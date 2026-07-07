@@ -2656,7 +2656,7 @@ function MeetingNoteList({onOpen}){
   );
 }
 function LeftPanel(){
-  const{leftWidth,setLeftWidth}=useLayout();
+  const{leftWidth,setLeftWidth,leftCollapsed}=useLayout();
   const[leftTab,setLeftTab]=React.useState('monthly'); // 'monthly' | 'meetings'
   const[meetingModal,setMeetingModal]=React.useState(null); // null | note object
   const onResizeMouseDown=React.useCallback((e)=>{
@@ -2668,9 +2668,10 @@ function LeftPanel(){
     document.addEventListener('mouseup',onUp);
   },[leftWidth,setLeftWidth]);
   return(
-    <aside style={{position:'fixed',top:56,left:0,width:leftWidth,height:'calc(100vh - 56px)',
+    <aside style={{position:'fixed',top:56,left:0,width:leftCollapsed?0:leftWidth,height:'calc(100vh - 56px)',
       borderRight:'0.5px solid #EBEBEB',backgroundColor:'#fff',zIndex:100,
-      boxSizing:'border-box',display:'flex',flexDirection:'column'}}>
+      boxSizing:'border-box',display:'flex',flexDirection:'column',overflow:'hidden',
+      transition:'width 0.2s ease'}}>
       {/* Tab bar */}
       <div style={{display:'flex',borderBottom:'0.5px solid #EBEBEB',flexShrink:0,padding:'0 12px'}}>
         {[{id:'monthly',label:'📅 먼슬리'},{id:'meetings',label:'📋 회의록'}].map(t=>(
@@ -3403,14 +3404,18 @@ function CalendarSection(){
   },[updateNavFromScroll,calendarScrollRef]);
 
   // Scroll to a specific year/month
-  c,etDate()===1));
+  const scrollToYearMonth=useCallback((yr,mo)=>{
+    const idx=allWeeks.findIndex(wk=>wk.some(d=>d.getFullYear()===yr&&d.getMonth()===mo&&d.getDate()===1));
     const el=weekRefs.current[idx>=0?idx:0];
     if(el&&calendarScrollRef?.current)calendarScrollRef.current.scrollTo({top:el.offsetTop,behavior:'smooth'});
   },[allWeeks,calendarScrollRef]);
 
   useEffect(()=>{
-    scrollToTodayRef.current=()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScnst nm=navMonth===0?11:navMonth-1;const ny=navMonth===0?navYear-1:navYear;setNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
-  const goNext=()=>{const nm=navMonth===11?0:navMonth+1;const ny=navMonth===11?navYear+1:navYear;s-#tNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
+    scrollToTodayRef.current=()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();};
+    setTimeout(()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();},200);
+  },[scrollToYearMonth,updateNavFromScroll]);
+  const goPrev=()=>{const nm=navMonth===0?11:navMonth-1;const ny=navMonth===0?navYear-1:navYear;setNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
+  const goNext=()=>{const nm=navMonth===11?0:navMonth+1;const ny=navMonth===11?navYear+1:navYear;setNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
   const goToday=()=>{
     const todayDate=new Date();
     const todayKey=toDateKey(todayDate);
@@ -3426,7 +3431,7 @@ function CalendarSection(){
     } else {
       scrollToYearMonth(todayDate.getFullYear(),todayDate.getMonth());
     }
-    setNavYear(todayDate.getFullYear());setNavMonth(to-"ayDate.getMonth());
+    setNavYear(todayDate.getFullYear());setNavMonth(todayDate.getMonth());
   };
   const goPrevYear=()=>{setNavYear(y=>y-1);scrollToYearMonth(navYear-1,navMonth);};
   const goNextYear=()=>{setNavYear(y=>y+1);scrollToYearMonth(navYear+1,navMonth);};
@@ -3438,7 +3443,7 @@ function CalendarSection(){
     if(!drag)return;
     const{start,current}=drag;setDrag(null);
     if(start===current)return; // single click = handled by dblclick or mousedown
-    const sorted=[start,current].sort();setBlockPopoverDates({start:sorten[0],end:sorten[1]});
+    const sorted=[start,current].sort();setBlockPopoverDates({start:sorted[0],end:sorted[1]});
   };
   const handleDblClick=(dk)=>setEventPopoverDate(dk);
   useEffect(()=>{const h=()=>setDrag(null);document.addEventListener('mouseup',h);return()=>document.removeEventListener('mouseup',h);},[]);
@@ -3467,7 +3472,7 @@ function CalendarSection(){
         <div style={{height:36,display:'flex',alignItems:'center',padding:'0 14px',gap:4}}>
           <span onClick={()=>setYearView(v=>!v)} style={{fontSize:12,fontWeight:600,color:yearView?'#534AB7':'#999',letterSpacing:'0.8px',flexShrink:0,cursor:'pointer',userSelect:'none',padding:'2px 4px',borderRadius:3,backgroundColor:yearView?'#EEEDFE':'transparent'}} title="클릭 시 1년 달력">먼슬리</span>
           <div style={{display:'flex',alignItems:'center',gap:0}}>
-            <button onClick={goPrevYear} style={{fontSize:13,color:'#C8C8C8',padding:'2px 4px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.c,#lor='#C8C8C8'}>‹</button>
+            <button onClick={goPrevYear} style={{fontSize:13,color:'#C8C8C8',padding:'2px 4px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
             <input type="number" value={navYear} onChange={handleYearInput}
               style={{width:46,textAlign:'center',fontSize:13,fontWeight:600,color:'#333',borderBottom:'1px solid #E0E0E0',paddingBottom:1}}
               onFocus={e=>e.target.select()}/>
@@ -3481,7 +3486,7 @@ function CalendarSection(){
           <div style={{flex:1}}/>
           {freeLayerVisible&&<span style={{fontSize:11,color:'#534AB7',opacity:0.7,marginRight:4}}>더블클릭 → 포스트잇</span>}
           {!freeLayerVisible&&<span style={{fontSize:11,color:'#ABABAB',marginRight:4}}>더블클릭 → 일정 | 드래그 → 기간</span>}
-          <button onClick={goToday} style={{fontSize:12,color:'#fff',padding:'3px 10px',backgroundColor:'#534AB7',border+>adius:5,fontWeight:500,flexShrink:0}}>오늘로</button>
+          <button onClick={goToday} style={{fontSize:12,color:'#fff',padding:'3px 10px',backgroundColor:'#534AB7',borderRadius:5,fontWeight:500,flexShrink:0}}>오늘로</button>
         </div>
         {/* Day names row (sticky) — hidden in year view */}
         {!yearView&&<div style={{display:'grid',gridTemplay^olumns:'repeat(7,1fr)',backgroundColor:'#FAFAFA',borderTop:'0.5px solid #F0F0F0'}}>
@@ -3529,9 +3534,9 @@ function CalendarSection(){
 }
 // ─── MAIN AREA ───────────────────────────────
 function MainArea(){
-  const{leftWidth}=useLayout();
+  const{leftWidth,leftCollapsed}=useLayout();
   return(
-    <main style={{marginLeft:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',backgroundColor:'#FAFAFA'}}>
+    <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',backgroundColor:'#FAFAFA',transition:'margin-left 0.2s ease'}}>
       <WeeklySection/>
       <div style={{height:8,backgroundColor:'#F3F3F3',flexShrink:0,borderBottom:'0.5px solid #EBEBEB'}}/>
       <CalendarSection/>
@@ -3539,8 +3544,23 @@ function MainArea(){
   );
 }
 // ─── APP ─────────────────────────────────────
+function PanelToggle(){
+  const{leftWidth,leftCollapsed,setLeftCollapsed}=useLayout();
+  return(
+    <button onClick={()=>setLeftCollapsed(c=>!c)} title={leftCollapsed?'패널 열기':'패널 닫기'}
+      style={{position:'fixed',top:'50%',left:leftCollapsed?0:leftWidth,transform:'translateY(-50%)',
+        width:16,height:36,backgroundColor:'#F0EFF8',borderRadius:'0 7px 7px 0',zIndex:200,
+        display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#534AB7',
+        border:'0.5px solid #D5D2EE',borderLeft:'none',cursor:'pointer',
+        transition:'left 0.2s ease',padding:0,
+        boxShadow:'2px 0 6px rgba(83,74,183,0.12)'}}>
+      {leftCollapsed?'›':'‹'}
+    </button>
+  );
+}
 function App(){
   const[leftWidth,setLeftWidth]=React.useState(300);
+  const[leftCollapsed,setLeftCollapsed]=React.useState(false);
   const[weeklyHeight,setWeeklyHeight]=React.useState(220);
   const[freeNotePanelHeight,setFreeNotePanelHeight]=React.useState(200);
   const[freeLayerVisible,setFreeLayerVisible]=React.useState(false);
@@ -3550,11 +3570,12 @@ function App(){
   const calendarScrollRef=React.useRef(null);
   const scrollToTodayRef=React.useRef(null);
   return(
-    <LayoutContext.Provider value={{leftWidth,setLeftWidth,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId}}>
+    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId}}>
       <StoreProvider>
         <ToastProvider>
           <TopBar/>
           <LeftPanel/>
+          <PanelToggle/>
           <MainArea/>
         </ToastProvider>
       </StoreProvider>
