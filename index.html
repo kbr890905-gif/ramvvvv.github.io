@@ -8,16 +8,16 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Noto Sans KR','Apple SD Gothic Neo',-apple-system,sans-serif;background:#fff;color:#1A1A1A;-webkit-font-smoothing:antialiased;}
+    body{font-family:'Noto Sans KR','Apple SD Gothic Neo',-apple-system,sans-serif;background:#fff;color:#1A1A1A;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em;}
     input,textarea{outline:none;border:none;background:transparent;font-family:inherit;}
     button{cursor:pointer;border:none;background:transparent;font-family:inherit;}
     button:focus-visible{outline:2px solid #AFA9EC;outline-offset:2px;border-radius:3px;}
     input:focus-visible,textarea:focus-visible{outline:none;}
-    ::-webkit-scrollbar{width:3px;height:3px;}
+    ::-webkit-scrollbar{width:5px;height:5px;}
     ::-webkit-scrollbar-track{background:transparent;}
-    ::-webkit-scrollbar-thumb{background:#E0E0E0;border-radius:2px;}
+    ::-webkit-scrollbar-thumb{background:#DCDCE0;border-radius:3px;}
     ::-webkit-scrollbar-thumb:hover{background:#C0C0C0;}
   @keyframes slideInToast{from{opacity:0;transform:translateY(10px) scale(0.95);}to{opacity:1;transform:translateY(0) scale(1);}}
   .memo-body-editor[data-placeholder]:empty::before{content:attr(data-placeholder);color:#BBBBBB;pointer-events:none;font-size:11px;}
@@ -26,6 +26,18 @@
   .memo-body-editor ul ul ul{list-style:square;}
   .memo-body-editor ol{list-style:decimal;padding-left:18px;margin:2px 0;}
   .memo-body-editor li{font-size:11px;margin:1px 0;line-height:1.6;}
+  .blk-edit:empty::before{content:'';}
+  .blk-edit.blk-h:empty::before,.blk-edit:focus:empty::before{content:attr(data-placeholder);color:#C8C8C8;pointer-events:none;}
+  .blk-row .blk-handle{opacity:0;transition:opacity 0.12s;}
+  .blk-row:hover .blk-handle{opacity:1;}
+  .blk-handle:active{cursor:grabbing;}
+  @keyframes fadeInPop{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .cal-cell:hover{box-shadow:inset 0 0 0 999px rgba(83,74,183,0.03);}
+  @keyframes popIn{from{opacity:0;transform:scale(0.97) translateY(4px);}to{opacity:1;transform:scale(1) translateY(0);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  button{transition:background-color 0.12s ease,color 0.12s ease,border-color 0.12s ease,opacity 0.12s ease,box-shadow 0.12s ease;}
+  input,select,textarea{transition:border-color 0.12s ease,background-color 0.12s ease;}
+  ::selection{background:#DDD9F7;}
   </style>
   <script defer src="https://unpkg.com/@azure/msal-browser@2.39.0/lib/msal-browser.min.js"></script>
 </head>
@@ -447,7 +459,7 @@ function SettingsModal({onClose}){
 
   return(
     <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.35)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div ref={ref} style={{backgroundColor:'#fff',borderRadius:12,boxShadow:'0 8px 40px rgba(0,0,0,0.18)',width:480,maxWidth:'92vw',maxHeight:'82vh',display:'flex',flexDirection:'column'}}>
+      <div ref={ref} style={{backgroundColor:'#fff',borderRadius:12,boxShadow:'0 8px 40px rgba(0,0,0,0.18)',width:480,maxWidth:'92vw',maxHeight:'82vh',display:'flex',flexDirection:'column',animation:'popIn 0.16s ease'}}>
         {/* header */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px 0'}}>
           <span style={{fontSize:16,fontWeight:600,color:'#1A1A1A'}}>설정</span>
@@ -1417,7 +1429,7 @@ function TopBar(){
   const[dragId,setDragId]=useState(null);
   const[dragOverId,setDragOverId]=useState(null);
   return(<>
-    <div style={{position:'fixed',top:0,left:0,right:0,height:56,borderBottom:'0.5px solid #EBEBEB',zIndex:1000,
+    <div style={{position:'fixed',top:0,left:0,right:0,height:56,borderBottom:'0.5px solid #E9E9EE',boxShadow:'0 1px 4px rgba(20,20,43,0.04)',zIndex:1000,
       display:'flex',alignItems:'center',padding:'0 14px 0 16px',gap:8,
       backgroundImage:topBarImg?`url(${topBarImg})`:'none',backgroundSize:'cover',backgroundPosition:'center',
       backgroundColor:topBarBg||'#fff'}}>
@@ -1474,7 +1486,7 @@ function TopBar(){
       )}
       <div style={{flex:1}}/>
       {/* Layer chips row — unified, all draggable */}
-      <div style={{display:'flex',alignItems:'center',gap:4,overflowX:'auto',flexShrink:1}}>
+      <div style={{display:'flex',alignItems:'center',gap:6,overflowX:'auto',flexShrink:1}}>
         {(()=>{
           // Build ordered layer list from layerOrder + catStyle
           const orderedLayers=(layerOrder||['work','personal']).map(id=>{
@@ -1541,8 +1553,8 @@ function TopBar(){
                   else if(l.type==='personal')dispatch({type:'SET_PERSONAL_VISIBLE',payload:!l.visible});
                   else dispatch({type:'TOGGLE_CUSTOM_LAYER',id:l.id});
                 }}
-                style={{display:'flex',alignItems:'center',gap:4,padding:'2px 9px',
-                  borderRadius:20,fontSize:12,fontWeight:l.visible?500:400,
+                style={{display:'flex',alignItems:'center',gap:5,padding:'3px 11px',
+                  borderRadius:20,fontSize:12,fontWeight:l.visible?600:400,
                   border:`0.5px solid ${l.visible?l.on.border:'#DEDEDE'}`,
                   backgroundColor:l.visible?l.on.bg:'#F7F7F7',
                   color:l.visible?l.on.text:'#ADADAD',
@@ -1610,7 +1622,7 @@ function TopBar(){
           onMouseLeave={e=>{e.currentTarget.style.color='#ABABAB';e.currentTarget.style.borderColor='#E8E8E8';e.currentTarget.style.backgroundColor='#FAFAFA';}}>⚙</button>
         <div style={{width:'0.5px',height:14,backgroundColor:'#E8E8E8',margin:'0 2px',flexShrink:0}}/>
         <button onClick={()=>setFreeLayerVisible(v=>!v)}
-          style={{display:'flex',alignItems:'center',gap:4,padding:'2px 9px',borderRadius:20,fontSize:12,
+          style={{display:'flex',alignItems:'center',gap:5,padding:'3px 11px',borderRadius:20,fontSize:12,
             fontWeight:freeLayerVisible?500:400,
             border:`0.5px solid ${freeLayerVisible?'#AFA9EC':'#DEDEDE'}`,
             backgroundColor:freeLayerVisible?'#EEEDFE':'#F7F7F7',
@@ -1620,7 +1632,7 @@ function TopBar(){
           자유 노트
         </button>
         <button onClick={()=>{setStickerMode(v=>{const nv=!v;if(nv)setFreeLayerVisible(true);return nv;});}}
-          style={{display:'flex',alignItems:'center',gap:4,padding:'2px 9px',borderRadius:20,fontSize:12,
+          style={{display:'flex',alignItems:'center',gap:5,padding:'3px 11px',borderRadius:20,fontSize:12,
             fontWeight:stickerMode?500:400,
             border:`0.5px solid ${stickerMode?'#F48FB1':'#DEDEDE'}`,
             backgroundColor:stickerMode?'#FCE4EC':'#F7F7F7',
@@ -1688,7 +1700,7 @@ function MonthlyHighlights(){
     <section style={{marginBottom:20}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
         <div style={{display:'flex',alignItems:'center',gap:4}}>
-          <span style={{fontSize:11,color:'#ABABAB',letterSpacing:'0.8px',textTransform:'uppercase',fontWeight:600}}>주요일정</span>
+          <span style={{fontSize:11,color:'#8B85C9',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>주요일정</span>
           <button onClick={goPrevHl} style={{fontSize:12,color:'#C8C8C8',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
           <span style={{fontSize:13,color:'#888',fontWeight:500,minWidth:38,textAlign:'center'}}>{hlYear}년 {hlMonth+1}월</span>
           <button onClick={goNextHl} style={{fontSize:12,color:'#C8C8C8',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>›</button>
@@ -1883,7 +1895,7 @@ function ProjectsSection(){
   return(
     <section>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
-        <span style={{fontSize:11,color:'#ABABAB',letterSpacing:'0.8px',textTransform:'uppercase',fontWeight:600}}>프로젝트</span>
+        <span style={{fontSize:11,color:'#8B85C9',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>프로젝트</span>
         <button onClick={()=>{setAdding(true);setTimeout(()=>nameRef.current?.focus(),30);}} style={{fontSize:11,color:'#ADADAD',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#AFA9EC';}} onMouseLeave={e=>{e.currentTarget.style.color='#ADADAD';e.currentTarget.style.borderColor='#E4E4E4';}}>+ 추가</button>
       </div>
       {adding&&<div style={{border:'0.5px solid #E8E8E8',borderRadius:6,padding:'8px',marginBottom:10,backgroundColor:'#FAFAFA'}}>
@@ -2237,9 +2249,22 @@ function FreeNotePanel(){
 // ═══════════════════════════════════════════════════════════════
 
 /* ── BlockItem: individual editable block — cursor-safe ── */
-function BlockItem({block,bIdx,refsMap,updateBlock,onEnterKey,onBackspaceKey,onTabKey,onFocusCb,editingRef,checkSel,TYPES,bulletMark,numMark}){
+/* ─── Block editor: caret & selection helpers ─── */
+const _blkCaretAtStart=(el)=>{const sel=window.getSelection();if(!sel.rangeCount)return false;const r=sel.getRangeAt(0);if(!r.collapsed)return false;const pre=r.cloneRange();pre.selectNodeContents(el);pre.setEnd(r.startContainer,r.startOffset);return pre.toString().length===0;};
+const _blkCaretOnEdgeLine=(el,edge)=>{const sel=window.getSelection();if(!sel.rangeCount)return true;const r=sel.getRangeAt(0).cloneRange();r.collapse(edge!=='last');const rects=r.getClientRects();const rect=rects.length?rects[edge==='last'?rects.length-1:0]:null;if(!rect||!el)return true;const eb=el.getBoundingClientRect();const lh=parseFloat(getComputedStyle(el).lineHeight)||18;return edge==='last'?(eb.bottom-rect.bottom)<lh*0.7:(rect.top-eb.top)<lh*0.7;};
+const _blkFocusEdge=(el,edge)=>{if(!el)return;el.focus();const r=document.createRange();r.selectNodeContents(el);r.collapse(edge==='start');const s=window.getSelection();s.removeAllRanges();s.addRange(r);};
+const _blkSetCaretTextOffset=(el,off)=>{if(!el)return;el.focus();const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n,acc=0;while((n=walker.nextNode())){const len=n.textContent.length;if(acc+len>=off){const r=document.createRange();r.setStart(n,Math.max(0,off-acc));r.collapse(true);const s=window.getSelection();s.removeAllRanges();s.addRange(r);return;}acc+=len;}_blkFocusEdge(el,'end');};
+const _blkSplitAtCaret=(el)=>{const sel=window.getSelection();if(!sel.rangeCount)return{before:el.innerHTML,after:''};const r=sel.getRangeAt(0);if(!r.collapsed)r.deleteContents();const rest=document.createRange();rest.setStart(r.endContainer,r.endOffset);rest.setEnd(el,el.childNodes.length);const frag=rest.extractContents();const d=document.createElement('div');d.appendChild(frag);const clean=(h)=>h.replace(/^(<br\s*\/?>)+/,'').replace(/(<br\s*\/?>)+$/,'');return{before:clean(el.innerHTML),after:clean(d.innerHTML)};};
+const _MD_MAP={'#':'h1','##':'h2','###':'h3','-':'bullet','*':'bullet','1.':'numbered','[]':'todo'};
+const _mdLineParse=(line)=>{let m;
+  if((m=line.match(/^(#{1,3})\s+(.*)$/)))return{type:['h1','h2','h3'][m[1].length-1],text:m[2]};
+  if((m=line.match(/^[-*•◦▪]\s+(.*)$/)))return{type:'bullet',text:m[1]};
+  if((m=line.match(/^\d+[.)]\s+(.*)$/)))return{type:'numbered',text:m[1]};
+  if((m=line.match(/^\[( |x|X)?\]\s+(.*)$/)))return{type:'todo',text:m[2],checked:m[1]==='x'||m[1]==='X'};
+  return{type:'p',text:line};};
+const _escHtml=(s)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function BlockItem({block,bIdx,refsMap,updateBlock,onEnterKey,onBackspaceKey,onTabKey,onArrowNav,onPasteLines,onFocusCb,editingRef,checkSel,TYPES,bulletMark,numMark}){
   const divRef=React.useRef(null);
-  const isTyping=React.useRef(false);
   React.useEffect(()=>{
     if(divRef.current){divRef.current.innerHTML=block.html||'';}
     refsMap.current[block.id]=divRef.current;
@@ -2249,10 +2274,12 @@ function BlockItem({block,bIdx,refsMap,updateBlock,onEnterKey,onBackspaceKey,onT
   const isBullet=block.type==='bullet';
   const isNum=block.type==='numbered';
   const isTodo=block.type==='todo';
+  const isHdr=block.type==='h1'||block.type==='h2'||block.type==='h3';
   const mark=isBullet?bulletMark(block.indent||0):isNum?numMark(bIdx):'';
+  const syncState=()=>{const el=divRef.current;if(el)updateBlock(block.id,{html:el.innerHTML,text:el.textContent||''});};
   return(
     <React.Fragment>
-      {(isBullet||isNum)&&<span style={{marginRight:6,marginTop:isBullet?3:2,color:'#888',
+      {(isBullet||isNum)&&<span style={{marginRight:6,marginTop:isBullet?3:2,color:'#909090',
         fontSize:isBullet?((block.indent||0)%3===0?13:11):11,
         fontWeight:isNum?500:400,flexShrink:0,minWidth:isNum?20:12,lineHeight:1.6,
         fontFamily:'system-ui'}}>{mark}</span>}
@@ -2260,16 +2287,45 @@ function BlockItem({block,bIdx,refsMap,updateBlock,onEnterKey,onBackspaceKey,onT
         onChange={e=>updateBlock(block.id,{checked:e.target.checked})}
         style={{marginRight:6,marginTop:4,width:14,height:14,flexShrink:0,cursor:'pointer',accentColor:'#534AB7'}}/>}
       <div ref={el=>{divRef.current=el;refsMap.current[block.id]=el;}}
+        className={'blk-edit'+(isHdr?' blk-h':'')}
         contentEditable suppressContentEditableWarning
         data-placeholder={td.ph}
-        onFocus={()=>{isTyping.current=true;onFocusCb(block.id);editingRef.current=block.id;}}
-        onBlur={e=>{isTyping.current=false;updateBlock(block.id,{html:e.currentTarget.innerHTML,text:e.currentTarget.textContent||'',});}}
-        onInput={e=>updateBlock(block.id,{html:e.currentTarget.innerHTML,text:e.currentTarget.textContent||''})}
+        onFocus={()=>{onFocusCb(block.id);editingRef.current=block.id;}}
+        onBlur={syncState}
+        onInput={e=>{
+          const el=e.currentTarget;const t=el.textContent||'';
+          if(block.type==='p'&&/[\s ]$/.test(t)){
+            const key=t.slice(0,-1).trim();
+            if(_MD_MAP[key]){el.innerHTML='';updateBlock(block.id,{type:_MD_MAP[key],html:'',text:'',checked:false});return;}
+          }
+          updateBlock(block.id,{html:el.innerHTML,text:t});
+        }}
+        onPaste={e=>{
+          e.preventDefault();
+          const text=(e.clipboardData||window.clipboardData).getData('text/plain');
+          if(!text)return;
+          const lines=text.replace(/\r/g,'').split('\n');
+          if(lines.length===1){document.execCommand('insertText',false,text);syncState();return;}
+          document.execCommand('insertText',false,lines[0]);
+          onPasteLines(block,lines.slice(1));
+        }}
         onMouseUp={checkSel} onKeyUp={checkSel}
         onKeyDown={e=>{
-          if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();const el=divRef.current;updateBlock(block.id,{html:el.innerHTML,text:el.textContent||''});onEnterKey(block,el);}
-          if(e.key==='Backspace'){const el=divRef.current;const empty=!el?.textContent?.trim();const atStart=(()=>{const sel=window.getSelection();if(!sel.rangeCount)return false;const r=sel.getRangeAt(0);return r.startOffset===0&&(r.startContainer===el||(r.startContainer.parentNode===el&&el.firstChild===r.startContainer));})();if(empty){e.preventDefault();onBackspaceKey(block,'empty');}else if(atStart){e.preventDefault();onBackspaceKey(block,'start');}}
-          if(e.key==='Tab'){e.preventDefault();onTabKey(block,e.shiftKey);}
+          const el=divRef.current;
+          if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey){
+            const cmd={b:'bold',i:'italic',u:'underline'}[e.key.toLowerCase()];
+            if(cmd){e.preventDefault();document.execCommand(cmd,false,null);syncState();return;}
+          }
+          if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();onEnterKey(block,el);return;}
+          if(e.key==='Backspace'){
+            const empty=!el||!el.textContent||!el.textContent.trim();
+            if(empty){e.preventDefault();onBackspaceKey(block,'empty');return;}
+            if(_blkCaretAtStart(el)){e.preventDefault();onBackspaceKey(block,'start');return;}
+            return;
+          }
+          if(e.key==='Tab'){e.preventDefault();onTabKey(block,e.shiftKey);return;}
+          if(e.key==='ArrowUp'&&!e.shiftKey&&_blkCaretOnEdgeLine(el,'first')){e.preventDefault();onArrowNav(block,-1);return;}
+          if(e.key==='ArrowDown'&&!e.shiftKey&&_blkCaretOnEdgeLine(el,'last')){e.preventDefault();onArrowNav(block,1);return;}
         }}
         style={{flex:1,fontSize:td.fs,fontWeight:td.fw,minHeight:td.fs*1.6,
           color:block.type==='h1'?'#111':block.type==='h2'?'#222':'#333',
@@ -2285,17 +2341,21 @@ function BlockItem({block,bIdx,refsMap,updateBlock,onEnterKey,onBackspaceKey,onT
 function BlockEditor({blocks,onBlocksChange}){
   const[focusedId,setFocusedId]=React.useState(null);
   const[collapsedSections,setCollapsedSections]=React.useState(new Set());
+  const[dragId,setDragId]=React.useState(null);
+  const[dropTarget,setDropTarget]=React.useState(null);
   const hdrLevel=(type)=>({h1:1,h2:2,h3:3}[type]||0);
   const toggleSection=(id)=>setCollapsedSections(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next;});
   const[selBar,setSelBar]=React.useState(null);
   const refsMap=React.useRef({});
   const editingRef=React.useRef(null);
-  const addBlock=(afterId,type='p',indent=0)=>{
-    const nb={id:uid(),type,text:'',html:'',indent,checked:false};
+  const focusBlock=(id,edge='end',offset=null)=>setTimeout(()=>{const el=refsMap.current[id];if(!el)return;if(offset!=null)_blkSetCaretTextOffset(el,offset);else _blkFocusEdge(el,edge);},30);
+  const addBlock=(afterId,type='p',indent=0,html='')=>{
+    const tmp=document.createElement('div');tmp.innerHTML=html;
+    const nb={id:uid(),type,text:tmp.textContent||'',html,indent,checked:false};
     const idx=blocks.findIndex(b=>b.id===afterId);
     const nb2=[...blocks];nb2.splice(idx+1,0,nb);
     onBlocksChange(nb2);
-    setTimeout(()=>{const el=refsMap.current[nb.id];if(el){el.focus();const r=document.createRange();const s=window.getSelection();r.selectNodeContents(el);r.collapse(false);s.removeAllRanges();s.addRange(r);}},40);
+    focusBlock(nb.id,'start');
   };
   const updateBlock=(id,upd)=>onBlocksChange(blocks.map(b=>b.id===id?{...b,...upd}:b));
   const deleteBlock=(id)=>{
@@ -2304,7 +2364,7 @@ function BlockEditor({blocks,onBlocksChange}){
     const nb=blocks.filter(b=>b.id!==id);
     onBlocksChange(nb);
     const prevId=nb[Math.max(0,idx-1)]?.id;
-    setTimeout(()=>{const el=refsMap.current[prevId];if(el){el.focus();const r=document.createRange();const s=window.getSelection();r.selectNodeContents(el);r.collapse(false);s.removeAllRanges();s.addRange(r);}},40);
+    focusBlock(prevId,'end');
   };
   const bulletMark=(indent)=>['•','◦','▪'][(indent||0)%3];
   const toAlpha=(n)=>String.fromCharCode(96+Math.min(n,26));
@@ -2313,7 +2373,7 @@ function BlockEditor({blocks,onBlocksChange}){
   const numMark=(bIdx)=>{const b=blocks[bIdx];const indent=b.indent||0;const n=getNum(bIdx);if(indent%3===0)return n+'.';if(indent%3===1)return toAlpha(n)+'.';return toRoman(n)+'.';};
   const TYPES=[
     {id:'h1',label:'H1',fs:22,fw:700,ph:'제목 1'},{id:'h2',label:'H2',fs:18,fw:600,ph:'제목 2'},
-    {id:'h3',label:'H3',fs:15,fw:600,ph:'제목 3'},{id:'p',label:'T',fs:13,fw:400,ph:'텍스트 입력...'},
+    {id:'h3',label:'H3',fs:15,fw:600,ph:'제목 3'},{id:'p',label:'T',fs:13,fw:400,ph:'입력하거나 \'- \', \'1. \', \'# \'로 블록 전환...'},
     {id:'bullet',label:'•',fs:13,fw:400,ph:'항목'},{id:'numbered',label:'1.',fs:13,fw:400,ph:'항목'},
     {id:'todo',label:'☑',fs:13,fw:400,ph:'할 일'},
   ];
@@ -2322,52 +2382,109 @@ function BlockEditor({blocks,onBlocksChange}){
   const handleEnterKey=(block,el)=>{
     const isListType=block.type==='bullet'||block.type==='numbered'||block.type==='todo';
     const isEmpty=!(el?.textContent?.trim());
-    if(isListType&&isEmpty){if((block.indent||0)>0)updateBlock(block.id,{indent:(block.indent||0)-1});else updateBlock(block.id,{type:'p',indent:0,html:'',text:''});}
-    else if(isListType){addBlock(block.id,block.type,block.indent||0);}
-    else{addBlock(block.id,'p',0);}
+    if(isListType&&isEmpty){
+      if((block.indent||0)>0)updateBlock(block.id,{indent:(block.indent||0)-1});
+      else updateBlock(block.id,{type:'p',indent:0,html:'',text:''});
+      return;
+    }
+    const{before,after}=el?_blkSplitAtCaret(el):{before:block.html||'',after:''};
+    if(el)el.innerHTML=before;
+    const newType=isListType?block.type:'p';
+    const tmp=document.createElement('div');tmp.innerHTML=after;
+    const nb={id:uid(),type:newType,text:tmp.textContent||'',html:after,indent:isListType?(block.indent||0):0,checked:false};
+    const idx=blocks.findIndex(b=>b.id===block.id);
+    const arr=blocks.map(b=>b.id===block.id?{...b,html:before,text:(el?.textContent)||''}:b);
+    arr.splice(idx+1,0,nb);
+    onBlocksChange(arr);
+    focusBlock(nb.id,'start');
   };
   const handleBackspaceKey=(block,reason)=>{
-    if(reason==='empty'||(reason==='start'&&block.type!=='p')){
-      if((block.indent||0)>0)updateBlock(block.id,{indent:(block.indent||0)-1});
-      else if(block.type!=='p')updateBlock(block.id,{type:'p',indent:0});
-      else deleteBlock(block.id);
-    }
+    if((block.indent||0)>0){updateBlock(block.id,{indent:(block.indent||0)-1});return;}
+    if(block.type!=='p'){updateBlock(block.id,{type:'p',indent:0});return;}
+    if(reason==='empty'){deleteBlock(block.id);return;}
+    /* merge into previous block (Notion-style) */
+    const idx=blocks.findIndex(b=>b.id===block.id);
+    if(idx<=0)return;
+    const prev=blocks[idx-1];
+    const el=refsMap.current[block.id];
+    const prevEl=refsMap.current[prev.id];
+    const curHtml=el?el.innerHTML:(block.html||'');
+    const curText=el?(el.textContent||''):(block.text||'');
+    const prevHtml=prevEl?prevEl.innerHTML:(prev.html||'');
+    const prevText=prevEl?(prevEl.textContent||''):(prev.text||'');
+    const mergedHtml=prevHtml+curHtml;
+    if(prevEl)prevEl.innerHTML=mergedHtml;
+    const arr=blocks.filter(b=>b.id!==block.id).map(b=>b.id===prev.id?{...b,html:mergedHtml,text:prevText+curText}:b);
+    onBlocksChange(arr);
+    focusBlock(prev.id,'end',prevText.length);
   };
   const handleTabKey=(block,isShift)=>{
     if(isShift)updateBlock(block.id,{indent:Math.max(0,(block.indent||0)-1)});
     else updateBlock(block.id,{indent:Math.min(4,(block.indent||0)+1)});
   };
+  const handleArrowNav=(block,dir)=>{
+    const idx=blocks.findIndex(b=>b.id===block.id);
+    const target=blocks[idx+dir];
+    if(!target)return;
+    focusBlock(target.id,dir>0?'start':'end');
+  };
+  const handlePasteLines=(block,lines)=>{
+    const el=refsMap.current[block.id];
+    const idx=blocks.findIndex(b=>b.id===block.id);
+    const newBlocks=lines.map(line=>{const p=_mdLineParse(line);return{id:uid(),type:p.type,html:_escHtml(p.text),text:p.text,indent:0,checked:!!p.checked};});
+    const arr=blocks.map(b=>b.id===block.id?{...b,html:el?el.innerHTML:b.html,text:el?(el.textContent||''):b.text}:b);
+    arr.splice(idx+1,0,...newBlocks);
+    onBlocksChange(arr);
+    if(newBlocks.length)focusBlock(newBlocks[newBlocks.length-1].id,'end');
+  };
+  const moveBlock=(srcId,targetId,pos)=>{
+    if(srcId===targetId)return;
+    const src=blocks.find(b=>b.id===srcId);if(!src)return;
+    const arr=blocks.filter(b=>b.id!==srcId);
+    let ti=arr.findIndex(b=>b.id===targetId);
+    if(ti<0)return;
+    if(pos==='below')ti++;
+    arr.splice(ti,0,src);
+    onBlocksChange(arr);
+  };
   const HIGHLIGHT_COLORS=['#FFF176','#CCFF90','#FFB3C6','#80DEEA','#FFCC80','#CF9FFF'];
   const checkSel=()=>{const sel=window.getSelection();if(sel&&sel.toString().length>0){const rect=sel.getRangeAt(0).getBoundingClientRect();setSelBar({x:rect.left+rect.width/2,y:rect.top-6});}else setSelBar(null);};
   const applyFmt=(cmd,val)=>{document.execCommand(cmd,false,val||null);const id=editingRef.current;if(id){const el=refsMap.current[id];if(el)updateBlock(id,{html:el.innerHTML,text:el.textContent||''});}setSelBar(null);};
+  const fmtBtnStyle={color:'#fff',fontSize:12.5,background:'none',border:'none',padding:'3px 7px',borderRadius:4,cursor:'pointer',fontFamily:'inherit',lineHeight:1.2};
   return(
     <div style={{position:'relative'}}>
       {selBar&&(
         <div onMouseDown={e=>e.preventDefault()}
-          style={{position:'fixed',top:selBar.y-40,left:selBar.x-110,backgroundColor:'#222',borderRadius:8,
-            padding:'5px 8px',display:'flex',alignItems:'center',gap:5,zIndex:99999,
-            boxShadow:'0 4px 16px rgba(0,0,0,0.35)',userSelect:'none'}}>
-          <button onMouseDown={e=>{e.preventDefault();applyFmt('bold');}} style={{color:'#fff',fontWeight:700,fontSize:13,background:'none',border:'none',padding:'2px 6px',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>B</button>
-          <div style={{width:'0.5px',backgroundColor:'#555',margin:'0 2px'}}/>
-          <button onMouseDown={e=>{e.preventDefault();applyFmt('backColor','rgba(0,0,0,0)');}} title="하이라이트 제거" style={{width:16,height:16,borderRadius:3,backgroundColor:'#fff',border:'1px solid #555',cursor:'pointer',padding:0,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#888'}}>✕</button>
-          {HIGHLIGHT_COLORS.map(c=>(<button key={c} onMouseDown={e=>{e.preventDefault();applyFmt('backColor',c);}} style={{width:16,height:16,borderRadius:3,backgroundColor:c,border:'none',cursor:'pointer',padding:0,flexShrink:0}}/>))}
-          <button onMouseDown={e=>{e.preventDefault();applyFmt('removeFormat');}} style={{color:'#aaa',fontSize:10,background:'none',border:'none',padding:'2px 4px',borderRadius:4,cursor:'pointer'}}>✕모두</button>
+          style={{position:'fixed',top:Math.max(8,selBar.y-40),left:Math.max(8,selBar.x-140),backgroundColor:'#1F1F23',borderRadius:9,
+            padding:'5px 8px',display:'flex',alignItems:'center',gap:3,zIndex:99999,
+            boxShadow:'0 6px 24px rgba(0,0,0,0.38)',userSelect:'none',animation:'fadeInPop 0.12s ease'}}>
+          <button onMouseDown={e=>{e.preventDefault();applyFmt('bold');}} title="굵게 (Ctrl+B)" style={{...fmtBtnStyle,fontWeight:700}}>B</button>
+          <button onMouseDown={e=>{e.preventDefault();applyFmt('italic');}} title="기울임 (Ctrl+I)" style={{...fmtBtnStyle,fontStyle:'italic',fontFamily:'Georgia,serif'}}>i</button>
+          <button onMouseDown={e=>{e.preventDefault();applyFmt('underline');}} title="밑줄 (Ctrl+U)" style={{...fmtBtnStyle,textDecoration:'underline'}}>U</button>
+          <button onMouseDown={e=>{e.preventDefault();applyFmt('strikeThrough');}} title="취소선" style={{...fmtBtnStyle,textDecoration:'line-through'}}>S</button>
+          <div style={{width:1,height:16,backgroundColor:'#48484E',margin:'0 3px'}}/>
+          {HIGHLIGHT_COLORS.map(c=>(<button key={c} onMouseDown={e=>{e.preventDefault();applyFmt('backColor',c);}} title="하이라이트" style={{width:15,height:15,borderRadius:4,backgroundColor:c,border:'none',cursor:'pointer',padding:0,flexShrink:0}}/>))}
+          <button onMouseDown={e=>{e.preventDefault();applyFmt('backColor','rgba(0,0,0,0)');}} title="하이라이트 제거" style={{width:15,height:15,borderRadius:4,backgroundColor:'#fff',border:'1px solid #5A5A60',cursor:'pointer',padding:0,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:'#888'}}>✕</button>
+          <div style={{width:1,height:16,backgroundColor:'#48484E',margin:'0 3px'}}/>
+          <button onMouseDown={e=>{e.preventDefault();applyFmt('removeFormat');}} title="서식 모두 제거" style={{color:'#A8A8AE',fontSize:10,background:'none',border:'none',padding:'2px 5px',borderRadius:4,cursor:'pointer'}}>지우기</button>
         </div>
       )}
-      <div style={{display:'flex',gap:3,marginBottom:10,padding:'4px 6px',backgroundColor:'#F8F8F8',borderRadius:8,flexWrap:'wrap'}}>
+      <div style={{display:'flex',gap:2,marginBottom:10,padding:'4px 6px',backgroundColor:'#F7F7F9',borderRadius:8,flexWrap:'wrap',alignItems:'center',position:'sticky',top:0,zIndex:10}}>
         {TYPES.map(t=>(
           <button key={t.id}
             onMouseDown={e=>{e.preventDefault();const id=focusedId||(blocks[0]?.id);if(id){const cur=blocks.find(b=>b.id===id);updateBlock(id,{type:cur?.type===t.id?'p':t.id});}}}
-            style={{padding:'3px 8px',borderRadius:5,fontSize:11,fontWeight:600,
-              border:`0.5px solid ${activeType.id===t.id?'#534AB7':'transparent'}`,
+            title={{h1:'제목 1',h2:'제목 2',h3:'제목 3',p:'텍스트',bullet:'글머리 기호',numbered:'번호 매기기',todo:'할 일'}[t.id]}
+            style={{padding:'3px 9px',borderRadius:6,fontSize:11,fontWeight:600,
+              border:`0.5px solid ${activeType.id===t.id?'#AFA9EC':'transparent'}`,
               backgroundColor:activeType.id===t.id?'#EEEDFE':'transparent',
-              color:activeType.id===t.id?'#534AB7':'#888',cursor:'pointer'}}>
+              color:activeType.id===t.id?'#534AB7':'#909090',cursor:'pointer',transition:'background-color 0.12s,color 0.12s'}}>
             {t.label}
           </button>
         ))}
-        <div style={{width:'0.5px',backgroundColor:'#E0E0E0',margin:'0 3px'}}/>
-        <button onMouseDown={e=>{e.preventDefault();if(focusedId){const b=blocks.find(x=>x.id===focusedId);updateBlock(focusedId,{indent:Math.max(0,(b?.indent||0)-1)});}}} style={{padding:'3px 7px',fontSize:11,borderRadius:5,color:'#888',border:'none',backgroundColor:'transparent',cursor:'pointer'}}>←</button>
-        <button onMouseDown={e=>{e.preventDefault();if(focusedId){const b=blocks.find(x=>x.id===focusedId);updateBlock(focusedId,{indent:Math.min(4,(b?.indent||0)+1)});}}} style={{padding:'3px 7px',fontSize:11,borderRadius:5,color:'#888',border:'none',backgroundColor:'transparent',cursor:'pointer'}}>→</button>
+        <div style={{width:1,height:14,backgroundColor:'#E4E4E8',margin:'0 3px'}}/>
+        <button title="내어쓰기 (Shift+Tab)" onMouseDown={e=>{e.preventDefault();if(focusedId){const b=blocks.find(x=>x.id===focusedId);updateBlock(focusedId,{indent:Math.max(0,(b?.indent||0)-1)});}}} style={{padding:'3px 7px',fontSize:11,borderRadius:6,color:'#909090',border:'none',backgroundColor:'transparent',cursor:'pointer'}}>⇤</button>
+        <button title="들여쓰기 (Tab)" onMouseDown={e=>{e.preventDefault();if(focusedId){const b=blocks.find(x=>x.id===focusedId);updateBlock(focusedId,{indent:Math.min(4,(b?.indent||0)+1)});}}} style={{padding:'3px 7px',fontSize:11,borderRadius:6,color:'#909090',border:'none',backgroundColor:'transparent',cursor:'pointer'}}>⇥</button>
+        <span style={{marginLeft:'auto',fontSize:10,color:'#C4C4C8',paddingRight:4,userSelect:'none'}}>드래그(⠿)로 이동 · Ctrl+B/I/U</span>
       </div>
       <div style={{display:'flex',flexDirection:'column',gap:2}}>
         {(()=>{
@@ -2384,11 +2501,24 @@ function BlockEditor({blocks,onBlocksChange}){
             }else if(hl>0&&collapsedSections.has(block.id)){
               hiddenUntil=hl;
             }
+            const isDropAbove=dropTarget&&dropTarget.id===block.id&&dropTarget.pos==='above';
+            const isDropBelow=dropTarget&&dropTarget.id===block.id&&dropTarget.pos==='below';
             return(
-              <div key={block.id} style={{display:'flex',alignItems:'flex-start',paddingLeft:(block.indent||0)*20}}>
+              <div key={block.id} className="blk-row"
+                onDragOver={e=>{if(!dragId)return;e.preventDefault();const r=e.currentTarget.getBoundingClientRect();const pos=e.clientY<r.top+r.height/2?'above':'below';setDropTarget(prev=>(prev&&prev.id===block.id&&prev.pos===pos)?prev:{id:block.id,pos});}}
+                onDrop={e=>{e.preventDefault();if(dragId&&dropTarget)moveBlock(dragId,dropTarget.id,dropTarget.pos);setDragId(null);setDropTarget(null);}}
+                style={{display:'flex',alignItems:'flex-start',paddingLeft:(block.indent||0)*20,position:'relative',borderRadius:4,
+                  boxShadow:isDropAbove?'inset 0 2px 0 #AFA9EC':isDropBelow?'inset 0 -2px 0 #AFA9EC':'none',
+                  opacity:dragId===block.id?0.35:1,transition:'opacity 0.12s'}}>
+                <span className="blk-handle" draggable
+                  onDragStart={e=>{setDragId(block.id);e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','');}catch(err){}}}
+                  onDragEnd={()=>{setDragId(null);setDropTarget(null);}}
+                  title="드래그하여 이동"
+                  style={{flexShrink:0,width:14,marginLeft:-16,marginRight:2,marginTop:hl===1?9:hl===2?7:hl===3?5:5,fontSize:10,lineHeight:1,color:'#C8C8CC',cursor:'grab',userSelect:'none',textAlign:'center'}}>⠿</span>
                 {hl>0&&<button onMouseDown={e=>{e.preventDefault();toggleSection(block.id);}} style={{flexShrink:0,width:16,height:16,marginRight:3,marginTop:hl===1?5:hl===2?4:3,fontSize:8,color:'#BBBBBB',border:'none',background:'none',cursor:'pointer',padding:0,lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:2}} title={collapsedSections.has(block.id)?'펼치기':'접기'}>{collapsedSections.has(block.id)?'▶':'▼'}</button>}
                 <BlockItem block={block} bIdx={bIdx} refsMap={refsMap} updateBlock={updateBlock}
                   onEnterKey={handleEnterKey} onBackspaceKey={handleBackspaceKey} onTabKey={handleTabKey}
+                  onArrowNav={handleArrowNav} onPasteLines={handlePasteLines}
                   onFocusCb={setFocusedId} editingRef={editingRef} checkSel={checkSel}
                   TYPES={TYPES} bulletMark={bulletMark} numMark={numMark}/>
               </div>
@@ -2397,8 +2527,8 @@ function BlockEditor({blocks,onBlocksChange}){
         })()}
         <button onMouseDown={()=>addBlock(blocks[blocks.length-1]?.id||'')}
           style={{alignSelf:'flex-start',marginTop:4,fontSize:12,color:'#C0C0C0',
-            padding:'2px 8px',borderRadius:4,border:'0.5px dashed #E0E0E0',
-            backgroundColor:'transparent',cursor:'pointer'}}
+            padding:'3px 10px',borderRadius:6,border:'0.5px dashed #E0E0E0',
+            backgroundColor:'transparent',cursor:'pointer',transition:'color 0.12s,border-color 0.12s'}}
           onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#AFA9EC';}}
           onMouseLeave={e=>{e.currentTarget.style.color='#C0C0C0';e.currentTarget.style.borderColor='#E0E0E0';}}>
           + 블록 추가
@@ -2450,15 +2580,28 @@ function MeetingNoteModal({initialNote,onClose}){
     if(note.linkedEventId)dispatch({type:'DELETE_EVENT',id:note.linkedEventId});
     dispatch({type:'DELETE_MEETING_NOTE',id:note.id});onClose();
   }};
+  const initialSnapRef=React.useRef(null);
+  React.useEffect(()=>{if(initialSnapRef.current===null)initialSnapRef.current=JSON.stringify(note);},[]);
+  React.useEffect(()=>{
+    const h=(e)=>{
+      if(e.key==='Escape'){
+        const dirty=initialSnapRef.current!==null&&JSON.stringify(note)!==initialSnapRef.current;
+        if(!dirty||confirm('저장하지 않은 변경사항이 있습니다. 닫을까요?'))onClose();
+      }
+      if((e.metaKey||e.ctrlKey)&&(e.key==='s'||e.key==='S')){e.preventDefault();save();}
+    };
+    window.addEventListener('keydown',h);
+    return()=>window.removeEventListener('keydown',h);
+  });
   return(
-    <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.45)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center'}}
+    <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.45)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',animation:'fadeIn 0.15s ease'}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{width:720,maxWidth:'95vw',maxHeight:'88vh',backgroundColor:'#fff',
+      <div style={{width:760,maxWidth:'95vw',maxHeight:'88vh',backgroundColor:'#fff',
         borderRadius:16,overflow:'hidden',display:'flex',flexDirection:'column',
-        boxShadow:'0 28px 80px rgba(0,0,0,0.22)'}}>
+        boxShadow:'0 28px 80px rgba(0,0,0,0.22)',animation:'popIn 0.18s ease'}}>
         {/* Header */}
         <div style={{padding:'22px 28px 16px',borderBottom:'0.5px solid #F0F0F0',flexShrink:0}}>
-          <input value={note.title} onChange={e=>setNote(n=>({...n,title:e.target.value}))}
+          <input autoFocus={isNew} value={note.title} onChange={e=>setNote(n=>({...n,title:e.target.value}))}
             placeholder="회의 제목"
             style={{fontSize:26,fontWeight:700,color:'#111',width:'100%',
               marginBottom:14,borderBottom:'2px solid transparent',paddingBottom:2,fontFamily:'inherit'}}
@@ -2545,8 +2688,10 @@ function MeetingNoteModal({initialNote,onClose}){
           <div style={{display:'flex',gap:8}}>
             <button onClick={onClose} style={{fontSize:13,color:'#888',padding:'6px 16px',
               border:'0.5px solid #E0E0E0',borderRadius:6,cursor:'pointer'}}>닫기</button>
-            <button onClick={save} style={{fontSize:13,color:'#fff',padding:'6px 18px',
-              backgroundColor:'#534AB7',borderRadius:6,fontWeight:500,cursor:'pointer'}}>저장</button>
+            <button onClick={save} title="Ctrl+S" style={{fontSize:13,color:'#fff',padding:'6px 18px',
+              backgroundColor:'#534AB7',borderRadius:6,fontWeight:500,cursor:'pointer'}}
+              onMouseEnter={e=>e.currentTarget.style.backgroundColor='#463DA3'}
+              onMouseLeave={e=>e.currentTarget.style.backgroundColor='#534AB7'}>저장</button>
           </div>
         </div>
       </div>
@@ -2677,8 +2822,8 @@ function LeftPanel(){
       <div style={{display:'flex',borderBottom:'0.5px solid #EBEBEB',flexShrink:0,padding:'0 12px'}}>
         {[{id:'monthly',label:'📅 먼슬리'},{id:'meetings',label:'📋 회의록'}].map(t=>(
           <button key={t.id} onClick={()=>setLeftTab(t.id)}
-            style={{padding:'10px 12px',fontSize:12,fontWeight:leftTab===t.id?600:400,
-              color:leftTab===t.id?'#534AB7':'#ABABAB',
+            style={{padding:'10px 12px',fontSize:12.5,fontWeight:leftTab===t.id?600:400,
+              color:leftTab===t.id?'#534AB7':'#9A9AA2',
               borderBottom:`2px solid ${leftTab===t.id?'#534AB7':'transparent'}`,
               backgroundColor:'transparent',cursor:'pointer',transition:'all 0.15s',
               marginBottom:'-0.5px'}}>
@@ -2694,7 +2839,7 @@ function LeftPanel(){
       ):(
         <div style={{flex:1,overflowY:'auto',padding:'12px 14px'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-            <span style={{fontSize:12,fontWeight:600,color:'#333'}}>회의록</span>
+            <span style={{fontSize:11,color:'#8B85C9',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>회의록</span>
             <button onClick={()=>setMeetingModal({})}
               style={{fontSize:11,color:'#534AB7',padding:'4px 10px',borderRadius:6,
                 border:'0.5px solid #AFA9EC',backgroundColor:'#EEEDFE',fontWeight:500}}>
@@ -2723,6 +2868,7 @@ function LeftPanel(){
 function EventPopover({date,onClose}){
   const{state,dispatch}=useStore();const catStyle=useDynCatStyle();const showToast=useToast();const[form,setForm]=useState({time:'',title:'',category:'work',projectId:null,isHighlight:false,recurring:false,recurType:'weekly',recurDay:0,recurWeeks:12});const titleRef=useRef(null);
   useEffect(()=>{setTimeout(()=>titleRef.current?.focus(),60);},[]);
+  useEffect(()=>{const h=(e)=>{if(e.key==='Escape')onClose();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[]);
   const dateObj=new Date(date+'T00:00:00');
   const dateLabel=`${dateObj.getMonth()+1}월 ${dateObj.getDate()}일`;
   const handleSave=()=>{
@@ -2751,8 +2897,8 @@ function EventPopover({date,onClose}){
     onClose();
   };
   return(
-    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:12,boxShadow:'0 10px 40px rgba(0,0,0,0.12)',padding:'18px 20px',minWidth:280,maxWidth:340,maxHeight:'88vh',overflowY:'auto'}}>
+    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',animation:'fadeIn 0.15s ease'}}>
+      <div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:12,boxShadow:'0 10px 40px rgba(0,0,0,0.12)',padding:'18px 20px',minWidth:280,maxWidth:340,maxHeight:'88vh',overflowY:'auto',animation:'popIn 0.16s ease'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
           <div><span style={{fontSize:15,fontWeight:600,letterSpacing:'-0.3px'}}>일정 추가</span><span style={{fontSize:13,color:'#BDBDBD',marginLeft:6}}>— {dateLabel}</span></div>
           <button onClick={onClose} style={{fontSize:16,color:'#CCC',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#999'} onMouseLeave={e=>e.currentTarget.style.color='#CCC'}>×</button>
@@ -2813,6 +2959,60 @@ function EventPopover({date,onClose}){
   );
 }
 
+/* ─── 회의록 미리보기 패널 (일정 팝오버 우측) ─── */
+function MeetingNotePreviewPane({note,onEdit}){
+  const{state}=useStore();
+  const proj=note.projectId?(state.projects||[]).find(p=>p.id===note.projectId):null;
+  const bulletMark=(indent)=>['•','◦','▪'][(indent||0)%3];
+  const items=[];
+  (note.blocks||[]).forEach((b,i,arr)=>{
+    let numLabel='';
+    if(b.type==='numbered'){
+      let n=1;
+      for(let j=i-1;j>=0;j--){const x=arr[j];const xi=x.indent||0;const bi=b.indent||0;if(xi<bi)break;if(xi===bi){if(x.type==='numbered')n++;else break;}}
+      numLabel=n+'.';
+    }
+    const base={h1:{fontSize:15,fontWeight:700,color:'#111',marginTop:i===0?0:10,marginBottom:2,borderBottom:'1px solid #EEEEEE',paddingBottom:3},
+      h2:{fontSize:13.5,fontWeight:600,color:'#1C1C1C',marginTop:i===0?0:8,marginBottom:2},
+      h3:{fontSize:12.5,fontWeight:600,color:'#2A2A2A',marginTop:i===0?0:6,marginBottom:1},
+    }[b.type]||{fontSize:12,fontWeight:400,color:'#3D3D3D',lineHeight:1.65};
+    const hasContent=(b.text||'').trim()||(b.html||'').replace(/<br\s*\/?>/g,'').trim();
+    if(!hasContent&&b.type==='p')return;
+    items.push(
+      <div key={b.id||i} style={{display:'flex',alignItems:'flex-start',gap:5,paddingLeft:(b.indent||0)*14}}>
+        {b.type==='bullet'&&<span style={{fontSize:11,color:'#909090',lineHeight:1.65,flexShrink:0}}>{bulletMark(b.indent)}</span>}
+        {b.type==='numbered'&&<span style={{fontSize:11,color:'#909090',lineHeight:1.65,flexShrink:0,minWidth:14}}>{numLabel}</span>}
+        {b.type==='todo'&&<span style={{fontSize:12,lineHeight:1.5,flexShrink:0,color:b.checked?'#7CB87C':'#B8B8B8'}}>{b.checked?'☑':'☐'}</span>}
+        <div style={{...base,flex:1,minWidth:0,wordBreak:'break-word',whiteSpace:'pre-wrap',
+          textDecoration:b.type==='todo'&&b.checked?'line-through':'none',
+          opacity:b.type==='todo'&&b.checked?0.55:1}}
+          dangerouslySetInnerHTML={{__html:(b.html&&b.html.trim())?b.html:_escHtml(b.text||'')}}/>
+      </div>
+    );
+  });
+  return(
+    <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',borderLeft:'0.5px solid #EEEEF2',backgroundColor:'#FBFBFD'}}>
+      <div style={{padding:'14px 16px 10px',borderBottom:'0.5px solid #F0F0F3',flexShrink:0}}>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+          <span style={{fontSize:11,fontWeight:700,color:'#8B85C9',letterSpacing:'0.5px'}}>📋 회의록</span>
+          {proj&&<span style={{fontSize:10,color:proj.color,fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{proj.name}</span>}
+        </div>
+        <div style={{fontSize:13,fontWeight:600,color:'#222',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{note.title||'(제목 없음)'}</div>
+        <div style={{fontSize:10.5,color:'#A8A8B0',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          {note.date}{note.time?' · '+note.time:''}{note.attendees?' · 👥 '+note.attendees:''}
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:'auto',padding:'12px 16px 14px',display:'flex',flexDirection:'column',gap:3}}>
+        {items.length>0?items:<div style={{fontSize:11.5,color:'#C4C4CA',textAlign:'center',padding:'24px 0'}}>아직 작성된 내용이 없습니다<br/><span style={{fontSize:10.5}}>아래 버튼으로 내용을 작성해 보세요</span></div>}
+      </div>
+      {onEdit&&<div style={{padding:'10px 16px',borderTop:'0.5px solid #F0F0F3',flexShrink:0,backgroundColor:'#FBFBFD'}}>
+        <button onClick={onEdit} style={{width:'100%',fontSize:12,fontWeight:500,color:'#534AB7',padding:'7px 10px',border:'0.5px solid #AFA9EC',borderRadius:7,backgroundColor:'#EEEDFE',cursor:'pointer',transition:'background-color 0.12s'}}
+          onMouseEnter={e=>e.currentTarget.style.backgroundColor='#E3E1FB'}
+          onMouseLeave={e=>e.currentTarget.style.backgroundColor='#EEEDFE'}>✏️ 회의록 편집</button>
+      </div>}
+    </div>
+  );
+}
 function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
   const{state,dispatch}=useStore();const catStyle=useDynCatStyle();const showToast=useToast();
   const[form,setForm]=useState({
@@ -2822,7 +3022,10 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
     recurDay:(()=>{const d=new Date(event.date+'T00:00:00');return(d.getDay()+6)%7;})(),
     recurWeeks:12,
   });
+  React.useEffect(()=>{const h=(e)=>{if(e.key==='Escape')onClose();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[]);
   const filteredProjects=(state.projects||[]).filter(p=>!p.layer||p.layer===form.category);
+  const linkedNote=(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId);
+  const openNote=(n)=>{onClose();setTimeout(()=>onOpenNote&&onOpenNote(n),50);};
   const handleSave=()=>{
     if(!form.title.trim())return;
     if(!form.recurring){
@@ -2852,14 +3055,37 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
         projectId:event.projectId||null,category:event.category||'work',linkedEventId:event.id,
         blocks:[{id:uid(),type:'p',text:'',indent:0,checked:false}],
         createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-      onClose();setTimeout(()=>onOpenNote&&onOpenNote(nn),50);
+      openNote(nn);
     };
-    return(<div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.04)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,0.1)',padding:'14px 16px',minWidth:240,maxWidth:300}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}><span style={{fontSize:14,fontWeight:600}}>{event.title}</span><button onClick={onClose} style={{fontSize:15,color:'#CCC'}}>×</button></div>{event.time&&<span style={{fontSize:12,color:'#ABABAB',display:'block',marginBottom:8}}>{event.time}</span>}<div style={{fontSize:12,color:'#ABABAB',textAlign:'center',marginBottom:10}}>🔗 아웃룩 일정 (편집 불가)</div><div style={{display:'flex',flexDirection:'column',gap:6}}>{existingOutlookNote?<button onClick={()=>{onClose();setTimeout(()=>onOpenNote&&onOpenNote(existingOutlookNote),50);}} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 보기/수정</button>:<button onClick={handleOutlookCreateNote} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 작성</button>}<button onClick={()=>{onDelete();onClose();}} style={{width:'100%',fontSize:12,color:'#E24B4A',padding:'6px',border:'0.5px solid #E24B4A',borderRadius:6,backgroundColor:'#FEF2F2',cursor:'pointer'}}>이 앱에서 삭제</button></div></div></div>);
+    return(
+      <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',animation:'fadeIn 0.15s ease'}}>
+        <div style={{backgroundColor:'#fff',border:'0.5px solid #E8E8EC',borderRadius:12,boxShadow:'0 12px 44px rgba(0,0,0,0.14)',
+          display:'flex',alignItems:'stretch',overflow:'hidden',animation:'popIn 0.16s ease',
+          width:existingOutlookNote?620:undefined,maxWidth:existingOutlookNote?'94vw':300,minWidth:existingOutlookNote?undefined:240,maxHeight:'80vh'}}>
+          <div style={{flex:existingOutlookNote?'0 0 250px':1,padding:'14px 16px',overflowY:'auto',minWidth:0}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:8,marginBottom:10}}>
+              <span style={{fontSize:14,fontWeight:600,wordBreak:'break-word'}}>{event.title}</span>
+              <button onClick={onClose} style={{fontSize:15,color:'#CCC',flexShrink:0}}>×</button>
+            </div>
+            {event.time&&<span style={{fontSize:12,color:'#ABABAB',display:'block',marginBottom:8}}>{event.time}</span>}
+            <div style={{fontSize:12,color:'#ABABAB',textAlign:'center',marginBottom:10}}>🔗 아웃룩 일정 (편집 불가)</div>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {!existingOutlookNote&&<button onClick={handleOutlookCreateNote} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 작성</button>}
+              <button onClick={()=>{onDelete();onClose();}} style={{width:'100%',fontSize:12,color:'#E24B4A',padding:'6px',border:'0.5px solid #E24B4A',borderRadius:6,backgroundColor:'#FEF2F2',cursor:'pointer'}}>이 앱에서 삭제</button>
+            </div>
+          </div>
+          {existingOutlookNote&&<MeetingNotePreviewPane note={existingOutlookNote} onEdit={onOpenNote?()=>openNote(existingOutlookNote):null}/>}
+        </div>
+      </div>
+    );
   }
   const dObj=new Date(event.date+'T00:00:00');
   return(
-    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:12,boxShadow:'0 10px 40px rgba(0,0,0,0.12)',padding:'16px 18px',minWidth:310,maxWidth:370,maxHeight:'85vh',overflowY:'auto'}}>
+    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',animation:'fadeIn 0.15s ease'}}>
+      <div style={{backgroundColor:'#fff',border:'0.5px solid #E8E8EC',borderRadius:12,boxShadow:'0 12px 44px rgba(0,0,0,0.14)',
+        display:'flex',alignItems:'stretch',overflow:'hidden',animation:'popIn 0.16s ease',
+        width:linkedNote?680:undefined,maxWidth:linkedNote?'94vw':370,minWidth:310,maxHeight:'85vh'}}>
+        <div style={{flex:linkedNote?'0 0 330px':1,padding:'16px 18px',overflowY:'auto',minWidth:0}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
           <span style={{fontSize:14,fontWeight:600}}>일정 수정</span>
           <button onClick={onClose} style={{fontSize:16,color:'#CCC'}}
@@ -2874,7 +3100,7 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
         {/* Time */}
         <div style={{marginBottom:10}}><label style={{fontSize:11,color:'#ABABAB',display:'block',marginBottom:3}}>시간</label><input value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} placeholder="예) 14:00" style={{width:'100%',fontSize:13,color:'#333',borderBottom:'0.5px solid #EBEBEB',paddingBottom:3}}/></div>
         {/* Title */}
-        <div style={{marginBottom:12}}><label style={{fontSize:11,color:'#ABABAB',display:'block',marginBottom:3}}>제목</label><input value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!form.recurring)handleSave();if(e.key==='Escape')onClose();}} style={{width:'100%',fontSize:14,color:'#333',borderBottom:'0.5px solid #EBEBEB',paddingBottom:3,fontWeight:500}}/></div>
+        <div style={{marginBottom:12}}><label style={{fontSize:11,color:'#ABABAB',display:'block',marginBottom:3}}>제목</label><input autoFocus value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!form.recurring)handleSave();if(e.key==='Escape')onClose();}} style={{width:'100%',fontSize:14,color:'#333',borderBottom:'0.5px solid #EBEBEB',paddingBottom:3,fontWeight:500}}/></div>
         {/* Project */}
         {filteredProjects.length>0&&(<div style={{marginBottom:12}}><label style={{fontSize:11,color:'#ABABAB',display:'block',marginBottom:5}}>프로젝트</label><div style={{display:'flex',gap:4,flexWrap:'wrap'}}><button onClick={()=>setForm(f=>({...f,projectId:null}))} style={{fontSize:11,padding:'2px 7px',borderRadius:10,border:`0.5px solid ${!form.projectId?'#DDD':'#EBEBEB'}`,backgroundColor:!form.projectId?'#F5F5F5':'transparent',color:!form.projectId?'#666':'#CCC'}}>없음</button>{filteredProjects.map(p=><button key={p.id} onClick={()=>setForm(f=>({...f,projectId:p.id}))} style={{fontSize:11,padding:'2px 8px',borderRadius:10,border:`0.5px solid ${form.projectId===p.id?p.color:'#EBEBEB'}`,backgroundColor:form.projectId===p.id?lighten(p.color):'transparent',color:form.projectId===p.id?p.color:'#BDBDBD',display:'flex',alignItems:'center',gap:4}}><span style={{width:5,height:5,borderRadius:'50%',backgroundColor:p.color,display:'inline-block',flexShrink:0}}/>{p.name}</button>)}</div></div>)}
         {/* Recurring */}
@@ -2916,14 +3142,16 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
           <input type="checkbox" id="hl_edit" checked={form.isHighlight} onChange={e=>setForm(f=>({...f,isHighlight:e.target.checked}))} style={{width:12,height:12,accentColor:'#534AB7',cursor:'pointer'}}/>
           <label htmlFor="hl_edit" style={{fontSize:11,color:form.isHighlight?'#534AB7':'#888',cursor:'pointer',userSelect:'none'}}>주요일정으로 등록</label>
         </div>
-        {/* Meeting Note */}
-        {onOpenNote&&(()=>{const mn=(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId);const handleNote=()=>{if(mn){onClose();setTimeout(()=>onOpenNote(mn),50);}else{const nn={id:uid(),title:form.title||event.title||'',date:event.date,time:form.time||event.time||'',attendees:'',projectId:form.projectId||event.projectId||null,category:form.category||event.category||'work',linkedEventId:event.id,blocks:[{id:uid(),type:'p',text:'',indent:0,checked:false}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};onClose();setTimeout(()=>onOpenNote(nn),50);}};return(<button onClick={handleNote} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px 10px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer',marginBottom:10,textAlign:'left'}}>{mn?'📋 회의록 수정':'📋 회의록 작성'}</button>);})()}
+        {/* Meeting Note — 새 작성 버튼 (연결된 회의록이 없을 때만; 있으면 우측 패널에 표시) */}
+        {onOpenNote&&!linkedNote&&(()=>{const handleNote=()=>{const nn={id:uid(),title:form.title||event.title||'',date:event.date,time:form.time||event.time||'',attendees:'',projectId:form.projectId||event.projectId||null,category:form.category||event.category||'work',linkedEventId:event.id,blocks:[{id:uid(),type:'p',text:'',indent:0,checked:false}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};openNote(nn);};return(<button onClick={handleNote} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px 10px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer',marginBottom:10,textAlign:'left'}}>📋 회의록 작성</button>);})()}
         {/* Actions */}
         <div style={{display:'flex',gap:5,justifyContent:'flex-end'}}>
           <button onClick={onDelete} style={{fontSize:12,color:'#E24B4A',padding:'4px 10px',border:'0.5px solid #E24B4A',borderRadius:5,marginRight:'auto'}}>삭제</button>
           <button onClick={onClose} style={{fontSize:12,color:'#888',padding:'4px 12px',border:'0.5px solid #E0E0E0',borderRadius:5}}>취소</button>
           <button onClick={handleSave} style={{fontSize:12,color:'#fff',padding:'4px 12px',backgroundColor:'#534AB7',borderRadius:5,opacity:form.title.trim()?1:0.4}}>저장</button>
         </div>
+        </div>
+        {linkedNote&&<MeetingNotePreviewPane note={linkedNote} onEdit={onOpenNote?()=>openNote(linkedNote):null}/>}
       </div>
     </div>
   );
@@ -2945,7 +3173,7 @@ function EventChip({event,onClick}){
   const catStyle=useDynCatStyle();const cs=catStyle[event.category]||catStyle.work;
   const{state}=useStore();const bdayPfx=getBdayPrefix(event.category,state);
   const isBday=bdayPfx!=='';
-  const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:3,marginBottom:1.5,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.5,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,borderRadius:3,marginBottom:1.5,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.5,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
+  const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:4,marginBottom:1.5,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.5,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,borderRadius:4,marginBottom:1.5,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.5,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
   return<div onClick={onClick} style={{display:'flex',alignItems:'center',gap:3,padding:'1px 4px',...chipStyle}}>{event.time&&<span style={{opacity:0.65,flexShrink:0,fontSize:10}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0}}>🔗</span>}</div>;
 }
 function TodoItem({todo,onToggle,onDelete}){
@@ -2993,17 +3221,18 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44}){
   const[noteMdl,setNoteMdl]=useState(null);
   const activateTodo=()=>{setTodoActive(true);setTimeout(()=>todoRef.current?.focus(),20);};
   const submitTodo=()=>{const t=todoVal.trim();if(t)dispatch({type:'ADD_TODO',date:dk,text:t,category:todoCat});setTodoVal('');setTodoActive(false);};
-  const isRedDay=(weekend||!!getHoliday(dk))&&!todayDate;
-  const hdrBg=todayDate?'#534AB7':'#F0F0F0';const dateColor=todayDate?'#fff':isRedDay?'#E24B4A':'#333';const dayColor=todayDate?'rgba(255,255,255,0.65)':isRedDay?'#E24B4A':'#C0C0C0';
-  const colBg=todayDate?'#FDFCFF':isRedDay?'#F7F7F7':'#fff';
+  const isRedDay=(isSun(date)||!!getHoliday(dk))&&!todayDate;
+  const isBlueDay=isSat(date)&&!todayDate&&!getHoliday(dk);
+  const hdrBg=todayDate?'#534AB7':'#F6F6F8';const dateColor=todayDate?'#fff':isRedDay?'#E24B4A':isBlueDay?'#4A7BC4':'#3A3A40';const dayColor=todayDate?'rgba(255,255,255,0.7)':isRedDay?'#E88B8A':isBlueDay?'#8FAEDB':'#B4B4BC';
+  const colBg=todayDate?'#FDFCFF':(isRedDay||isBlueDay)?'#FAFAFB':'#fff';
   const CHIP_H=21;
   const visibleEvt=Math.max(1,Math.floor((evtH-5)/CHIP_H));
   const hiddenEvt=Math.max(0,events.length-visibleEvt);
   return(
     <div style={{display:'flex',flexDirection:'column',backgroundColor:colBg,borderRight:'0.5px solid #F2F2F2',minWidth:0,minHeight:colH,height:'100%'}}>
-      <div style={{height:26,display:'flex',alignItems:'center',justifyContent:'center',gap:3,backgroundColor:hdrBg,borderBottom:'0.5px solid #F2F2F2',flexShrink:0}}>
-        <span style={{fontSize:11,color:dayColor}}>{DAY_NAMES[dow]}</span>
-        <span style={{fontSize:13,color:dateColor,fontWeight:todayDate?600:400}}>{date.getDate()}</span>
+      <div style={{height:28,display:'flex',alignItems:'center',justifyContent:'center',gap:4,backgroundColor:hdrBg,borderBottom:'0.5px solid #F0F0F2',flexShrink:0}}>
+        <span style={{fontSize:10.5,color:dayColor,fontWeight:600,letterSpacing:'0.5px'}}>{DAY_NAMES[dow]}</span>
+        <span style={{fontSize:13.5,color:dateColor,fontWeight:todayDate?700:600,fontVariantNumeric:'tabular-nums'}}>{date.getDate()}</span>
       </div>
       <div style={{height:14,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>{getHoliday(dk)&&!todayDate&&<span style={{fontSize:9,color:'#E24B4A',letterSpacing:'-0.2px',fontWeight:500}}>{getHoliday(dk)}</span>}</div>
       <div style={{flexShrink:0,overflow:'hidden',padding:'3px 4px 2px',borderBottom:'0.5px solid #F5F5F5',height:evtH,minHeight:evtH}}>
@@ -3049,14 +3278,14 @@ function WeeklyHeader({weekDates,collapsed,onPrev,onNext,onToday,onToggleCollaps
   const s=weekDates[0],e=weekDates[6];const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
   return(
     <div style={{height:34,display:'flex',alignItems:'center',padding:'0 14px',gap:6,backgroundColor:'#fff',borderBottom:'0.5px solid #EBEBEB'}}>
-      <span style={{fontSize:12,fontWeight:600,color:'#999',letterSpacing:'0.8px',flexShrink:0}}>위클리</span>
+      <span style={{fontSize:11,fontWeight:700,color:'#534AB7',letterSpacing:'0.8px',flexShrink:0,backgroundColor:'#F0EFFE',padding:'3px 9px',borderRadius:6}}>위클리</span>
       <div style={{display:'flex',alignItems:'center',gap:1}}>
         <button onClick={onPrev} style={{fontSize:14,color:'#C8C8C8',padding:'2px 6px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
-        <span style={{fontSize:13,color:'#444',fontWeight:500,minWidth:100,textAlign:'center',userSelect:'none'}}>{fmt(s)} — {fmt(e)}</span>
+        <span style={{fontSize:13,color:'#222',fontWeight:600,minWidth:100,textAlign:'center',userSelect:'none',fontVariantNumeric:'tabular-nums'}}>{fmt(s)} — {fmt(e)}</span>
         <button onClick={onNext} style={{fontSize:14,color:'#C8C8C8',padding:'2px 6px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>›</button>
       </div>
       <div style={{flex:1}}/>
-      <button onClick={onToday} style={{fontSize:12,color:'#fff',padding:'3px 10px',backgroundColor:'#534AB7',borderRadius:5,fontWeight:500,flexShrink:0}}>오늘로</button>
+      <button onClick={onToday} style={{fontSize:12,color:'#fff',padding:'4px 12px',backgroundColor:'#534AB7',borderRadius:6,fontWeight:600,flexShrink:0,boxShadow:'0 1px 3px rgba(83,74,183,0.28)'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#463DA3'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#534AB7'}>오늘로</button>
       <button onClick={onToggleCollapse} style={{fontSize:12,color:'#ADADAD',padding:'3px 8px',border:'0.5px solid #E8E8E8',borderRadius:5,flexShrink:0}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#AFA9EC';}} onMouseLeave={e=>{e.currentTarget.style.color='#ADADAD';e.currentTarget.style.borderColor='#E8E8E8';}}>{collapsed?'펼치기 ↓':'접기 ↑'}</button>
     </div>
   );
@@ -3088,6 +3317,7 @@ function MultiDayBlockPopover({initialStart,initialEnd,editBlock,onClose}){
   const[form,setForm]=useState({startDate:editBlock?.startDate||initialStart||'',endDate:editBlock?.endDate||initialEnd||'',title:editBlock?.title||'',category:editBlock?.category||'work',projectId:editBlock?.projectId||null,isHighlight:false});
   const titleRef=useRef(null);
   useEffect(()=>{setTimeout(()=>titleRef.current?.focus(),60);},[]);
+  useEffect(()=>{const h=(e)=>{if(e.key==='Escape')onClose();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[]);
   const handleSave=()=>{
     if(!form.title.trim()||!form.startDate||!form.endDate)return;
     const b={startDate:form.startDate<=form.endDate?form.startDate:form.endDate,endDate:form.startDate<=form.endDate?form.endDate:form.startDate,title:form.title.trim(),category:form.category,projectId:form.projectId};
@@ -3106,8 +3336,8 @@ function MultiDayBlockPopover({initialStart,initialEnd,editBlock,onClose}){
     onClose();
   };
   return(
-    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:12,boxShadow:'0 10px 40px rgba(0,0,0,0.12)',padding:'18px 20px',minWidth:300,maxWidth:360,maxHeight:'88vh',overflowY:'auto'}}>
+    <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',animation:'fadeIn 0.15s ease'}}>
+      <div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:12,boxShadow:'0 10px 40px rgba(0,0,0,0.12)',padding:'18px 20px',minWidth:300,maxWidth:360,maxHeight:'88vh',overflowY:'auto',animation:'popIn 0.16s ease'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
           <span style={{fontSize:15,fontWeight:600,letterSpacing:'-0.3px'}}>{editBlock?'기간 일정 수정':'기간 일정 추가'}</span>
           <button onClick={onClose} style={{fontSize:16,color:'#CCC',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#999'} onMouseLeave={e=>e.currentTarget.style.color='#CCC'}>×</button>
@@ -3150,14 +3380,15 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
   const catStyle=useDynCatStyle();
   const todayCell=isToday(date);const weekend=isSat(date)||isSun(date);
   const isFirstOfMonth=date.getDate()===1;
-  const isRed=holiday||(weekend&&!todayCell);
-  const numColor=todayCell?'#534AB7':isRed?'#E24B4A':isFirstOfMonth?'#0EA5E9':'#333';
+  const isRed=(holiday||isSun(date))&&!todayCell;
+  const isBlue=isSat(date)&&!todayCell&&!holiday;
+  const numColor=todayCell?'#534AB7':isRed?'#E24B4A':isBlue?'#4A7BC4':isFirstOfMonth?'#0EA5E9':'#3A3A40';
   const isRedDay=(isSat(date)||isSun(date)||!!holiday)&&!todayCell;
-  const cellBg=isInDragRange?'#EEEDFE':todayCell?'#F0EFFE':isRedDay?'#F8F8F8':'#fff';
+  const cellBg=isInDragRange?'#EEEDFE':todayCell?'#F0EFFE':isRedDay?'#FAFAFB':'#fff';
   const cellBorder=isInDragRange?'0.5px solid #AFA9EC':todayCell?'0.5px solid #AFA9EC':'0.5px solid #F0F0F0';
   const dateLabel=isFirstOfMonth?`${date.getMonth()+1}/1`:`${date.getDate()}`;
   return(
-    <div onMouseDown={onMouseDown} onMouseEnter={onMouseEnter} onMouseUp={onMouseUp}
+    <div className="cal-cell" onMouseDown={onMouseDown} onMouseEnter={onMouseEnter} onMouseUp={onMouseUp}
       onDoubleClick={onDoubleClick}
       style={{minHeight:162,padding:'4px 6px 4px',backgroundColor:cellBg,
         borderRight:cellBorder,borderBottom:cellBorder,cursor:'pointer',userSelect:'none',
@@ -3179,8 +3410,8 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
             const isBdayEv=getBdayPrefix(ev.category,state)!=='';
             return(
               <div key={ev.id} onClick={e=>{e.stopPropagation();onEventClick&&onEventClick(ev);}}
-                style={{display:'flex',alignItems:'center',gap:2,padding:'1px 4px',
-                  backgroundColor:isBdayEv?'transparent':cs.bg,borderRadius:3,overflow:'hidden',
+                style={{display:'flex',alignItems:'center',gap:3,padding:'1.5px 5px',
+                  backgroundColor:isBdayEv?'transparent':cs.bg,borderRadius:4,overflow:'hidden',
                   cursor:'pointer',flexShrink:0,lineHeight:1.4}}>
                 {ev.time&&<span style={{fontSize:10,color:cs.text,opacity:0.7,flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
                 <span style={{fontSize:11,color:cs.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
@@ -3502,7 +3733,7 @@ function CalendarSection(){
       <div style={{flexShrink:0,backgroundColor:'#fff',borderBottom:'0.5px solid #EBEBEB',zIndex:10}}>
         {/* Year/month nav row */}
         <div style={{height:36,display:'flex',alignItems:'center',padding:'0 14px',gap:4}}>
-          <span onClick={()=>setYearView(v=>!v)} style={{fontSize:12,fontWeight:600,color:yearView?'#534AB7':'#999',letterSpacing:'0.8px',flexShrink:0,cursor:'pointer',userSelect:'none',padding:'2px 4px',borderRadius:3,backgroundColor:yearView?'#EEEDFE':'transparent'}} title="클릭 시 1년 달력">먼슬리</span>
+          <span onClick={()=>setYearView(v=>!v)} style={{fontSize:11,fontWeight:700,color:yearView?'#fff':'#534AB7',letterSpacing:'0.8px',flexShrink:0,cursor:'pointer',userSelect:'none',padding:'3px 9px',borderRadius:6,backgroundColor:yearView?'#534AB7':'#F0EFFE',transition:'background-color 0.15s,color 0.15s'}} title="클릭 시 1년 달력">먼슬리</span>
           <div style={{display:'flex',alignItems:'center',gap:0}}>
             <button onClick={goPrevYear} style={{fontSize:13,color:'#C8C8C8',padding:'2px 4px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
             <input type="number" value={navYear} onChange={handleYearInput}
@@ -3512,17 +3743,17 @@ function CalendarSection(){
           </div>
           <div style={{display:'flex',alignItems:'center',gap:0}}>
             <button onClick={goPrev} style={{fontSize:16,color:'#C8C8C8',padding:'2px 5px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>&#8249;</button>
-            <span style={{fontSize:14,color:'#333',fontWeight:600,minWidth:44,textAlign:'center',userSelect:'none',letterSpacing:'-0.3px'}}>{navMonth+1}월</span>
+            <span style={{fontSize:16,color:'#1A1A1A',fontWeight:700,minWidth:48,textAlign:'center',userSelect:'none',letterSpacing:'-0.3px'}}>{navMonth+1}월</span>
             <button onClick={goNext} style={{fontSize:16,color:'#C8C8C8',padding:'2px 5px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>&#8250;</button>
           </div>
           <div style={{flex:1}}/>
           {freeLayerVisible&&<span style={{fontSize:11,color:'#534AB7',opacity:0.7,marginRight:4}}>더블클릭 → 포스트잇</span>}
           {!freeLayerVisible&&<span style={{fontSize:11,color:'#ABABAB',marginRight:4}}>더블클릭 → 일정 | 드래그 → 기간</span>}
-          <button onClick={goToday} style={{fontSize:12,color:'#fff',padding:'3px 10px',backgroundColor:'#534AB7',borderRadius:5,fontWeight:500,flexShrink:0}}>오늘로</button>
+          <button onClick={goToday} style={{fontSize:12,color:'#fff',padding:'4px 12px',backgroundColor:'#534AB7',borderRadius:6,fontWeight:600,flexShrink:0,boxShadow:'0 1px 3px rgba(83,74,183,0.28)'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#463DA3'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#534AB7'}>오늘로</button>
         </div>
         {/* Day names row (sticky) — hidden in year view */}
         {!yearView&&<div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',backgroundColor:'#FAFAFA',borderTop:'0.5px solid #F0F0F0'}}>
-          {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',padding:'4px 0',fontSize:11,color:i>=5?'#E24B4A':'#ABABAB',fontWeight:500}}>{d}</div>)}
+          {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',padding:'5px 0',fontSize:11,color:i===6?'#E24B4A':i===5?'#4A7BC4':'#9A9AA2',fontWeight:600,letterSpacing:'0.5px'}}>{d}</div>)}
         </div>}
       </div>
       {yearView&&<YearView year={navYear} onSelectMonth={(yr,mo)=>{setNavYear(yr);setNavMonth(mo);scrollToYearMonth(yr,mo);setYearView(false);}}/>}
