@@ -3509,7 +3509,7 @@ function CalendarSection(){
             drag={drag}
             onCellMouseDown={handleCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}
-            ,#nCellMouseUp={handleCellMouseUp}
+            onCellMouseUp={handleCellMouseUp}
             onDblClickCell={handleDblClick}
             onBlockClick={(b)=>setEditBlock(b)}
             onEventClick={(ev)=>setDetailEvent(ev)}
@@ -3520,7 +3520,7 @@ function CalendarSection(){
         <StickerCanvas/>
       </div>
       {eventPopoverDate&&<EventPopover date={eventPopoverDate} onClose={()=>setEventPopoverDate(null)}/>}
-      {(blockPopoverDates||editBlock)&&<MultiDa")BlockPopover
+      {(blockPopoverDates||editBlock)&&<MultiDayBlockPopover
         initialStart={blockPopoverDates?.start}
         initialEnd={blockPopoverDates?.end}
         editBlock={editBlock}
@@ -3528,7 +3528,7 @@ function CalendarSection(){
       {detailEvent&&<EventDetailPopover event={detailEvent}
         onClose={()=>setDetailEvent(null)}
         onDelete={()=>{dispatch({type:'DELETE_EVENT',id:detailEvent.id});setDetailEvent(null);showToast('일정 삭제됨','info');}}
-        onUpdate={updates=>{dispach({type:'UPDATE_EVENT',id:detailEvent.id,updates});setDetailEvent(null);}}/>}
+        onUpdate={updates=>{dispatch({type:'UPDATE_EVENT',id:detailEvent.id,updates});setDetailEvent(null);}}/>}
     </section>
   );
 }
