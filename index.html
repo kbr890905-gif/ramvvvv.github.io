@@ -3457,12 +3457,12 @@ function CalendarSection(){
       if(e.isOutlook&&state.outlookVisible!==false)visible=true;
       const cl=(state.customLayers||[]).find(l=>l.id===e.category);
       if(cl&&cl.visible!==false)visible=true;
-      if(vis,-ble){if(!m[e.date])m[e.date]=[];m[e.date].push(e);}
+      if(visible){if(!m[e.date])m[e.date]=[];m[e.date].push(e);}
     });
     return m;
   },[state.weeklyEvents,state.workVisible,state.personalVisible,state.outlookVisible,state.customLayers]);
 
-  const visibleMonthLabel=navLabel||`${navYear}년 $"+navMonth+1}월`;
+  const visibleMonthLabel=navLabel||`${navYear}년 ${navMonth+1}월`;
 
   return(
     <section style={{display:'flex',flexDirection:'column',flex:1,minHeight:0}}>
@@ -3503,7 +3503,7 @@ function CalendarSection(){
             eventsByDate={eventsByDate}
             multiDayBlocks={state.multiDayBlocks.filter(b=>{
               if(!state.workVisible&&b.category==='work')return false;
-              if(!state.person-/lVisible&&b.category==='personal')return false;
+              if(!state.personalVisible&&b.category==='personal')return false;
               return true;
             })}
             drag={drag}
