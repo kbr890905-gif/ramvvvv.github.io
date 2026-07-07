@@ -2434,7 +2434,8 @@ function MeetingNoteModal({initialNote,onClose}){
       };
       const existingEv=linkedEventId&&(state.weeklyEvents||[]).find(e=>e.id===linkedEventId);
       if(existingEv){
-        dispatch({type:'UPDATE_EVENT',id:linkedEventId,updates:{...evData,meetingNoteId:note.id}});
+        if(isNew){dispatch({type:'UPDATE_EVENT',id:linkedEventId,updates:{meetingNoteId:note.id}});}
+        else{dispatch({type:'UPDATE_EVENT',id:linkedEventId,updates:{...evData,meetingNoteId:note.id}});}
       } else {
         linkedEventId=uid();
         dispatch({type:'ADD_EVENT',event:{...evData,id:linkedEventId,meetingNoteId:note.id}});
@@ -2844,7 +2845,17 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
     showToast(`일정 수정됨 — ${form.title.trim()}`,'success');
     onClose();
   };
-  if(event.isOutlook){return(<div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.04)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,0.1)',padding:'14px 16px',minWidth:220}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}><span style={{fontSize:14,fontWeight:600}}>{event.title}</span><button onClick={onClose} style={{fontSize:15,color:'#CCC'}}>×</button></div>{event.time&&<span style={{fontSize:12,color:'#ABABAB',display:'block',marginBottom:8}}>{event.time}</span>}<div style={{fontSize:12,color:'#ABABAB',textAlign:'center',marginBottom:12}}>아웃룩 일정 (편집 불가)</div><button onClick={()=>{onDelete();onClose();}} style={{width:'100%',fontSize:12,color:'#E24B4A',padding:'6px',border:'0.5px solid #E24B4A',borderRadius:6,backgroundColor:'#FEF2F2',cursor:'pointer'}}>이 앱에서 삭제</button></div></div>);}
+  if(event.isOutlook){
+    const existingOutlookNote=(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId);
+    const handleOutlookCreateNote=()=>{
+      const nn={id:uid(),title:event.title||'',date:event.date,time:event.time||'',attendees:'',
+        projectId:event.projectId||null,category:event.category||'work',linkedEventId:event.id,
+        blocks:[{id:uid(),type:'p',text:'',indent:0,checked:false}],
+        createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+      onClose();setTimeout(()=>onOpenNote&&onOpenNote(nn),50);
+    };
+    return(<div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.04)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,0.1)',padding:'14px 16px',minWidth:240,maxWidth:300}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}><span style={{fontSize:14,fontWeight:600}}>{event.title}</span><button onClick={onClose} style={{fontSize:15,color:'#CCC'}}>×</button></div>{event.time&&<span style={{fontSize:12,color:'#ABABAB',display:'block',marginBottom:8}}>{event.time}</span>}<div style={{fontSize:12,color:'#ABABAB',textAlign:'center',marginBottom:10}}>🔗 아웃룩 일정 (편집 불가)</div><div style={{display:'flex',flexDirection:'column',gap:6}}>{existingOutlookNote?<button onClick={()=>{onClose();setTimeout(()=>onOpenNote&&onOpenNote(existingOutlookNote),50);}} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 보기/수정</button>:<button onClick={handleOutlookCreateNote} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 작성</button>}<button onClick={()=>{onDelete();onClose();}} style={{width:'100%',fontSize:12,color:'#E24B4A',padding:'6px',border:'0.5px solid #E24B4A',borderRadius:6,backgroundColor:'#FEF2F2',cursor:'pointer'}}>이 앱에서 삭제</button></div></div></div>);
+  }
   const dObj=new Date(event.date+'T00:00:00');
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -2907,7 +2918,7 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
         </div>
         {/* Actions */}
         <div style={{display:'flex',gap:6,justifyContent:'space-between'}}>
-          {event.meetingNoteId&&onOpenNote&&(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId)&&<button onClick={()=>{const mn=(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId);onClose();setTimeout(()=>mn&&onOpenNote(mn),50);}} style={{fontSize:11,color:'#534AB7',padding:'4px 10px',border:'0.5px solid #AFA9EC',borderRadius:5,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 수정</button>}
+          {onOpenNote&&(()=>{const mn=(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId);return mn?<button onClick={()=>{onClose();setTimeout(()=>onOpenNote(mn),50);}} style={{fontSize:11,color:'#534AB7',padding:'4px 10px',border:'0.5px solid #AFA9EC',borderRadius:5,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 수정</button>:<button onClick={()=>{const nn={id:uid(),title:form.title||event.title||'',date:event.date,time:form.time||event.time||'',attendees:'',projectId:form.projectId||event.projectId||null,category:form.category||event.category||'work',linkedEventId:event.id,blocks:[{id:uid(),type:'p',text:'',indent:0,checked:false}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};onClose();setTimeout(()=>onOpenNote(nn),50);}} style={{fontSize:11,color:'#534AB7',padding:'4px 10px',border:'0.5px solid #AFA9EC',borderRadius:5,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 작성</button>;})()}
           <button onClick={onDelete} style={{fontSize:12,color:'#E24B4A',padding:'4px 10px',border:'0.5px solid #E24B4A',borderRadius:5}}>삭제</button>
           <div style={{display:'flex',gap:5}}>
             <button onClick={onClose} style={{fontSize:12,color:'#888',padding:'4px 12px',border:'0.5px solid #E0E0E0',borderRadius:5}}>취소</button>
@@ -3350,6 +3361,7 @@ function CalendarSection(){
   const[blockPopoverDates,setBlockPopoverDates]=useState(null);
   const[editBlock,setEditBlock]=useState(null);
   const[detailEvent,setDetailEvent]=useState(null);
+  const[noteMdl,setNoteMdl]=useState(null);
   const weekRefs=useRef({});
   const[yearView,setYearView]=useState(false);
   const[navYear,setNavYear]=useState(today_.getFullYear());
@@ -3528,7 +3540,9 @@ function CalendarSection(){
       {detailEvent&&<EventDetailPopover event={detailEvent}
         onClose={()=>setDetailEvent(null)}
         onDelete={()=>{dispatch({type:'DELETE_EVENT',id:detailEvent.id});setDetailEvent(null);showToast('일정 삭제됨','info');}}
-        onUpdate={updates=>{dispatch({type:'UPDATE_EVENT',id:detailEvent.id,updates});setDetailEvent(null);}}/>}
+        onUpdate={updates=>{dispatch({type:'UPDATE_EVENT',id:detailEvent.id,updates});setDetailEvent(null);}}
+        onOpenNote={note=>{setDetailEvent(null);setTimeout(()=>setNoteMdl(note),50);}}/>}
+      {noteMdl&&<MeetingNoteModal initialNote={noteMdl} onClose={()=>setNoteMdl(null)}/>}
     </section>
   );
 }
@@ -3543,7 +3557,7 @@ function MainArea(){
     </main>
   );
 }
-// ─── APP ─────────────────────────────────────
+// ─── APP ──────────────────────────────────────────────────────────
 function PanelToggle(){
   const{leftWidth,leftCollapsed,setLeftCollapsed}=useLayout();
   return(
