@@ -3489,7 +3489,7 @@ function CalendarSection(){
           <button onClick={goToday} style={{fontSize:12,color:'#fff',padding:'3px 10px',backgroundColor:'#534AB7',borderRadius:5,fontWeight:500,flexShrink:0}}>오늘로</button>
         </div>
         {/* Day names row (sticky) — hidden in year view */}
-        {!yearView&&<div style={{display:'grid',gridTemplay^olumns:'repeat(7,1fr)',backgroundColor:'#FAFAFA',borderTop:'0.5px solid #F0F0F0'}}>
+        {!yearView&&<div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',backgroundColor:'#FAFAFA',borderTop:'0.5px solid #F0F0F0'}}>
           {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',padding:'4px 0',fontSize:11,color:i>=5?'#E24B4A':'#ABABAB',fontWeight:500}}>{d}</div>)}
         </div>}
       </div>
