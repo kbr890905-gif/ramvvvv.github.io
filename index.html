@@ -2916,14 +2916,13 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
           <input type="checkbox" id="hl_edit" checked={form.isHighlight} onChange={e=>setForm(f=>({...f,isHighlight:e.target.checked}))} style={{width:12,height:12,accentColor:'#534AB7',cursor:'pointer'}}/>
           <label htmlFor="hl_edit" style={{fontSize:11,color:form.isHighlight?'#534AB7':'#888',cursor:'pointer',userSelect:'none'}}>주요일정으로 등록</label>
         </div>
+        {/* Meeting Note */}
+        {onOpenNote&&(()=>{const mn=(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId);const handleNote=()=>{if(mn){onClose();setTimeout(()=>onOpenNote(mn),50);}else{const nn={id:uid(),title:form.title||event.title||'',date:event.date,time:form.time||event.time||'',attendees:'',projectId:form.projectId||event.projectId||null,category:form.category||event.category||'work',linkedEventId:event.id,blocks:[{id:uid(),type:'p',text:'',indent:0,checked:false}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};onClose();setTimeout(()=>onOpenNote(nn),50);}};return(<button onClick={handleNote} style={{width:'100%',fontSize:12,color:'#534AB7',padding:'7px 10px',border:'0.5px solid #AFA9EC',borderRadius:6,backgroundColor:'#EEEDFE',cursor:'pointer',marginBottom:10,textAlign:'left'}}>{mn?'📋 회의록 수정':'📋 회의록 작성'}</button>);})()}
         {/* Actions */}
-        <div style={{display:'flex',gap:6,justifyContent:'space-between'}}>
-          {onOpenNote&&(()=>{const mn=(state.meetingNotes||[]).find(n=>n.id===event.meetingNoteId);return mn?<button onClick={()=>{onClose();setTimeout(()=>onOpenNote(mn),50);}} style={{fontSize:11,color:'#534AB7',padding:'4px 10px',border:'0.5px solid #AFA9EC',borderRadius:5,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 수정</button>:<button onClick={()=>{const nn={id:uid(),title:form.title||event.title||'',date:event.date,time:form.time||event.time||'',attendees:'',projectId:form.projectId||event.projectId||null,category:form.category||event.category||'work',linkedEventId:event.id,blocks:[{id:uid(),type:'p',text:'',indent:0,checked:false}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};onClose();setTimeout(()=>onOpenNote(nn),50);}} style={{fontSize:11,color:'#534AB7',padding:'4px 10px',border:'0.5px solid #AFA9EC',borderRadius:5,backgroundColor:'#EEEDFE',cursor:'pointer'}}>📋 회의록 작성</button>;})()}
-          <button onClick={onDelete} style={{fontSize:12,color:'#E24B4A',padding:'4px 10px',border:'0.5px solid #E24B4A',borderRadius:5}}>삭제</button>
-          <div style={{display:'flex',gap:5}}>
-            <button onClick={onClose} style={{fontSize:12,color:'#888',padding:'4px 12px',border:'0.5px solid #E0E0E0',borderRadius:5}}>취소</button>
-            <button onClick={handleSave} style={{fontSize:12,color:'#fff',padding:'4px 12px',backgroundColor:'#534AB7',borderRadius:5,opacity:form.title.trim()?1:0.4}}>저장</button>
-          </div>
+        <div style={{display:'flex',gap:5,justifyContent:'flex-end'}}>
+          <button onClick={onDelete} style={{fontSize:12,color:'#E24B4A',padding:'4px 10px',border:'0.5px solid #E24B4A',borderRadius:5,marginRight:'auto'}}>삭제</button>
+          <button onClick={onClose} style={{fontSize:12,color:'#888',padding:'4px 12px',border:'0.5px solid #E0E0E0',borderRadius:5}}>취소</button>
+          <button onClick={handleSave} style={{fontSize:12,color:'#fff',padding:'4px 12px',backgroundColor:'#534AB7',borderRadius:5,opacity:form.title.trim()?1:0.4}}>저장</button>
         </div>
       </div>
     </div>
@@ -3269,73 +3268,83 @@ function YearView({year,onSelectMonth}){
   const{state}=useStore();
   const today=new Date();
   const[bdayTooltip,setBdayTooltip]=useState(null);
+  const[holidayTooltip,setHolidayTooltip]=useState(null);
+  const scrollRef=useRef(null);
+  const yearRefs=useRef({});
+  const years=[year-1,year,year+1];
   const getBdayEvents=(dateKey)=>(state.weeklyEvents||[]).filter(e=>getBdayPrefix(e.category,state)!==''&&e.date===dateKey);
-  return(
-    <div style={{flex:1,overflowY:'auto',padding:'20px 16px',backgroundColor:'#fff'}}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,240px)',gap:16,justifyContent:'center'}}>
-        {Array.from({length:12},(_,mo)=>{
-          const firstDay=new Date(year,mo,1);
-          const lastDay=new Date(year,mo+1,0);
-          const startDow=(firstDay.getDay()+6)%7;
-          const daysInMonth=lastDay.getDate();
-          const cells=[];
-          for(let i=0;i<startDow;i++)cells.push(null);
-          for(let d=1;d<=daysInMonth;d++)cells.push(d);
-          return(
-            <div key={mo} onClick={()=>onSelectMonth(mo)}
-              style={{cursor:'pointer',borderRadius:10,padding:'14px 12px',backgroundColor:'#fff',
-                border:'1px solid #EFEFEF',boxShadow:'0 1px 4px rgba(0,0,0,0.05)',transition:'box-shadow 0.15s,border-color 0.15s'}}
-              onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 14px rgba(83,74,183,0.13)';e.currentTarget.style.borderColor='#C5C0F0';}}
-              onMouseLeave={e=>{e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,0.05)';e.currentTarget.style.borderColor='#EFEFEF';}}>
-              <div style={{fontSize:13,fontWeight:700,color:'#534AB7',marginBottom:10,paddingLeft:2,letterSpacing:'-0.2px'}}>{mo+1}월</div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',rowGap:2,columnGap:0}}>
-                {['M','T','W','T','F','S','S'].map((d,i)=>(
-                  <div key={i} style={{textAlign:'center',fontSize:9,color:i>=5?'#FDAAB0':'#D0D0D0',paddingBottom:5,fontWeight:600,letterSpacing:'0.2px'}}>{d}</div>
-                ))}
-                {cells.map((d,ci)=>{
-                  if(!d)return<div key={'e'+ci}/>;
-                  const colDow=(startDow+d-1)%7;
-                  const dateKey=`${year}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                  const mmdd=`${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                  const isHoliday=getHoliday(dateKey)!==null||getHoliday(mmdd)!==null;
-                  const bdayEvs=getBdayEvents(dateKey);
-                  const isBday=bdayEvs.length>0;
-                  const isTd=today.getFullYear()===year&&today.getMonth()===mo&&today.getDate()===d;
-                  const isRed=isHoliday||colDow===6||colDow===5;
-                  const textColor=isTd?'#fff':isRed?'#E24B4A':'#444';
-                  return(
-                    <div key={d} onClick={e=>{e.stopPropagation();onSelectMonth(mo);}}
-                      style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-                        fontSize:10,position:'relative',height:24,
-                        fontWeight:isTd?700:400,color:textColor}}>
-                      <div style={{width:18,height:18,display:'flex',alignItems:'center',justifyContent:'center',
-                        backgroundColor:isTd?'#534AB7':'transparent',borderRadius:'50%',fontSize:10,lineHeight:1}}>
-                        {d}
-                      </div>
-                      {isBday&&!isTd&&(
-                        <div
-                          style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
-                            width:16,height:10,display:'flex',alignItems:'flex-end',justifyContent:'center',
-                            cursor:'default',zIndex:2,paddingBottom:1}}
-                          onClick={e=>e.stopPropagation()}
-                          onMouseEnter={e=>{
-                            e.stopPropagation();
-                            const rect=e.currentTarget.getBoundingClientRect();
-                            setBdayTooltip({names:bdayEvs.map(ev=>ev.title),x:rect.left+rect.width/2,y:rect.top});
-                          }}
-                          onMouseLeave={()=>setBdayTooltip(null)}
-                        >
-                          <div style={{width:5,height:5,borderRadius:'50%',backgroundColor:'#EC4899'}}/>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+  useEffect(()=>{
+    const el=yearRefs.current[year];
+    if(el&&scrollRef.current)scrollRef.current.scrollTo({top:el.offsetTop-24,behavior:'instant'});
+  },[year]);
+  const renderMonthCard=(yr,mo)=>{
+    const firstDay=new Date(yr,mo,1);const lastDay=new Date(yr,mo+1,0);
+    const startDow=(firstDay.getDay()+6)%7;const daysInMonth=lastDay.getDate();
+    const cells=[];
+    for(let i=0;i<startDow;i++)cells.push(null);
+    for(let d=1;d<=daysInMonth;d++)cells.push(d);
+    return(
+      <div key={mo} onClick={()=>onSelectMonth(yr,mo)}
+        style={{cursor:'pointer',borderRadius:10,padding:'14px 12px',backgroundColor:'#fff',
+          border:'1px solid #EFEFEF',boxShadow:'0 1px 4px rgba(0,0,0,0.05)',transition:'box-shadow 0.15s,border-color 0.15s'}}
+        onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 14px rgba(83,74,183,0.13)';e.currentTarget.style.borderColor='#C5C0F0';}}
+        onMouseLeave={e=>{e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,0.05)';e.currentTarget.style.borderColor='#EFEFEF';}}>
+        <div style={{fontSize:13,fontWeight:700,color:'#534AB7',marginBottom:10,paddingLeft:2,letterSpacing:'-0.2px'}}>{mo+1}월</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',rowGap:2,columnGap:0}}>
+          {['M','T','W','T','F','S','S'].map((d,i)=>(
+            <div key={i} style={{textAlign:'center',fontSize:9,color:i>=5?'#FDAAB0':'#D0D0D0',paddingBottom:5,fontWeight:600,letterSpacing:'0.2px'}}>{d}</div>
+          ))}
+          {cells.map((d,ci)=>{
+            if(!d)return<div key={'e'+ci}/>;
+            const colDow=(startDow+d-1)%7;
+            const dateKey=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const holiday=getHoliday(dateKey);
+            const isHoliday=holiday!==null;
+            const bdayEvs=getBdayEvents(dateKey);
+            const isBday=bdayEvs.length>0;
+            const isTd=today.getFullYear()===yr&&today.getMonth()===mo&&today.getDate()===d;
+            const isRed=isHoliday||colDow===6||colDow===5;
+            const textColor=isTd?'#fff':isRed?'#E24B4A':'#444';
+            return(
+              <div key={d} onClick={e=>{e.stopPropagation();onSelectMonth(yr,mo);}}
+                style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                  fontSize:10,position:'relative',height:24,fontWeight:isTd?700:400,color:textColor}}>
+                <div
+                  style={{width:18,height:18,display:'flex',alignItems:'center',justifyContent:'center',
+                    backgroundColor:isTd?'#534AB7':'transparent',borderRadius:'50%',fontSize:10,lineHeight:1}}
+                  onMouseEnter={isHoliday&&!isTd?e=>{e.stopPropagation();const r=e.currentTarget.getBoundingClientRect();setHolidayTooltip({name:holiday,x:r.left+r.width/2,y:r.top});}:undefined}
+                  onMouseLeave={isHoliday&&!isTd?()=>setHolidayTooltip(null):undefined}
+                >{d}</div>
+                {isBday&&!isTd&&(
+                  <div
+                    style={{position:'absolute',bottom:0,left:'50%',transform:'translateX(-50%)',
+                      width:16,height:10,display:'flex',alignItems:'flex-end',justifyContent:'center',
+                      cursor:'default',zIndex:2,paddingBottom:1}}
+                    onClick={e=>e.stopPropagation()}
+                    onMouseEnter={e=>{e.stopPropagation();const r=e.currentTarget.getBoundingClientRect();setBdayTooltip({names:bdayEvs.map(ev=>ev.title),x:r.left+r.width/2,y:r.top});}}
+                    onMouseLeave={()=>setBdayTooltip(null)}
+                  >
+                    <div style={{width:5,height:5,borderRadius:'50%',backgroundColor:'#EC4899'}}/>
+                  </div>
+                )}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
+    );
+  };
+  return(
+    <div ref={scrollRef} style={{flex:1,overflowY:'auto',padding:'20px 16px',backgroundColor:'#fff'}}>
+      {years.map((yr)=>(
+        <div key={yr} ref={el=>yearRefs.current[yr]=el}
+          style={{opacity:yr===year?1:0.38,marginBottom:44,transition:'opacity 0.2s',pointerEvents:yr===year?undefined:'auto'}}>
+          <div style={{fontSize:16,fontWeight:700,color:'#534AB7',marginBottom:16,textAlign:'center',letterSpacing:'-0.3px'}}>{yr}년</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,240px)',gap:16,justifyContent:'center'}}>
+            {Array.from({length:12},(_,mo)=>renderMonthCard(yr,mo))}
+          </div>
+        </div>
+      ))}
       {bdayTooltip&&(
         <div style={{position:'fixed',left:bdayTooltip.x,top:bdayTooltip.y-38,transform:'translateX(-50%)',
           backgroundColor:'#1F2937',color:'#fff',fontSize:11,padding:'5px 9px',borderRadius:6,
@@ -3345,6 +3354,17 @@ function YearView({year,onSelectMonth}){
           <div style={{position:'absolute',bottom:-5,left:'50%',transform:'translateX(-50%)',
             width:0,height:0,borderLeft:'5px solid transparent',
             borderRight:'5px solid transparent',borderTop:'5px solid #1F2937'}}/>
+        </div>
+      )}
+      {holidayTooltip&&(
+        <div style={{position:'fixed',left:holidayTooltip.x,top:holidayTooltip.y-38,transform:'translateX(-50%)',
+          backgroundColor:'rgba(226,75,74,0.95)',color:'#fff',fontSize:11,padding:'5px 9px',borderRadius:6,
+          pointerEvents:'none',zIndex:9999,whiteSpace:'nowrap',
+          boxShadow:'0 2px 10px rgba(0,0,0,0.18)',letterSpacing:'-0.2px'}}>
+          🎌 {holidayTooltip.name}
+          <div style={{position:'absolute',bottom:-5,left:'50%',transform:'translateX(-50%)',
+            width:0,height:0,borderLeft:'5px solid transparent',
+            borderRight:'5px solid transparent',borderTop:'5px solid rgba(226,75,74,0.95)'}}/>
         </div>
       )}
     </div>
@@ -3505,7 +3525,7 @@ function CalendarSection(){
           {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',padding:'4px 0',fontSize:11,color:i>=5?'#E24B4A':'#ABABAB',fontWeight:500}}>{d}</div>)}
         </div>}
       </div>
-      {yearView&&<YearView year={navYear} onSelectMonth={mo=>{setNavYear(navYear);setNavMonth(mo);scrollToYearMonth(navYear,mo);setYearView(false);}}/>}
+      {yearView&&<YearView year={navYear} onSelectMonth={(yr,mo)=>{setNavYear(yr);setNavMonth(mo);scrollToYearMonth(yr,mo);setYearView(false);}}/>}
       {/* Scrollable weeks */}
       <div ref={calendarScrollRef} style={{flex:1,overflowY:'auto',position:'relative',display:yearView?'none':'block',borderLeft:'0.5px solid #EBEBEB'}}>
         {allWeeks.map((weekDates,i)=>(
@@ -3562,7 +3582,7 @@ function PanelToggle(){
   const{leftWidth,leftCollapsed,setLeftCollapsed}=useLayout();
   return(
     <button onClick={()=>setLeftCollapsed(c=>!c)} title={leftCollapsed?'패널 열기':'패널 닫기'}
-      style={{position:'fixed',top:'50%',left:leftCollapsed?0:leftWidth,transform:'translateY(-50%)',
+      style={{position:'fixed',top:80,left:leftCollapsed?0:leftWidth,
         width:16,height:36,backgroundColor:'#F0EFF8',borderRadius:'0 7px 7px 0',zIndex:200,
         display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#534AB7',
         border:'0.5px solid #D5D2EE',borderLeft:'none',cursor:'pointer',
