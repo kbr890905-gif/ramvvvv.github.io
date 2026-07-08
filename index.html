@@ -261,6 +261,7 @@ function reducer(state,action){
     case 'DELETE_PLACED_STICKER':return{...state,placedStickers:state.placedStickers.filter(s=>s.id!==action.id)};
       case 'CLEAR_ALL_STICKERS':return{...state,placedStickers:[]};
     case 'REORDER_FOLDERS':return{...state,projectFolders:action.folders};
+    case 'MOVE_MEMO':{const src=getMemoList(state.projectMemos[action.fromProjectId]);const memo=src.find(m=>m.id===action.memoId);if(!memo)return state;const dst=getMemoList(state.projectMemos[action.toProjectId]);return{...state,projectMemos:{...state.projectMemos,[action.fromProjectId]:src.filter(m=>m.id!==action.memoId),[action.toProjectId]:[...dst,memo]}};}
     case 'ADD_PROJECT_FULL':return{...state,projects:[...state.projects,action.project]};
     case 'ADD_FOLDER':return{...state,projectFolders:[...(state.projectFolders||[]),action.folder]};
     case 'UPDATE_FOLDER':return{...state,projectFolders:(state.projectFolders||[]).map(f=>f.id===action.id?{...f,...action.updates}:f)};
@@ -679,13 +680,31 @@ async function cloudLoad(apiKey,binId){
 function StoreProvider({children}){
   const [state,rawDispatch]=useReducer(reducer,initialState);
   const historyRef=useRef([]);
+  const redoRef=useRef([]);
   const stateRef=useRef(state);
   // cloudLoadedRef: cloudLoad 완료 전에는 cloudSave 차단 (race condition 방지)
   const cloudLoadedRef=useRef(false);
   useEffect(()=>{stateRef.current=state;},[state]);
   const dispatch=useCallback((action)=>{
     historyRef.current=[...historyRef.current.slice(-49),stateRef.current];
+    redoRef.current=[];
     rawDispatch(action);
+  },[rawDispatch]);
+  const undo=useCallback(()=>{
+    const hist=historyRef.current;
+    if(hist.length===0)return;
+    const prev=hist[hist.length-1];
+    historyRef.current=hist.slice(0,-1);
+    redoRef.current=[...redoRef.current,stateRef.current];
+    rawDispatch({type:'RESTORE_STATE',state:prev});
+  },[rawDispatch]);
+  const redo=useCallback(()=>{
+    const rd=redoRef.current;
+    if(rd.length===0)return;
+    const nxt=rd[rd.length-1];
+    redoRef.current=rd.slice(0,-1);
+    historyRef.current=[...historyRef.current,stateRef.current];
+    rawDispatch({type:'RESTORE_STATE',state:nxt});
   },[rawDispatch]);
   // Auto-snapshot on mount
   useEffect(()=>{setTimeout(()=>autoSnapshot(stateRef.current),1000);},[]);
@@ -740,16 +759,10 @@ function StoreProvider({children}){
   },[]);
   useEffect(()=>{
     const onKey=(e)=>{
-      if((e.ctrlKey||e.metaKey)&&e.key==='z'&&!e.shiftKey){
-        const t=e.target;
-        if(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)return;
-        e.preventDefault();
-        const hist=historyRef.current;
-        if(hist.length===0)return;
-        const prev=hist[hist.length-1];
-        historyRef.current=hist.slice(0,-1);
-        rawDispatch({type:'RESTORE_STATE',state:prev});
-      }
+      const t=e.target;
+      if(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)return;
+      if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')&&!e.shiftKey){e.preventDefault();undo();}
+      if(((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')&&e.shiftKey)||((e.ctrlKey||e.metaKey)&&(e.key==='y'||e.key==='Y'))){e.preventDefault();redo();}
     };
     document.addEventListener('keydown',onKey);
     return()=>document.removeEventListener('keydown',onKey);
@@ -775,7 +788,7 @@ function StoreProvider({children}){
     },300);
     return()=>{if(lsTimerRef.current)clearTimeout(lsTimerRef.current);};
   },[state]);
-  return<StoreContext.Provider value={{state,dispatch}}>{children}</StoreContext.Provider>;
+  return<StoreContext.Provider value={{state,dispatch,undo,redo}}>{children}</StoreContext.Provider>;
 }
 const useStore=()=>useContext(StoreContext);
 
@@ -1590,7 +1603,7 @@ function LayerCtxMenu({menu,onClose,dispatch,workLabel,workColor,personalLabel,p
 }
 
 function TopBar(){
-  const{state,dispatch}=useStore();
+  const{state,dispatch,undo,redo}=useStore();
   const{workVisible,personalVisible,outlookVisible,customLayers,layerOrder,workLabel,personalLabel,workColor,personalColor,titleText,topBarBg,topBarImg}=state;
   const{freeLayerVisible,setFreeLayerVisible,stickerMode,setStickerMode,scrollToTodayRef}=useLayout();
   const catStyle=useDynCatStyle();
@@ -1688,7 +1701,8 @@ function TopBar(){
       )}
       <div style={{flex:1}}/>
       {/* Layer chips row — unified, all draggable */}
-      <div style={{display:'flex',alignItems:'center',gap:6,overflowX:'auto',flexShrink:1}}>
+      <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:1,minWidth:0}}>
+      <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',backgroundColor:'#F5F5F6',borderRadius:20,flexShrink:1,overflowX:'auto',border:'0.5px solid #EFEFEF'}}>
         {(()=>{
           // Build ordered layer list from layerOrder + catStyle
           const orderedLayers=(layerOrder||['work','personal']).map(id=>{
@@ -1817,6 +1831,9 @@ function TopBar(){
             + 레이어
           </button>
         )}
+      </div>
+        <button title="되돌리기 (Ctrl+Z)" onClick={undo} style={{display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',fontSize:13,color:'#8C8C8C',border:'0.5px solid #E8E8E8',flexShrink:0,backgroundColor:'#FAFAFA'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C8C'}>↺</button>
+        <button title="다시 실행 (Ctrl+Shift+Z)" onClick={redo} style={{display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',fontSize:13,color:'#8C8C8C',border:'0.5px solid #E8E8E8',flexShrink:0,backgroundColor:'#FAFAFA'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C8C'}>↻</button>
         <div style={{width:'0.5px',height:14,backgroundColor:'#E8E8E8',margin:'0 2px',flexShrink:0}}/>
         <button onClick={()=>setSettingsOpen(true)}
           style={{display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',
@@ -1917,6 +1934,7 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
   const[memoDragOver,setMemoDragOver]=useState(false);
   const[selBar,setSelBar]=useState(null);
   const editorRef=React.useRef(null);
+  const lastDbl=React.useRef(0);
   // Init contentEditable when expanded — migrate plain text → HTML
   React.useEffect(()=>{
     if(editorRef.current&&!memo.collapsed){
@@ -1945,13 +1963,13 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
   const saveTitle=()=>{const t=titleVal.trim()||'메모';dispatch({type:'UPDATE_MEMO',projectId,id:memo.id,updates:{title:t}});setEditTitle(false);};
   return(
     <div
-      draggable
-      onDragStart={e=>{e.dataTransfer.setData('memoId',memo.id);e.dataTransfer.setData('projectId',projectId);e.dataTransfer.effectAllowed='move';}}
+      draggable={!bodyFocus}
+      onDragStart={e=>{if(e.target.isContentEditable||(window.getSelection()&&!window.getSelection().isCollapsed)){e.preventDefault();return;}e.dataTransfer.setData('memoId',memo.id);e.dataTransfer.setData('projectId',projectId);e.dataTransfer.effectAllowed='move';}}
       onDragOver={e=>{e.preventDefault();setMemoDragOver(true);}}
       onDragLeave={()=>setMemoDragOver(false)}
       onDrop={e=>{e.preventDefault();setMemoDragOver(false);const fromId=e.dataTransfer.getData('memoId');if(fromId&&fromId!==memo.id){window._pendingMemoDrop&&window._pendingMemoDrop(fromId,memo.id,projectId);}}}
       onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
-      style={{borderTop:memoDragOver?`2px solid ${projectColor}`:'2px solid transparent',paddingLeft:14,paddingBottom:4,transition:'border-color 0.1s'}}
+      style={{borderTop:memoDragOver?`2px solid ${projectColor}`:'2px solid transparent',paddingLeft:8,paddingBottom:4,transition:'border-color 0.1s'}}
     >
       <div style={{display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}
         onClick={()=>dispatch({type:'UPDATE_MEMO',projectId,id:memo.id,updates:{collapsed:!memo.collapsed}})}>
@@ -1976,7 +1994,7 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
           {/* 드래그 선택 팝업 제거됨 — 포커스 시 고정 툴바만 사용 */}
           {/* Static toolbar — shown when focused */}
           {bodyFocus&&(
-            <div onMouseDown={e=>e.preventDefault()} style={{display:'inline-flex',gap:1,marginTop:5,marginBottom:4,flexWrap:'wrap',alignItems:'center',padding:'2px 3px',backgroundColor:'#fff',border:'0.5px solid #E6E6E6',borderRadius:8,boxShadow:'0 2px 10px rgba(15,15,35,0.08)'}}>
+            <div onMouseDown={e=>e.preventDefault()} style={{position:'absolute',top:-34,left:0,zIndex:95,display:'inline-flex',gap:1,alignItems:'center',padding:'2px 3px',backgroundColor:'#fff',border:'0.5px solid #E6E6E6',borderRadius:8,boxShadow:'0 3px 12px rgba(15,15,35,0.14)',animation:'popIn 0.14s ease',whiteSpace:'nowrap'}}>
               <button className="fmt-btn" title="굵게" onMouseDown={e=>{e.preventDefault();applyFmt('bold');}} style={{...btnS,fontWeight:700}}>B</button>
               <button className="fmt-btn" title="글머리 기호" onMouseDown={e=>{e.preventDefault();insertBullet();}} style={btnS}>•</button>
               <button className="fmt-btn" title="들여쓰기" onMouseDown={e=>{e.preventDefault();doIndent();}} style={btnS}>⇥</button>
@@ -1994,6 +2012,7 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
             spellCheck={false}
             data-placeholder="내용을 입력하세요..."
             className="memo-body-editor"
+            onDoubleClick={()=>{const now=Date.now();if(now-lastDbl.current<600&&editorRef.current){const r=document.createRange();r.selectNodeContents(editorRef.current);const s=window.getSelection();s.removeAllRanges();s.addRange(r);}lastDbl.current=now;}}
             onFocus={()=>setBodyFocus(true)}
             onBlur={()=>{setBodyFocus(false);save();setSelBar(null);}}
             onInput={save}
@@ -2031,7 +2050,7 @@ function ProjectItem({project,dragId,dragOverId,onDragStart,onDragEnd,onDragOver
       onDragStart={e=>{e.dataTransfer.effectAllowed='move';onDragStart(project.id);}}
       onDragEnd={onDragEnd}
       onDragOver={e=>{e.preventDefault();e.dataTransfer.dropEffect='move';onDragOver(project.id);}}
-      onDrop={e=>{e.preventDefault();onDrop(project.id);}}
+      onDrop={e=>{e.preventDefault();const mid=e.dataTransfer.getData('memoId');const fromP=e.dataTransfer.getData('projectId');if(mid&&fromP&&fromP!==project.id){dispatch({type:'MOVE_MEMO',fromProjectId:fromP,memoId:mid,toProjectId:project.id});return;}onDrop(project.id);}}
       style={{position:'relative',paddingBottom:6,borderBottom:'0.5px solid #EFEFEF',opacity:isDragging?0.4:1,transition:'opacity 0.12s'}}
       onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
     >
@@ -2152,7 +2171,7 @@ function ProjectsSection(){
             <div key={f.id}>
               <FolderRow f={f} count={inFolder.length} dragId={dragId} dispatch={dispatch} clearDrag={()=>{setDragId(null);setDragOverId(null);}} fDrag={fDrag} setFDrag={setFDrag} onFolderReorder={onFolderReorder}/>
               {!f.folded&&inFolder.length>0&&(
-                <div style={{display:'flex',flexDirection:'column',gap:8,paddingLeft:12,marginTop:7,marginLeft:5,borderLeft:'1.5px solid #F0F0F0'}}>
+                <div style={{display:'flex',flexDirection:'column',gap:8,paddingLeft:6,marginTop:7,marginLeft:3,borderLeft:'1.5px solid #F0F0F0'}}>
                   {inFolder.map(p=><ProjectItem key={p.id} project={p} dragId={dragId} dragOverId={dragOverId} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={handleDrop}/>)}
                 </div>
               )}
@@ -3477,6 +3496,8 @@ function MemoEditor({memoKey,value,onUpdate}){
   const ref=useRef(null);
   const[focused,setFocused]=useState(false);
   const prevKey=useRef(memoKey);
+  const wrapRef=useRef(null);
+  const[barPos,setBarPos]=useState(null);
   useEffect(()=>{
     if(ref.current){ref.current.innerHTML=value||'';}
   },[]);
@@ -3488,19 +3509,19 @@ function MemoEditor({memoKey,value,onUpdate}){
   },[memoKey,value,focused]);
   const execCmd=(cmd,e)=>{e.preventDefault();document.execCommand(cmd,false,null);ref.current?.focus();onUpdate(ref.current?.innerHTML||'');};
   return(
-    <div style={{display:'flex',flexDirection:'column',height:'100%',position:'relative'}}>
+    <div ref={wrapRef} style={{display:'flex',flexDirection:'column',height:'100%',position:'relative'}}>
       {focused&&(
-        <div style={{position:'absolute',top:0,left:0,zIndex:90,display:'inline-flex',gap:1,padding:'2px 3px',backgroundColor:'#fff',border:'0.5px solid #E6E6E6',borderRadius:7,boxShadow:'0 2px 10px rgba(15,15,35,0.16)',animation:'popIn 0.14s ease'}}>
+        <div style={{position:'fixed',top:barPos?barPos.t:0,left:barPos?barPos.l:0,zIndex:5000,display:'inline-flex',gap:1,padding:'2px 3px',backgroundColor:'#fff',border:'0.5px solid #E6E6E6',borderRadius:7,boxShadow:'0 3px 12px rgba(15,15,35,0.18)',animation:'popIn 0.14s ease'}}>
           <button className="fmt-btn" onMouseDown={e=>execCmd('bold',e)} title="굵게" style={{fontSize:10.5,fontWeight:700,minWidth:20,height:20,padding:'0 4px',color:'#55545E',border:'none',borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>B</button>
           <button className="fmt-btn" onMouseDown={e=>execCmd('italic',e)} title="기울임" style={{fontSize:10.5,fontStyle:'italic',minWidth:20,height:20,padding:'0 4px',color:'#55545E',border:'none',borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif'}}>i</button>
           <button className="fmt-btn" onMouseDown={e=>execCmd('strikeThrough',e)} title="취소선" style={{fontSize:10.5,textDecoration:'line-through',minWidth:20,height:20,padding:'0 4px',color:'#55545E',border:'none',borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>S</button>
         </div>
       )}
       <div ref={ref} contentEditable suppressContentEditableWarning
-        onFocus={()=>setFocused(true)}
+        onFocus={()=>{if(wrapRef.current){const r=wrapRef.current.getBoundingClientRect();setBarPos({t:Math.max(60,r.top-32),l:Math.max(8,r.left)});}setFocused(true);}}
         onBlur={()=>{setFocused(false);onUpdate(ref.current?.innerHTML||'');}}
         onInput={e=>onUpdate(e.currentTarget.innerHTML)}
-        style={{flex:1,fontSize:13,color:'#555',outline:'none',overflowY:'auto',lineHeight:1.5,cursor:'text',wordBreak:'break-all',padding:0,paddingTop:focused?26:0,transition:'padding-top 0.15s ease'}}
+        style={{flex:1,fontSize:13,color:'#555',outline:'none',overflowY:'auto',lineHeight:1.5,cursor:'text',wordBreak:'break-all',padding:0}}
         data-placeholder="메모"/>
     </div>
   );
@@ -3551,7 +3572,7 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
         style={{flex:2,overflowY:'auto',padding:'3px 4px 2px',borderBottom:'0.5px solid #EFEFEF',minHeight:0,cursor:todoActive?'default':'text',position:'relative'}} onClick={()=>{if(!todoActive)activateTodo();}}>
         {todoDragIdx!==null&&<div style={{position:'absolute',left:3,right:3,top:3+todoDragIdx*20,height:17,borderRadius:6,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.07)',pointerEvents:'none',transition:'top 0.12s ease',zIndex:2}}/>}
         {todos.map((t,ci)=><div key={t.id} style={{transform:(todoDragIdx!==null&&ci>=todoDragIdx)?'translateY(20px)':'translateY(0)',transition:'transform 0.15s ease'}}><TodoItem todo={t} onToggle={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} onDelete={()=>dispatch({type:'DELETE_TODO',id:t.id})} onEdit={text=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{text}})}/></div>)}
-        {todoActive&&<div style={{display:'flex',alignItems:'center',gap:3,marginTop:todos.length?2:0}} onClick={e=>e.stopPropagation()}><button onClick={()=>setTodoCat(c=>c==='work'?'personal':'work')} style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:`0.5px solid ${todoCat==='work'?catStyle.work.border:catStyle.personal.border}`,backgroundColor:todoCat==='work'?catStyle.work.bg:catStyle.personal.bg,color:todoCat==='work'?catStyle.work.text:catStyle.personal.text}}>{todoCat==='work'?(state.workLabel||'업무').slice(0,1):(state.personalLabel||'개인').slice(0,1)}</button><button onClick={()=>setTodoRepeat(v=>!v)} title="매주 반복 (12주)" style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:'0.5px solid '+(todoRepeat?'#AFA9EC':'#E4E4E4'),backgroundColor:todoRepeat?'#EEEDFE':'#FAFAFA',color:todoRepeat?'#534AB7':'#ABABAB'}}>매주</button><input ref={todoRef} value={todoVal} onChange={e=>setTodoVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitTodo();if(e.key==='Escape'){setTodoVal('');setTodoActive(false);}}} onBlur={()=>setTimeout(submitTodo,120)} placeholder="할 일" style={{flex:1,fontSize:11,color:'#333',minWidth:0,borderBottom:'0.5px solid #E8E8E8'}}/></div>}
+        {todoActive&&<div style={{display:'flex',alignItems:'center',gap:3,marginTop:todos.length?2:0}} onClick={e=>e.stopPropagation()}><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoCat(c=>c==='work'?'personal':'work')} style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:`0.5px solid ${todoCat==='work'?catStyle.work.border:catStyle.personal.border}`,backgroundColor:todoCat==='work'?catStyle.work.bg:catStyle.personal.bg,color:todoCat==='work'?catStyle.work.text:catStyle.personal.text}}>{todoCat==='work'?(state.workLabel||'업무').slice(0,1):(state.personalLabel||'개인').slice(0,1)}</button><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoRepeat(v=>!v)} title="매주 반복 (12주)" style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:'0.5px solid '+(todoRepeat?'#AFA9EC':'#E4E4E4'),backgroundColor:todoRepeat?'#EEEDFE':'#FAFAFA',color:todoRepeat?'#534AB7':'#ABABAB'}}>매주</button><input ref={todoRef} value={todoVal} onChange={e=>setTodoVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitTodo();if(e.key==='Escape'){setTodoVal('');setTodoActive(false);}}} onBlur={()=>setTimeout(submitTodo,120)} placeholder="할 일" style={{flex:1,fontSize:11,color:'#333',minWidth:0,borderBottom:'0.5px solid #E8E8E8'}}/></div>}
         {!todoActive&&todos.length===0&&<div style={{fontSize:11,color:'#CFCFD7',paddingTop:2}}>+ 할 일</div>}
       </div>
       <div style={{flex:1.2,padding:'3px 5px',borderBottom:'0.5px solid #EFEFEF',minHeight:0,overflow:'hidden'}}><MemoEditor memoKey={dk} value={memo} onUpdate={html=>dispatch({type:'SET_WEEK_MEMO',date:dk,text:html})}/></div>
@@ -4229,9 +4250,9 @@ function CalendarSection(){
 }
 // ─── MAIN AREA ───────────────────────────────
 function MainArea(){
-  const{leftWidth,leftCollapsed}=useLayout();
+  const{leftWidth,leftCollapsed,rightDockOpen,dockW}=useLayout();
   return(
-    <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-left 0.2s ease'}}>
+    <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',marginRight:rightDockOpen?(dockW||308)+16:0,transition:'margin-left 0.2s ease,margin-right 0.2s ease'}}>
       <WeeklySection/>
       <CalendarSection/>
     </main>
@@ -4253,8 +4274,7 @@ function PanelToggle(){
   );
 }
 function RightDock(){
-  const{rightDockOpen,setRightDockOpen,setStickerMode}=useLayout();
-  const[dockW,setDockW]=React.useState(()=>lsLoad('dockW',308));
+  const{rightDockOpen,setRightDockOpen,setStickerMode,dockW,setDockW}=useLayout();
   const onDockResize=(e)=>{
     e.preventDefault();
     const sx=e.clientX,sw=dockW;
@@ -4301,12 +4321,13 @@ function App(){
   const[stickerMode,setStickerMode]=React.useState(false);
   const[selectedStickerId,setSelectedStickerId]=React.useState(null);
   const[rightDockOpen,setRightDockOpen]=React.useState(false);
+  const[dockW,setDockW]=React.useState(()=>lsLoad('dockW',308));
   const calendarScrollRef=React.useRef(null);
   const scrollToTodayRef=React.useRef(null);
   React.useEffect(()=>{if(activeNoteId)setRightDockOpen(true);},[activeNoteId]);
   React.useEffect(()=>{if(selectedStickerId)setRightDockOpen(true);},[selectedStickerId]);
   return(
-    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId,rightDockOpen,setRightDockOpen}}>
+    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId,rightDockOpen,setRightDockOpen,dockW,setDockW}}>
       <StoreProvider>
         <ToastProvider>
           <TopBar/>
