@@ -43,6 +43,8 @@
   .note-editor ul{list-style:disc;padding-left:16px;margin:1px 0;}
   .note-editor ol{list-style:decimal;padding-left:16px;margin:1px 0;}
   .txt-note:hover{box-shadow:0 0 0 1px #D9D6F4 !important;}
+  .lp-sec .lp-add{opacity:0;transition:opacity 0.15s;}
+  .lp-sec:hover .lp-add{opacity:1;}
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;} input[type=number]{-moz-appearance:textfield;}
   @keyframes popIn{from{opacity:0;transform:scale(0.97) translateY(4px);}to{opacity:1;transform:scale(1) translateY(0);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
@@ -1843,6 +1845,8 @@ function HighlightItem({highlight,project}){
 }
 function MonthlyHighlights(){
   const{state,dispatch}=useStore();const{monthlyHighlights,projects,hlYear,hlMonth}=state;
+  const[fold,setFold]=useState(()=>lsLoad('foldHl',false));
+  const toggleFold=()=>setFold(f=>{lsSave('foldHl',!f);return !f;});
   const goPrevHl=()=>{if(hlMonth===0)dispatch({type:'SET_HL_MONTH',hlYear:hlYear-1,hlMonth:11});else dispatch({type:'SET_HL_MONTH',hlYear,hlMonth:hlMonth-1});};
   const goNextHl=()=>{if(hlMonth===11)dispatch({type:'SET_HL_MONTH',hlYear:hlYear+1,hlMonth:0});else dispatch({type:'SET_HL_MONTH',hlYear,hlMonth:hlMonth+1});};
   const getProject=id=>projects.find(p=>p.id===id)||null;
@@ -1854,17 +1858,17 @@ function MonthlyHighlights(){
     return m===hlMonth+1;
   });
   return(
-    <section style={{marginBottom:20}}>
+    <section className="lp-sec" style={{marginBottom:18}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
         <div style={{display:'flex',alignItems:'center',gap:4}}>
-          <span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>주요일정</span>
+          <button onClick={toggleFold} style={{display:'inline-flex',alignItems:'center',gap:4,background:'none',border:'none',cursor:'pointer',padding:0}}><span style={{fontSize:8,color:'#C4C4C4',display:'inline-block',transform:fold?'rotate(-90deg)':'none',transition:'transform 0.15s'}}>▼</span><span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>주요일정</span></button>
           <button onClick={goPrevHl} style={{fontSize:12,color:'#C8C8C8',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
           <span style={{fontSize:13,color:'#888',fontWeight:500,minWidth:38,textAlign:'center'}}>{hlYear}년 {hlMonth+1}월</span>
           <button onClick={goNextHl} style={{fontSize:12,color:'#C8C8C8',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>›</button>
         </div>
-        <button onClick={()=>dispatch({type:'ADD_HIGHLIGHT',yearMonth:currentYM})} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E4E4E4';}}>+ 추가</button>
+        <button className="lp-add" onClick={()=>dispatch({type:'ADD_HIGHLIGHT',yearMonth:currentYM})} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E4E4E4';}}>+ 추가</button>
       </div>
-      {filteredHighlights.length===0?<div style={{fontSize:13,color:'#CDCDCD',textAlign:'center',padding:'6px 0'}}>이 달에 주요일정이 없습니다</div>:<div style={{display:'flex',flexDirection:'column',gap:2,paddingRight:8}}>{filteredHighlights.map(h=><HighlightItem key={h.id} highlight={h} project={getProject(h.projectId)}/>)}</div>}
+      {!fold&&(filteredHighlights.length===0?<div style={{fontSize:13,color:'#CDCDCD',textAlign:'center',padding:'6px 0'}}>이 달에 주요일정이 없습니다</div>:<div style={{display:'flex',flexDirection:'column',gap:2,paddingRight:8}}>{filteredHighlights.map(h=><HighlightItem key={h.id} highlight={h} project={getProject(h.projectId)}/>)}</div>)}
     </section>
   );
 }
@@ -1996,17 +2000,19 @@ function ProjectItem({project,dragId,dragOverId,onDragStart,onDragEnd,onDragOver
     >
       {isDragOver&&<div style={{position:'absolute',top:0,left:0,right:0,height:2,backgroundColor:project.color,borderRadius:1,zIndex:2}}/>}
       <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
+        <span onClick={e=>{e.stopPropagation();dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{folded:!project.folded}});}} title={project.folded?'펼치기':'접기'} style={{fontSize:8,color:'#C4C4C4',cursor:'pointer',flexShrink:0,display:'inline-block',transform:project.folded?'rotate(-90deg)':'none',transition:'transform 0.15s',userSelect:'none',padding:'2px 1px'}}>▼</span>
         <span title="드래그해서 순서 변경" style={{fontSize:12,color:hovered?'#C8C8C8':'transparent',cursor:'grab',flexShrink:0,lineHeight:1,transition:'color 0.15s',userSelect:'none'}}>⠿</span>
         <div style={{position:'relative',flexShrink:0}}>
           <div onClick={()=>setCpOpen(v=>!v)} style={{width:9,height:9,borderRadius:'50%',backgroundColor:project.color,cursor:'pointer',border:`1.5px solid ${project.color}`,transition:'transform 0.1s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.2)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}/>
           {cpOpen&&<ColorPickerPopover selectedColor={project.color} onSelect={c=>dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{color:c}})} onClose={()=>setCpOpen(false)} style={{top:12,left:0}}/>}
         </div>
         {editing?<input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} onBlur={saveName} onKeyDown={e=>{if(e.key==='Enter')saveName();if(e.key==='Escape'){setNameVal(project.name);setEditing(false);}}} style={{flex:1,fontSize:13,fontWeight:500,color:project.color,borderBottom:`0.5px solid ${project.color}`,paddingBottom:1,minWidth:0}}/>:<span onDoubleClick={()=>{setNameVal(project.name);setEditing(true);}} style={{flex:1,fontSize:13,fontWeight:500,color:project.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'text',minWidth:0}}>{project.name}</span>}
+        {memos.length>0&&<span style={{fontSize:9.5,color:'#9A9A9A',backgroundColor:'#F3F3F3',borderRadius:8,padding:'1px 6px',lineHeight:1.4,flexShrink:0}}>{memos.length}</span>}
         <button onClick={()=>dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{layer:project.layer==='work'?'personal':'work'}})} title={project.layer==='personal'?'개인→업무':'업무→개인'} style={{fontSize:10,padding:'1px 4px',borderRadius:3,flexShrink:0,opacity:0.6,border:'0.5px solid #E0E0E0',color:project.layer==='personal'?'#185FA5':'#534AB7',backgroundColor:project.layer==='personal'?'#E6F1FB':'#EEEDFE'}}>{project.layer==='personal'?'개인':'업무'}</button>
         {hovered&&!editing&&<button onClick={()=>dispatch({type:'DELETE_PROJECT',id:project.id})} style={{fontSize:13,color:'#CCC',lineHeight:1,flexShrink:0,padding:'1px 2px'}} onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'} onMouseLeave={e=>e.currentTarget.style.color='#CCC'}>×</button>}
       </div>
       <div>
-        {memos.map((memo,idx)=>(
+        {!project.folded&&memos.map((memo,idx)=>(
           <MemoItem key={memo.id} memo={memo} projectId={project.id} projectColor={project.color} memoIdx={idx} memoCount={memos.length} dispatch={dispatch}/>
         ))}
       </div>
@@ -2020,7 +2026,9 @@ function ProjectItem({project,dragId,dragOverId,onDragStart,onDragEnd,onDragOver
   );
 }
 function ProjectsSection(){
-  const{state,dispatch}=useStore();const[adding,setAdding]=useState(false);const[newName,setNewName]=useState('');const[newColor,setNewColor]=useState(PROJECT_COLORS[3]);const[cpOpen,setCpOpen]=useState(false);const nameRef=useRef(null);
+  const{state,dispatch}=useStore();const[adding,setAdding]=useState(false);
+  const[fold,setFold]=useState(()=>lsLoad('foldPj',false));
+  const toggleFold=()=>setFold(f=>{lsSave('foldPj',!f);return !f;});const[newName,setNewName]=useState('');const[newColor,setNewColor]=useState(PROJECT_COLORS[3]);const[cpOpen,setCpOpen]=useState(false);const nameRef=useRef(null);
   const[newLayer,setNewLayer]=useState('work');const handleAdd=()=>{const t=newName.trim();if(!t)return;dispatch({type:'ADD_PROJECT',name:t,color:newColor,layer:newLayer});setNewName('');setNewColor(PROJECT_COLORS[3]);setAdding(false);};
   const[dragId,setDragId]=useState(null);const[dragOverId,setDragOverId]=useState(null);
   const handleDragStart=(id)=>{setDragId(id);setDragOverId(null);};
@@ -2036,11 +2044,12 @@ function ProjectsSection(){
     setDragId(null);setDragOverId(null);
   };
   return(
-    <section>
+    <section className="lp-sec">
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
-        <span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>프로젝트</span>
-        <button onClick={()=>{setAdding(true);setTimeout(()=>nameRef.current?.focus(),30);}} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E4E4E4';}}>+ 추가</button>
+        <button onClick={toggleFold} style={{display:'inline-flex',alignItems:'center',gap:4,background:'none',border:'none',cursor:'pointer',padding:0}}><span style={{fontSize:8,color:'#C4C4C4',display:'inline-block',transform:fold?'rotate(-90deg)':'none',transition:'transform 0.15s'}}>▼</span><span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>프로젝트</span></button>
+        <button className="lp-add" onClick={()=>{setAdding(true);setTimeout(()=>nameRef.current?.focus(),30);}} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E4E4E4';}}>+ 추가</button>
       </div>
+      {!fold&&(<>
       {adding&&<div style={{border:'0.5px solid #E8E8E8',borderRadius:6,padding:'8px',marginBottom:10,backgroundColor:'#FAFAFA'}}>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
           <div style={{position:'relative',flexShrink:0}}><div onClick={()=>setCpOpen(v=>!v)} style={{width:14,height:14,borderRadius:'50%',backgroundColor:newColor,cursor:'pointer',border:`1.5px solid ${newColor}`}}/>{cpOpen&&<ColorPickerPopover selectedColor={newColor} onSelect={c=>setNewColor(c)} onClose={()=>setCpOpen(false)} style={{top:18,left:0}}/>}</div>
@@ -2053,45 +2062,24 @@ function ProjectsSection(){
         </div>
       </div>}
       {state.projects.length===0&&!adding?<div style={{fontSize:13,color:'#CDCDCD',textAlign:'center',padding:'10px 0'}}>프로젝트를 추가해보세요</div>:<div style={{display:'flex',flexDirection:'column',gap:8}}>{state.projects.map(p=><ProjectItem key={p.id} project={p} dragId={dragId} dragOverId={dragOverId} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={handleDrop}/>)}</div>}
+      </>)}
     </section>
   );
 }
 // ─── FREE NOTE PANEL ─────────────────────────
 function FreeNotePanel(){
   const{state,dispatch}=useStore();
-  const{freeLayerVisible,setFreeLayerVisible,calendarScrollRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId}=useLayout();
-  const[stickyOpen,setStickyOpen]=useState(true);
-  const[textOpen,setTextOpen]=useState(true);
+  const{freeLayerVisible,setFreeLayerVisible,calendarScrollRef,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId}=useLayout();
+  const[dockTab,setDockTab]=useState(()=>lsLoad('dockTab','notes'));
   const[stickerTab,setStickerTab]=useState(0);
-  const[stickerH,setStickerH]=useState(320);
-  const onStickerResize=useCallback((e)=>{
-    e.preventDefault();
-    const startY=e.clientY,startH=stickerH;
-    const onMove=(ev)=>{setStickerH(Math.max(150,Math.min(600,startH+(startY-ev.clientY))));};
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  },[stickerH]);
-  // Auto-expand panel when sticker section opens
-  useEffect(()=>{
-    if(stickerMode) setFreeNotePanelHeight(h=>Math.max(h,400));
-  },[stickerMode,setFreeNotePanelHeight]);
+  useEffect(()=>{if(stickerMode)setDockTab('stickers');},[stickerMode]);
+  useEffect(()=>{if(activeNoteId)setDockTab('notes');},[activeNoteId]);
   const notes=state.stickyNotes||[];
-  const stickyNotes=notes.filter(n=>n.type!=='text');
-  const textNotes=notes.filter(n=>n.type==='text');
-
-  const onResizeMouseDown=useCallback((e)=>{
-    e.preventDefault();
-    const startY=e.clientY,startH=freeNotePanelHeight;
-    const onMove=(ev)=>{const h=Math.max(80,Math.min(500,startH-(ev.clientY-startY)));setFreeNotePanelHeight(h);};
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  },[freeNotePanelHeight,setFreeNotePanelHeight]);
   const activeNote=notes.find(n=>n.id===activeNoteId)||null;
   const FONT_SIZES=[11,12,13,14,16,18,20,24];
   const TEXT_COLORS=['#1A1A1A','#534AB7','#1D9E75','#E24B4A','#D97706','#4A90D9','#888','#fff'];
   const BG_COLORS=['transparent','#FFFDE7','#FFF3E0','#E3F2FD','#E8F5E9','#FCE4EC','#EDE7F6','#F3E5F5','#1A1A1A','#534AB7'];
   const updateActiveNote=(updates)=>{if(activeNote)dispatch({type:'UPDATE_STICKY_NOTE',id:activeNote.id,updates});};
-
   const scrollToNote=(note)=>{
     const c=calendarScrollRef?.current;
     if(c)c.scrollTo({top:Math.max(0,note.y-c.clientHeight/2+70),behavior:'smooth'});
@@ -2109,22 +2097,23 @@ function FreeNotePanel(){
     setActiveNoteId(newId);
     setTimeout(()=>{if(c)c.scrollTo({top:Math.max(0,y-c.clientHeight/2+70),behavior:'smooth'});},60);
   };
-  const addSticker=(stickerType,content)=>{
+  const addSticker=(stickerType,stContent)=>{
     const c=calendarScrollRef?.current;
     const n=(state.placedStickers||[]).length;
     const off=(n%6)*30;
     const x=c?Math.max(24,(c.clientWidth-48)/2-80+off):200;
     const y=c?c.scrollTop+c.clientHeight/2-84+off*0.7:200;
-    dispatch({type:'ADD_PLACED_STICKER',sticker:{type:stickerType,content,x,y,size:48,rotation:0}});
+    if(!freeLayerVisible)setFreeLayerVisible(true);
+    dispatch({type:'ADD_PLACED_STICKER',sticker:{type:stickerType,content:stContent,x,y,size:48,rotation:0}});
   };
   const StickerRow=({s})=>{
     const faceEmoji=s.type==='face'?FACE_STICKERS.find(f=>f.id===s.content)?.emoji:null;
-        const shapeDef=s.type==='shape'?SHAPE_STICKERS.find(f=>f.id===s.content):null;
-        const arrowDef2=s.type==='arrow_svg'?ARROW_SVG_STICKERS.find(f=>f.id===s.content):null;
-        const sketchDef2=s.type==='sketch'?SKETCH_STICKERS.find(f=>f.id===s.content):null;
-        const isSelected=selectedStickerId===s.id;
+    const shapeDef=s.type==='shape'?SHAPE_STICKERS.find(f=>f.id===s.content):null;
+    const arrowDef2=s.type==='arrow_svg'?ARROW_SVG_STICKERS.find(f=>f.id===s.content):null;
+    const sketchDef2=s.type==='sketch'?SKETCH_STICKERS.find(f=>f.id===s.content):null;
+    const isSelected=selectedStickerId===s.id;
     return(
-      <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 4px',borderRadius:4,cursor:'pointer',marginBottom:1,
+      <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 4px',borderRadius:5,cursor:'pointer',marginBottom:1,
         backgroundColor:isSelected?'rgba(83,74,183,0.08)':'transparent'}}
         onMouseEnter={e=>{if(!isSelected)e.currentTarget.style.backgroundColor='#F3F3F3';}}
         onMouseLeave={e=>{e.currentTarget.style.backgroundColor=isSelected?'rgba(83,74,183,0.08)':'transparent';}}
@@ -2135,175 +2124,141 @@ function FreeNotePanel(){
            s.type==='sketch'&&sketchDef2?sketchDef2.render():
            <span style={{fontSize:14,lineHeight:1}}>{s.type==='face'?faceEmoji:s.content}</span>}
         </div>
-        <span style={{fontSize:11,color:'#555',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+        <span style={{fontSize:11,color:'#5C5C5C',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
           {Math.round(s.x)},{Math.round(s.y)} · {Math.round(s.size||44)}px
         </span>
         <button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_PLACED_STICKER',id:s.id});if(selectedStickerId===s.id)setSelectedStickerId(null);}}
-          style={{fontSize:11,color:'#DDD',flexShrink:0,lineHeight:1,padding:'0 2px'}}
+          style={{fontSize:11,color:'#D2D2D2',flexShrink:0,lineHeight:1,padding:'0 2px'}}
           onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
-          onMouseLeave={e=>e.currentTarget.style.color='#DDD'}>×</button>
+          onMouseLeave={e=>e.currentTarget.style.color='#D2D2D2'}>×</button>
       </div>
     );
   };
-  const NoteRow=({note})=>(
-    <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 4px',borderRadius:4,cursor:'pointer',marginBottom:1}}
-      onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F3'}
-      onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}
-      onClick={()=>{scrollToNote(note);setActiveNoteId(note.id);}}>
-      <span style={{width:8,height:8,borderRadius:note.type==='text'?2:'50%',
-        backgroundColor:note.type==='text'?'#999':note.color||STICKY_COLORS[0],
-        flexShrink:0,border:'0.5px solid rgba(0,0,0,0.08)'}}/>
-      <span style={{fontSize:11,color:'#555',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-        {note.text?(note.text.slice(0,28)+(note.text.length>28?'…':'')):'(빈 노트)'}
-      </span>
-      <button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_STICKY_NOTE',id:note.id});}}
-        style={{fontSize:11,color:'#DDD',flexShrink:0,lineHeight:1,padding:'0 2px'}}
-        onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
-        onMouseLeave={e=>e.currentTarget.style.color='#DDD'}>×</button>
-    </div>
+  const NoteCard=({note})=>{
+    const isTxt=note.type==='text';
+    const active=activeNoteId===note.id;
+    return(
+      <div onClick={()=>{scrollToNote(note);setActiveNoteId(note.id);}}
+        style={{padding:'7px 10px',borderRadius:8,cursor:'pointer',marginBottom:5,
+          border:`0.5px solid ${active?'#AFA9EC':'#EFEFEF'}`,
+          backgroundColor:active?'#F7F6FE':'#FFFFFF',
+          boxShadow:'0 1px 2px rgba(20,20,40,0.04)',transition:'border-color 0.12s,background-color 0.12s'}}
+        onMouseEnter={e=>{if(!active)e.currentTarget.style.borderColor='#DDDDDD';}}
+        onMouseLeave={e=>{if(!active)e.currentTarget.style.borderColor='#EFEFEF';}}>
+        <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
+          <span style={{width:8,height:8,borderRadius:isTxt?2:'50%',backgroundColor:isTxt?'#B8B8B8':(note.color||STICKY_COLORS[0]),flexShrink:0,border:'0.5px solid rgba(0,0,0,0.08)'}}/>
+          <span style={{fontSize:9.5,color:'#9A9A9A',fontWeight:600,letterSpacing:'0.3px'}}>{isTxt?'텍스트':'포스트잇'}</span>
+          {note.createdAt&&<span style={{fontSize:9,color:'#C4C4C4',marginLeft:'auto'}}>{(()=>{const d=new Date(note.createdAt);return (d.getMonth()+1)+'/'+d.getDate();})()}</span>}
+          <button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_STICKY_NOTE',id:note.id});}}
+            style={{fontSize:11,color:'#D2D2D2',flexShrink:0,lineHeight:1,padding:'0 2px'}}
+            onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
+            onMouseLeave={e=>e.currentTarget.style.color='#D2D2D2'}>×</button>
+        </div>
+        <div style={{fontSize:11.5,color:'#444444',lineHeight:1.45,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',wordBreak:'break-word'}}>{(note.text||'').trim()||'(빈 노트)'}</div>
+      </div>
+    );
+  };
+  const editToggle=(
+    <button onClick={()=>setFreeLayerVisible(v=>!v)}
+      style={{fontSize:11,padding:'5px 10px',borderRadius:7,flexShrink:0,cursor:'pointer',
+        border:`0.5px solid ${freeLayerVisible?'#AFA9EC':'#E4E4E4'}`,
+        backgroundColor:freeLayerVisible?'#EEEDFE':'#FAFAFA',
+        color:freeLayerVisible?'#534AB7':'#9A9A9A',fontWeight:600}}>
+      {freeLayerVisible?'● 표시 중':'표시'}
+    </button>
   );
   return(
-    <div data-free-note-panel="true" style={{flex:1,minHeight:0,backgroundColor:'#fff',
-      display:'flex',flexDirection:'column',
-      overflow:'hidden',position:'relative',paddingTop:6}}>
-      <div style={{flex:1,overflowY:'auto',padding:'0 14px 14px'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,paddingTop:4}}>
-          <span style={{fontSize:11,fontWeight:600,color:'#8C8C8C',letterSpacing:'0.5px',textTransform:'uppercase'}}>자유 노트</span>
-          <div style={{display:'flex',gap:4,alignItems:'center'}}>
-            <button onClick={()=>addNote('sticky')}
-              style={{fontSize:11,color:'#534AB7',padding:'2px 7px',border:'0.5px solid #AFA9EC',borderRadius:4,backgroundColor:'#EEEDFE'}}>+ 포스트잇</button>
-            <button onClick={()=>addNote('text')}
-              style={{fontSize:11,color:'#555',padding:'2px 7px',border:'0.5px solid #E0E0E0',borderRadius:4,backgroundColor:'#F8F8F8'}}>+ 텍스트</button>
-            <button onClick={()=>setFreeLayerVisible(v=>!v)}
-              style={{fontSize:11,padding:'2px 8px',borderRadius:4,
-                border:`0.5px solid ${freeLayerVisible?'#AFA9EC':'#E0E0E0'}`,
-                backgroundColor:freeLayerVisible?'#EEEDFE':'#F4F4F4',
-                color:freeLayerVisible?'#534AB7':'#AAA'}}>
-              {freeLayerVisible?'● 편집 중':'편집'}
-            </button>
-          </div>
-        </div>
-        {/* Active note format controls */}
-        {activeNote&&(
-          <div style={{padding:'9px 11px',backgroundColor:'#FAFAFA',borderRadius:8,marginBottom:8,border:'0.5px solid #E8E8E8'}}>
-            <div style={{fontSize:10,color:'#8C8C8C',marginBottom:7,fontWeight:700,letterSpacing:'0.6px',textTransform:'uppercase'}}>{activeNote.type==='text'?'텍스트박스 서식':'포스트잇 서식'}</div>
-            <div style={{display:'flex',flexDirection:'column',gap:7}}>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0}}>크기</span>
-                <select value={activeNote.fontSize||(activeNote.type==='text'?15:13)} onChange={e=>updateActiveNote({fontSize:+e.target.value})}
-                  style={{fontSize:11,color:'#3F3E45',backgroundColor:'#F3F3F3',borderRadius:5,padding:'3px 6px',cursor:'pointer',flex:1,border:'none'}}>
-                  {FONT_SIZES.map(s=><option key={s} value={s}>{s}px</option>)}
-                </select>
-              </div>
-              <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
-                <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0,paddingTop:2}}>글자색</span>
-                <div style={{display:'flex',gap:3.5,flexWrap:'wrap'}}>
-                  {TEXT_COLORS.map(c=>(
-                    <button key={c} onClick={()=>updateActiveNote({textColor:c})}
-                      style={{width:16,height:16,borderRadius:'50%',backgroundColor:c,cursor:'pointer',padding:0,border:'none',flexShrink:0,
-                        boxShadow:(activeNote.textColor||(activeNote.type==='text'?'#1A1A1A':'#333'))===c?'0 0 0 1.5px #fff, 0 0 0 3px #534AB7':(c==='#fff'?'inset 0 0 0 1px #D6D6DE':'inset 0 0 0 0.5px rgba(0,0,0,0.14)')}}/>
-                  ))}
-                </div>
-              </div>
-              <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
-                <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0,paddingTop:2}}>배경</span>
-                <div style={{display:'flex',gap:3.5,flexWrap:'wrap'}}>
-                  {(activeNote.type==='text'?BG_COLORS:STICKY_COLORS).map(c=>{
-                    const cur=activeNote.type==='text'?(activeNote.bgColor||'transparent'):(activeNote.color||STICKY_COLORS[0]);
-                    return(
-                      <button key={c} onClick={()=>updateActiveNote(activeNote.type==='text'?{bgColor:c}:{color:c})}
-                        style={{width:16,height:16,borderRadius:4,cursor:'pointer',padding:0,flexShrink:0,
-                          backgroundColor:c==='transparent'?'#fff':c,
-                          border:c==='transparent'?'1px dashed #C8C8D0':'none',
-                          boxShadow:cur===c?'0 0 0 1.5px #fff, 0 0 0 3px #534AB7':(c==='transparent'?'none':'inset 0 0 0 0.5px rgba(0,0,0,0.10)')}}/>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={{fontSize:9.5,color:'#ABABAB',lineHeight:1.5}}>드래그한 부분만 색칠(마커)은 박스 위 툴바에서 할 수 있어요.</div>
-            </div>
-          </div>
-        )}
-        {notes.length===0?(
-          <div style={{fontSize:11,color:'#CDCDCD',textAlign:'center',padding:'8px 0'}}>포스트잇을 추가해보세요</div>
-        ):(
-          <>
-            {stickyNotes.length>0&&(
-              <div style={{marginBottom:4}}>
-                <button onClick={()=>setStickyOpen(v=>!v)}
-                  style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#999',marginBottom:3,width:'100%',textAlign:'left'}}>
-                  <span style={{fontSize:9}}>{stickyOpen?'▼':'▶'}</span>
-                  포스트잇<span style={{color:'#ABABAB',marginLeft:3}}>({stickyNotes.length})</span>
-                </button>
-                {stickyOpen&&stickyNotes.map(n=><NoteRow key={n.id} note={n}/>)}
-              </div>
-            )}
-            {textNotes.length>0&&(
-              <div>
-                <button onClick={()=>setTextOpen(v=>!v)}
-                  style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#999',marginBottom:3,width:'100%',textAlign:'left'}}>
-                  <span style={{fontSize:9}}>{textOpen?'▼':'▶'}</span>
-                  텍스트<span style={{color:'#ABABAB',marginLeft:3}}>({textNotes.length})</span>
-                </button>
-                {textOpen&&textNotes.map(n=><NoteRow key={n.id} note={n}/>)}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-            {/* ─── STICKER SECTION: always show list, palette only when stickerMode ─── */}
-      <div style={{borderTop:'0.5px solid #E8E8E8',padding:'0 12px 8px',flexShrink:0,height:stickerMode?stickerH:'auto',display:'flex',flexDirection:'column',minHeight:0,paddingTop:stickerMode?0:6}}>
-        {stickerMode&&<div onMouseDown={onStickerResize} title="드래그로 크기 조절"
-          style={{height:8,cursor:'row-resize',margin:'0 -12px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',transition:'background-color 0.12s'}}
-          onMouseEnter={e=>e.currentTarget.style.backgroundColor='rgba(83,74,183,0.08)'}
-          onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}>
-          <div style={{width:28,height:3,borderRadius:2,backgroundColor:'#E0E0E6'}}/>
-        </div>}
-        {/* Header always visible */}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-          <button onClick={()=>setStickerMode(v=>!v)}
-            style={{display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,
-              color:stickerMode?'#E91E63':'#8C8C8C',background:'none',border:'none',cursor:'pointer',padding:0}}>
-            <span style={{fontSize:14}}>🎨</span>
-            스티커 {stickerMode?'▲':'▼'}
+    <div data-free-note-panel="true" style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',backgroundColor:'#fff'}}>
+      {/* 도크 탭 */}
+      <div style={{display:'flex',gap:2,padding:'8px 10px 0',flexShrink:0}}>
+        {[{id:'notes',label:'노트'},{id:'stickers',label:'스티커'}].map(t=>(
+          <button key={t.id} onClick={()=>{setDockTab(t.id);lsSave('dockTab',t.id);if(t.id==='stickers'&&!stickerMode)setStickerMode(true);}}
+            style={{flex:1,padding:'6px 0',borderRadius:7,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
+              backgroundColor:dockTab===t.id?'#F0F0F1':'transparent',color:dockTab===t.id?'#1A1A1A':'#9A9A9A',transition:'all 0.15s'}}>
+            {t.label}
           </button>
-          <div style={{display:'flex',gap:4,alignItems:'center'}}>
-            <button onClick={()=>setFreeLayerVisible(v=>!v)}
-              style={{fontSize:10,padding:'1px 6px',borderRadius:3,
-                border:`0.5px solid ${freeLayerVisible?'#AFA9EC':'#E0E0E0'}`,
-                backgroundColor:freeLayerVisible?'#EEEDFE':'#F4F4F4',
-                color:freeLayerVisible?'#534AB7':'#AAA'}}>
-              {freeLayerVisible?'편집 중':'편집'}
-            </button>
+        ))}
+      </div>
+      {dockTab==='notes'?(
+        <div style={{flex:1,minHeight:0,overflowY:'auto',padding:'10px 12px 12px'}}>
+          <div style={{display:'flex',gap:5,marginBottom:10}}>
+            <button onClick={()=>addNote('sticky')}
+              style={{flex:1,fontSize:11.5,fontWeight:600,color:'#534AB7',padding:'5px 0',border:'0.5px solid #CFCBEF',borderRadius:7,backgroundColor:'#F4F3FC',cursor:'pointer'}}>+ 포스트잇</button>
+            <button onClick={()=>addNote('text')}
+              style={{flex:1,fontSize:11.5,fontWeight:600,color:'#5C5C5C',padding:'5px 0',border:'0.5px solid #E4E4E4',borderRadius:7,backgroundColor:'#FAFAFA',cursor:'pointer'}}>+ 텍스트</button>
+            {editToggle}
+          </div>
+          {activeNote&&(
+            <div style={{padding:'8px 10px',backgroundColor:'#FAFAFA',borderRadius:8,marginBottom:8,border:'0.5px solid #E8E8E8'}}>
+              <div style={{fontSize:10,color:'#8C8C8C',marginBottom:7,fontWeight:700,letterSpacing:'0.6px',textTransform:'uppercase'}}>{activeNote.type==='text'?'텍스트박스 서식':'포스트잇 서식'}</div>
+              <div style={{display:'flex',flexDirection:'column',gap:7}}>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0}}>크기</span>
+                  <select value={activeNote.fontSize||(activeNote.type==='text'?15:13)} onChange={e=>updateActiveNote({fontSize:+e.target.value})}
+                    style={{fontSize:11,color:'#2F2F2F',backgroundColor:'#F0F0F1',borderRadius:5,padding:'3px 6px',cursor:'pointer',flex:1,border:'none'}}>
+                    {FONT_SIZES.map(s=><option key={s} value={s}>{s}px</option>)}
+                  </select>
+                </div>
+                <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
+                  <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0,paddingTop:2}}>글자색</span>
+                  <div style={{display:'flex',gap:3.5,flexWrap:'wrap'}}>
+                    {TEXT_COLORS.map(c=>(
+                      <button key={c} onClick={()=>updateActiveNote({textColor:c})}
+                        style={{width:16,height:16,borderRadius:'50%',backgroundColor:c,cursor:'pointer',padding:0,border:'none',flexShrink:0,
+                          boxShadow:(activeNote.textColor||(activeNote.type==='text'?'#1A1A1A':'#333'))===c?'0 0 0 1.5px #fff, 0 0 0 3px #534AB7':(c==='#fff'?'inset 0 0 0 1px #D6D6DE':'inset 0 0 0 0.5px rgba(0,0,0,0.14)')}}/>
+                    ))}
+                  </div>
+                </div>
+                <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
+                  <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0,paddingTop:2}}>배경</span>
+                  <div style={{display:'flex',gap:3.5,flexWrap:'wrap'}}>
+                    {(activeNote.type==='text'?BG_COLORS:STICKY_COLORS).map(c=>{
+                      const cur=activeNote.type==='text'?(activeNote.bgColor||'transparent'):(activeNote.color||STICKY_COLORS[0]);
+                      return(
+                        <button key={c} onClick={()=>updateActiveNote(activeNote.type==='text'?{bgColor:c}:{color:c})}
+                          style={{width:16,height:16,borderRadius:4,cursor:'pointer',padding:0,flexShrink:0,
+                            backgroundColor:c==='transparent'?'#fff':c,
+                            border:c==='transparent'?'1px dashed #C8C8D0':'none',
+                            boxShadow:cur===c?'0 0 0 1.5px #fff, 0 0 0 3px #534AB7':(c==='transparent'?'none':'inset 0 0 0 0.5px rgba(0,0,0,0.10)')}}/>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {notes.length===0?(
+            <div style={{fontSize:11.5,color:'#C4C4C4',textAlign:'center',padding:'22px 0'}}>포스트잇이나 텍스트박스를<br/>추가해 보세요</div>
+          ):(
+            notes.map(n=><NoteCard key={n.id} note={n}/>)
+          )}
+        </div>
+      ):(
+        <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',padding:'10px 12px 12px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:8,flexShrink:0}}>
+            {editToggle}
             {(state.placedStickers||[]).length>0&&(
               <button onClick={()=>{if(confirm('스티커를 모두 삭제?'))dispatch({type:'CLEAR_ALL_STICKERS'});}}
-                style={{fontSize:10,color:'#E24B4A',padding:'1px 5px',border:'0.5px solid #FFCDD2',borderRadius:3,backgroundColor:'#FFF5F5'}}>전체삭제</button>
+                style={{fontSize:10.5,color:'#E24B4A',padding:'5px 9px',border:'0.5px solid #F3C1C0',borderRadius:7,backgroundColor:'#FDF4F4',cursor:'pointer',marginLeft:'auto'}}>전체삭제</button>
             )}
           </div>
-        </div>
-        {/* Placed sticker mini-list — always visible */}
-        {(state.placedStickers||[]).length>0&&(
-          <div style={{maxHeight:96,overflowY:'auto',marginBottom:stickerMode?6:0,flexShrink:0}}>
-            {(state.placedStickers||[]).map(s=><StickerRow key={s.id} s={s}/>)}
-          </div>
-        )}
-        {/* Full palette — only when stickerMode */}
-        {stickerMode&&(
-          <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-            {/* Tabs */}
-            <div style={{display:'flex',gap:1,marginBottom:5,overflowX:'auto',paddingBottom:2}}>
-              {EMOJI_TABS.groups.map((g,i)=>(
-                <button key={i} onClick={()=>setStickerTab(i)}
-                  style={{flexShrink:0,padding:'2px 7px',borderRadius:8,fontSize:10,
-                    border:`0.5px solid ${stickerTab===i?'#F48FB1':'#F0F0F0'}`,
-                    backgroundColor:stickerTab===i?'#FCE4EC':'transparent',
-                    color:stickerTab===i?'#E91E63':'#8C8C8C',fontWeight:stickerTab===i?500:400}}>
-                  {g.name}
-                </button>
-              ))}
+          {(state.placedStickers||[]).length>0&&(
+            <div style={{maxHeight:88,overflowY:'auto',marginBottom:8,flexShrink:0,borderBottom:'0.5px solid #F1F1F1',paddingBottom:6}}>
+              {(state.placedStickers||[]).map(s=><StickerRow key={s.id} s={s}/>)}
             </div>
-            {/* Palette grid — scrollable, max height */}
-            <div style={{flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
+          )}
+          <div style={{display:'flex',gap:1,marginBottom:6,overflowX:'auto',paddingBottom:2,flexShrink:0}}>
+            {EMOJI_TABS.groups.map((g,i)=>(
+              <button key={i} onClick={()=>setStickerTab(i)}
+                style={{flexShrink:0,padding:'3px 9px',borderRadius:8,fontSize:10.5,fontWeight:600,cursor:'pointer',
+                  border:'none',
+                  backgroundColor:stickerTab===i?'#F0F0F1':'transparent',
+                  color:stickerTab===i?'#1A1A1A':'#9A9A9A',transition:'all 0.12s'}}>
+                {g.name}
+              </button>
+            ))}
+          </div>
+          <div style={{flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
               {(()=>{
                 const g=EMOJI_TABS.groups[stickerTab];
                 const svgBtn=(s,w,h,type)=>(
@@ -2392,19 +2347,18 @@ function FreeNotePanel(){
                         style={{padding:'5px 2px',borderRadius:6,border:'0.5px solid #F0F0F0',
                           backgroundColor:'#FAFAFA',cursor:'pointer',
                           display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.12s'}}
-                        onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#FFF3E0';e.currentTarget.style.borderColor='#FFB74D';e.currentTarget.style.transform='scale(1.1)';}}
-                        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#FAFAFA';e.currentTarget.style.borderColor='#F0F0F0';e.currentTarget.style.transform='scale(1)';}}>
+                        onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F3F3F3';e.currentTarget.style.transform='scale(1.1)';}}
+                        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#FAFAFA';e.currentTarget.style.transform='scale(1)';}}>
                         <span style={{fontSize:26,lineHeight:1.1}}>{s.emoji}</span>
                       </button>
                     ))}
                   </div>
                 );
               })()}
-            </div>
-            <div style={{fontSize:9,color:'#ABABAB',textAlign:'center',marginTop:4,lineHeight:1.3}}>클릭→추가 · 드래그→이동 · 모서리■→크기 · ●→회전 · Delete→삭제</div>
           </div>
-        )}
-      </div>
+          <div style={{fontSize:9,color:'#ABABAB',textAlign:'center',marginTop:6,lineHeight:1.3,flexShrink:0}}>클릭→추가 · 드래그→이동 · 모서리■→크기 · ●→회전 · Delete→삭제</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2867,6 +2821,7 @@ function MeetingNoteModal({initialNote,onClose}){
 function MeetingNoteList({onOpen}){
   const{state}=useStore();
   const[projTab,setProjTab]=React.useState('all');
+  const[q,setQ]=React.useState('');
   const notes=state.meetingNotes||[];
   const catStyle=useDynCatStyle();
   const getCatColor=(cat)=>{
@@ -2886,6 +2841,7 @@ function MeetingNoteList({onOpen}){
   const usedProjects=usedProjectIds.map(pid=>(state.projects||[]).find(p=>p.id===pid)).filter(Boolean);
   /* filtered + sorted notes */
   const filtered=(projTab==='all'?notes:notes.filter(n=>n.projectId===projTab))
+    .filter(n=>{const s=q.trim().toLowerCase();if(!s)return true;return (n.title||'').toLowerCase().includes(s)||(n.attendees||'').toLowerCase().includes(s)||(n.blocks||[]).some(b=>(b.text||'').toLowerCase().includes(s));})
     .slice().sort((a,b)=>b.date.localeCompare(a.date));
   /* group by month */
   const grouped={};
@@ -2900,6 +2856,8 @@ function MeetingNoteList({onOpen}){
   );
   return(
     <div style={{display:'flex',flexDirection:'column',gap:0}}>
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="회의록 검색 (제목·내용·참석자)"
+        style={{width:'100%',fontSize:12,padding:'6px 10px',borderRadius:7,border:'0.5px solid #E6E6E6',backgroundColor:'#FAFAFA',marginBottom:8}}/>
       {/* Project filter tabs */}
       <div style={{display:'flex',gap:4,marginBottom:10,flexWrap:'wrap'}}>
         {[{id:'all',label:'전체'},...usedProjects.map(p=>({id:p.id,label:p.name,color:p.color}))].map(tab=>{
@@ -4090,6 +4048,14 @@ function PanelToggle(){
 }
 function RightDock(){
   const{rightDockOpen,setRightDockOpen,setStickerMode}=useLayout();
+  const[dockW,setDockW]=React.useState(()=>lsLoad('dockW',308));
+  const onDockResize=(e)=>{
+    e.preventDefault();
+    const sx=e.clientX,sw=dockW;
+    const onMove=(ev)=>setDockW(Math.max(260,Math.min(540,sw-(ev.clientX-sx))));
+    const onUp=(ev)=>{lsSave('dockW',Math.max(260,Math.min(540,sw-(ev.clientX-sx))));document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
+    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
+  };
   React.useEffect(()=>{
     if(!rightDockOpen)return;
     const h=(e)=>{
@@ -4102,9 +4068,13 @@ function RightDock(){
   },[rightDockOpen,setRightDockOpen,setStickerMode]);
   if(!rightDockOpen)return null;
   return(
-    <aside data-right-dock="true" style={{position:'fixed',top:66,right:12,bottom:12,width:308,backgroundColor:'#fff',
+    <aside data-right-dock="true" style={{position:'fixed',top:66,right:12,bottom:12,width:dockW,backgroundColor:'#fff',
       border:'0.5px solid #E6E6E6',borderRadius:14,zIndex:950,display:'flex',flexDirection:'column',overflow:'hidden',
       boxShadow:'0 0 0 0.5px rgba(15,15,35,0.04), 0 12px 32px rgba(15,15,35,0.13), 0 32px 70px rgba(15,15,35,0.15)',animation:'popIn 0.16s ease'}}>
+      <div onMouseDown={onDockResize} title="드래그로 너비 조절"
+        style={{position:'absolute',left:0,top:0,bottom:0,width:6,cursor:'ew-resize',zIndex:5}}
+        onMouseEnter={e=>e.currentTarget.style.backgroundColor='rgba(83,74,183,0.10)'}
+        onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}/>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'0.5px solid #EFEFEF',flexShrink:0}}>
         <span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>노트 · 스티커</span>
         <button onClick={()=>{setRightDockOpen(false);setStickerMode(false);}} style={{fontSize:16,color:'#B8B8B8',lineHeight:1}}
