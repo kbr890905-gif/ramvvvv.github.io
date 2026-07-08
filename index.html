@@ -39,6 +39,10 @@
   .fmt-btn{transition:background-color 0.1s;}
   .fmt-btn:hover{background-color:#F1F1F5;}
   [data-sticky-note]{animation:popIn 0.18s ease;}
+  .note-editor:empty::before{content:attr(data-placeholder);color:#B8B8C0;pointer-events:none;}
+  .note-editor ul{list-style:disc;padding-left:16px;margin:1px 0;}
+  .note-editor ol{list-style:decimal;padding-left:16px;margin:1px 0;}
+  .txt-note:hover{box-shadow:0 0 0 1px #D9D6F4 !important;}
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;} input[type=number]{-moz-appearance:textfield;}
   @keyframes popIn{from{opacity:0;transform:scale(0.97) translateY(4px);}to{opacity:1;transform:scale(1) translateY(0);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
@@ -821,101 +825,143 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
   const fontSize=note.fontSize||(isText?15:13);
   const textColor=note.textColor||(isText?'#1A1A1A':'#333');
   const bgColor=isText?(note.bgColor||'transparent'):(note.color||STICKY_COLORS[0]);
+  const edRef=React.useRef(null);
 
-  // Drag (only when freeLayerVisible)
-  const onDragStart=useCallback((e)=>{
-    onFocus?.();
-    if(!freeLayerVisible)return;
-    if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='BUTTON')return;
+  /* contentEditable 초기화 (plain text → HTML 마이그레이션) */
+  React.useEffect(()=>{
+    if(edRef.current){
+      const h=(note.html!=null&&note.html!=='')?note.html:(note.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+      if(edRef.current.innerHTML!==h)edRef.current.innerHTML=h;
+    }
+  },[collapsed]);
+  const syncNote=()=>{const el=edRef.current;if(el)onUpdate({html:el.innerHTML,text:el.textContent||''});};
+  const fmt=(cmd,val)=>{document.execCommand(cmd,false,val||null);edRef.current?.focus();syncNote();};
+
+  /* 드래그 이동 */
+  const startDrag=(e)=>{
     e.stopPropagation();e.preventDefault();
-    e.currentTarget.focus();
     const sx=e.clientX,sy=e.clientY,nx=note.x,ny=note.y;
     const onMove=(ev)=>onUpdate({x:nx+(ev.clientX-sx),y:ny+(ev.clientY-sy)});
     const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
     document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  },[freeLayerVisible,note.x,note.y,onUpdate,onFocus]);
-
-  // Resize (only when freeLayerVisible, bottom-right corner)
-  const onResizeStart=useCallback((e)=>{
+  };
+  const onRootDown=(e)=>{
+    onFocus?.();
+    if(!freeLayerVisible)return;
+    if(e.target.isContentEditable||e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+    startDrag(e);
+  };
+  /* 리사이즈: 텍스트박스는 가로만, 포스트잇은 양방향 */
+  const onResizeStart=(e)=>{
     e.stopPropagation();e.preventDefault();
     const sx=e.clientX,sy=e.clientY,sw=note.w||170,sh=note.h||140;
-    const onMove=(ev)=>onUpdate({w:Math.max(120,sw+(ev.clientX-sx)),h:Math.max(60,sh+(ev.clientY-sy))});
+    const onMove=(ev)=>{
+      if(isText)onUpdate({w:Math.max(60,sw+(ev.clientX-sx))});
+      else onUpdate({w:Math.max(120,sw+(ev.clientX-sx)),h:Math.max(60,sh+(ev.clientY-sy))});
+    };
     const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
     document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  },[note.w,note.h,onUpdate]);
+  };
 
-  const FONT_SIZES=[11,12,13,14,16,18,20,24];
-  const TEXT_COLORS=['#1A1A1A','#534AB7','#1D9E75','#E24B4A','#D97706','#4A90D9','#888','#fff'];
-  const BG_COLORS=['transparent','#FFFDE7','#FFF3E0','#E3F2FD','#E8F5E9','#FCE4EC','#EDE7F6','#F3E5F5','#1A1A1A','#534AB7'];
+  const tbBtn={color:'#3F3E45',fontSize:11.5,background:'none',border:'none',minWidth:22,height:22,padding:'0 4px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',lineHeight:1,display:'inline-flex',alignItems:'center',justifyContent:'center',flexShrink:0};
 
   return(
-    <div data-sticky-note="true" tabIndex={0} onKeyDown={e=>{if((e.key==='Delete'||e.key==='Backspace')&&isActive&&e.target===e.currentTarget){e.preventDefault();e.stopPropagation();onDelete();}}} onMouseDown={onDragStart}
+    <div data-sticky-note="true" tabIndex={0}
+      className={isText?'txt-note':''}
+      onKeyDown={e=>{if((e.key==='Delete'||e.key==='Backspace')&&isActive&&e.target===e.currentTarget){e.preventDefault();e.stopPropagation();onDelete();}}}
+      onMouseDown={onRootDown}
       style={{position:'absolute',left:note.x,top:note.y,
         width:note.w||170,
-        height:collapsed?(isActive?28:24):undefined,
-        minHeight:collapsed?undefined:(note.h||140),
+        height:collapsed?(isActive?26:22):(isText?'auto':undefined),
+        minHeight:collapsed?undefined:(isText?Math.round(fontSize*1.6)+6:(note.h||140)),
         backgroundColor:bgColor,
-        borderRadius:isText?4:6,
+        borderRadius:isText?3:6,
         boxShadow:isText?'none':(isActive?'0 4px 20px rgba(0,0,0,0.18)':'0 2px 10px rgba(0,0,0,0.11)'),
-        border:isText?(isActive?'1.5px solid #AFA9EC':'none'):'0.5px solid rgba(0,0,0,0.07)',
-        padding:collapsed?'3px 8px':(isText?'6px 8px':'8px 10px'),
-        cursor:freeLayerVisible?'grab':'default',
+        border:isText?(isActive?'1px solid #AFA9EC':'1px solid transparent'):'0.5px solid rgba(0,0,0,0.07)',
+        padding:collapsed?'2px 8px':(isText?'2px 5px':'8px 10px'),
+        cursor:freeLayerVisible?(isActive?'default':'grab'):'default',
         pointerEvents:'all',
         userSelect:'none',display:'flex',flexDirection:'column',
-        overflow:'hidden',
+        overflow:isText?'visible':'hidden',
         zIndex:isActive?50:30,
-        transition:'box-shadow 0.15s'}}>
+        transition:'box-shadow 0.15s,border-color 0.15s'}}>
 
-      {/* ── Toolbar: collapse + delete only (format controls in left panel) ── */}
-      {isActive&&(
-        <div style={{display:'flex',alignItems:'center',gap:2,marginBottom:collapsed?0:4,flexShrink:0,justifyContent:'flex-end'}}>
+      {/* ── 플로팅 서식 툴바 (선택 시, Miro 스타일) ── */}
+      {isActive&&freeLayerVisible&&!collapsed&&(
+        <div onMouseDown={e=>e.stopPropagation()}
+          style={{position:'absolute',top:-36,left:-1,display:'flex',alignItems:'center',gap:1,padding:'3px 4px',
+            backgroundColor:'#fff',border:'0.5px solid #E4E4EA',borderRadius:8,
+            boxShadow:'0 0 0 0.5px rgba(15,15,35,0.04), 0 6px 18px rgba(15,15,35,0.14)',zIndex:70,whiteSpace:'nowrap'}}>
+          <span title="드래그하여 이동" onMouseDown={startDrag}
+            style={{cursor:'grab',color:'#B0B0B8',fontSize:11,padding:'0 5px',userSelect:'none',lineHeight:1}}>⠿</span>
+          <div style={{width:1,height:14,backgroundColor:'#ECECF1',margin:'0 2px'}}/>
+          <button className="fmt-btn" title="굵게" onMouseDown={e=>{e.preventDefault();fmt('bold');}} style={{...tbBtn,fontWeight:700}}>B</button>
+          <button className="fmt-btn" title="기울임" onMouseDown={e=>{e.preventDefault();fmt('italic');}} style={{...tbBtn,fontStyle:'italic',fontFamily:'Georgia,serif'}}>i</button>
+          <button className="fmt-btn" title="밑줄" onMouseDown={e=>{e.preventDefault();fmt('underline');}} style={{...tbBtn,textDecoration:'underline'}}>U</button>
+          <button className="fmt-btn" title="취소선" onMouseDown={e=>{e.preventDefault();fmt('strikeThrough');}} style={{...tbBtn,textDecoration:'line-through'}}>S</button>
+          <button className="fmt-btn" title="글머리 기호" onMouseDown={e=>{e.preventDefault();fmt('insertUnorderedList');}} style={tbBtn}>•</button>
+          <div style={{width:1,height:14,backgroundColor:'#ECECF1',margin:'0 2px'}}/>
+          <button className="fmt-btn" title="글자 작게" onMouseDown={e=>{e.preventDefault();onUpdate({fontSize:Math.max(9,fontSize-1)});}} style={{...tbBtn,fontSize:10}}>A−</button>
+          <button className="fmt-btn" title="글자 크게" onMouseDown={e=>{e.preventDefault();onUpdate({fontSize:Math.min(48,fontSize+1)});}} style={{...tbBtn,fontSize:12.5}}>A+</button>
+          <div style={{width:1,height:14,backgroundColor:'#ECECF1',margin:'0 2px'}}/>
           {!isText&&(
-            <button onClick={e=>{e.stopPropagation();onUpdate({collapsed:!collapsed});}}
-              title={collapsed?'펼치기':'접기'}
-              style={{fontSize:10,color:'#8E8E96',padding:'1px 4px',borderRadius:3,border:'0.5px solid #E0E0E0',flexShrink:0}}
-              onMouseEnter={e=>e.currentTarget.style.color='#534AB7'}
-              onMouseLeave={e=>e.currentTarget.style.color='#8E8E96'}>
-              {collapsed?'▼':'▲'}
-            </button>
+            <button className="fmt-btn" title={collapsed?'펼치기':'접기'} onMouseDown={e=>{e.preventDefault();onUpdate({collapsed:!collapsed});}} style={{...tbBtn,fontSize:9}}>▲</button>
           )}
-          <button onClick={e=>{e.stopPropagation();onDelete();}}
-            style={{fontSize:12,color:'#A2A2AA',lineHeight:1,padding:'1px 3px',flexShrink:0}}
-            onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
-            onMouseLeave={e=>e.currentTarget.style.color='#A2A2AA'}>×</button>
+          <button className="fmt-btn" title="삭제" onMouseDown={e=>{e.preventDefault();onDelete();}} style={{...tbBtn,color:'#C94B4A',fontSize:13}}>×</button>
+        </div>
+      )}
+      {/* 접힘 상태 툴바 */}
+      {isActive&&collapsed&&(
+        <div onMouseDown={e=>e.stopPropagation()}
+          style={{position:'absolute',top:-32,left:-1,display:'flex',alignItems:'center',gap:1,padding:'2px 3px',
+            backgroundColor:'#fff',border:'0.5px solid #E4E4EA',borderRadius:7,
+            boxShadow:'0 4px 14px rgba(15,15,35,0.12)',zIndex:70}}>
+          <button className="fmt-btn" title="펼치기" onMouseDown={e=>{e.preventDefault();onUpdate({collapsed:false});}} style={{...tbBtn,fontSize:9}}>▼</button>
+          <button className="fmt-btn" title="삭제" onMouseDown={e=>{e.preventDefault();onDelete();}} style={{...tbBtn,color:'#C94B4A',fontSize:13}}>×</button>
         </div>
       )}
 
-      {/* ── Content ── */}
+      {/* ── 본문 (리치 텍스트) ── */}
       {!collapsed&&(
-        <textarea value={note.text} onChange={e=>onUpdate({text:e.target.value})}
-          placeholder={isText?'텍스트 입력...':'메모 입력...'}
-          onMouseDown={e=>e.stopPropagation()} onFocus={()=>onFocus?.()}
-          style={{flex:1,minHeight:isText?36:80,
+        <div ref={edRef} contentEditable={freeLayerVisible} suppressContentEditableWarning
+          className="note-editor"
+          data-placeholder={isText?'텍스트 입력':'메모 입력...'}
+          spellCheck={false}
+          onMouseDown={e=>e.stopPropagation()}
+          onFocus={()=>onFocus?.()}
+          onInput={syncNote}
+          onBlur={syncNote}
+          style={{flex:1,minHeight:isText?Math.round(fontSize*1.5):80,
             fontSize,color:textColor,
-            backgroundColor:'transparent',border:'none',
-            resize:'none',cursor:'text',lineHeight:1.65,fontFamily:'inherit',
-            fontWeight:isText?500:400,padding:0,outline:'none'}}/>
+            outline:'none',cursor:'text',lineHeight:1.55,fontFamily:'inherit',
+            fontWeight:isText?500:400,padding:0,wordBreak:'break-word',whiteSpace:'pre-wrap',userSelect:'text'}}/>
       )}
       {collapsed&&<span style={{fontSize:11,color:textColor,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,opacity:0.7}}>
         {note.text||'(빈 노트)'}
       </span>}
 
-      {/* ── Created date (sticky only) ── */}
+      {/* ── 작성일 (포스트잇만) ── */}
       {!isText&&!collapsed&&note.createdAt&&(
         <div style={{fontSize:7,color:'rgba(0,0,0,0.25)',textAlign:'right',flexShrink:0,
           marginTop:'auto',paddingTop:2,lineHeight:1.4,letterSpacing:'0.2px'}}>
           {(()=>{const d=new Date(note.createdAt);const yy=String(d.getFullYear()).slice(2);const mm=String(d.getMonth()+1).padStart(2,'0');const dd=String(d.getDate()).padStart(2,'0');const hh=String(d.getHours()).padStart(2,'0');const mi=String(d.getMinutes()).padStart(2,'0');return`'${yy}.${mm}.${dd} ${hh}:${mi}`;})()}
         </div>
       )}
-      {/* ── Resize handle (bottom-right, only when freeLayerVisible) ── */}
-      {freeLayerVisible&&!collapsed&&(
+      {/* ── 리사이즈 핸들 ── */}
+      {freeLayerVisible&&!collapsed&&isActive&&(
         <div onMouseDown={onResizeStart}
-          style={{position:'absolute',right:0,bottom:0,width:14,height:14,cursor:'se-resize',
-            display:'flex',alignItems:'flex-end',justifyContent:'flex-end',padding:'2px',zIndex:60}}
+          style={{position:'absolute',right:isText?-5:0,bottom:isText?undefined:0,top:isText?'50%':undefined,
+            transform:isText?'translateY(-50%)':'none',
+            width:isText?9:14,height:isText?18:14,cursor:isText?'ew-resize':'se-resize',
+            display:'flex',alignItems:'center',justifyContent:'center',padding:'1px',zIndex:60}}
           onClick={e=>e.stopPropagation()}>
-          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-            <path d="M7 1L1 7M7 4L4 7M7 7L7 7" stroke="rgba(0,0,0,0.2)" strokeWidth="1" strokeLinecap="round"/>
-          </svg>
+          {isText?(
+            <div style={{width:5,height:14,borderRadius:3,backgroundColor:'#AFA9EC',border:'1px solid #fff'}}/>
+          ):(
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M7 1L1 7M7 4L4 7M7 7L7 7" stroke="rgba(0,0,0,0.2)" strokeWidth="1" strokeLinecap="round"/>
+            </svg>
+          )}
         </div>
       )}
     </div>
@@ -989,13 +1035,17 @@ function FreeLayer(){return null;}
 // ─── STICKER SYSTEM ──────────────────────────
 const EMOJI_TABS={
   groups:[
-    {name:'뱃지', type:'badge', items:null},
-    {name:'화살표', type:'arrow', items:null},
+    {name:'업무', type:'work', items:null},
+    {name:'일상', type:'life', items:null},
+    {name:'숫자·별점', type:'num', items:null},
     {name:'마크', type:'mark', items:null},
+    {name:'화살표', type:'arrow', items:null},
     {name:'도형', type:'shape', items:null},
-    {name:'이모지', type:'emoji', items:['✅','❌','⭐','🔥','❗','❓','📌','📍','🚩','🎯','⏰','📅','💡','⚠️','💰','📞','✉️','🔁','🔒','✏️','👍','👎','💯','🏁','🥇','📊','🗂️','💬','🔔','⚡','🌸','🌈','✨','🎉','💕','☕','🎂','🎁','💻','📚','🍀','🌙','🌊','🧸','🎵','🍰','🌻','❄️']},
-    {name:'동물', type:'emoji', items:['🐰','🐱','🐶','🦊','🐻','🐼','🐨','🐯','🦁','🐷','🐸','🐮','🦄','🐧','🦆','🐦','🦅','🦉','🐺','🐴','🐙','🦈','🦭','🐠','🐬','🦋','🐝','🐌','🦎','🐢','🐓','🦚','🦜','🐇','🐿','🐾','🦔','🦩','🕊','🐈']},
-    {name:'손', type:'emoji', items:['👆','👇','👈','👉','☝️','✌️','🤞','🤟','🤙','🤌','👌','🤏','🫰','🫶','👍','👎','👋','🤚','🖐','✋','🖖','🤝','👐','🙌','👏','🤜','🤛','💪','🫳','🫴','🫵','💅','🤳','🙏']},
+    {name:'이모지', type:'emojiset', sets:[
+      {label:'자주 쓰는', items:['✅','❌','⭐','🔥','❗','❓','📌','📍','🚩','🎯','⏰','📅','💡','⚠️','💰','✉️','🔁','✏️','💯','🎉','✨','☕','🎂','🎁','📚','💬','🔔','⚡','🌸','🍀']},
+      {label:'동물', items:['🐶','🐱','🐰','🦊','🐻','🐼','🐯','🦁','🐷','🐸','🦄','🐧','🐥','🦉','🐢','🐬','🐳','🦋','🐝','🐾']},
+      {label:'손짓', items:['👍','👎','👏','🙏','💪','✌️','👌','🤙','👉','👈','👆','👇','🫶','🤝','✋','🖐']},
+    ]},
     {name:'표정', type:'face', items:null},
   ]
 };
@@ -1013,6 +1063,37 @@ const SHAPE_COLORS=[
   {id:'black', fill:'#212121'},
 ];
 const SHAPE_STICKERS=(()=>{
+  const cur=[
+    /* 말풍선/생각풍선 */
+    {id:'shp-sp1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M6 8.5 Q6 5.5 9 5.5 H31 Q34 5.5 34 8.5 V21.5 Q34 24.5 31 24.5 H18.5 L11 32 L12.8 24.5 H9 Q6 24.5 6 21.5 Z" fill="#fff" stroke="#534AB7" strokeWidth="2.2" strokeLinejoin="round"/></svg>},
+    {id:'shp-sp2',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M6 8.5 Q6 5.5 9 5.5 H31 Q34 5.5 34 8.5 V21.5 Q34 24.5 31 24.5 H18.5 L11 32 L12.8 24.5 H9 Q6 24.5 6 21.5 Z" fill="#FFF4C9" stroke="#E8B10A" strokeWidth="1.8" strokeLinejoin="round"/></svg>},
+    {id:'shp-th1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><ellipse cx="21" cy="14" rx="14" ry="9.5" fill="#fff" stroke="#4B4A54" strokeWidth="2"/><circle cx="12" cy="27" r="3" fill="#fff" stroke="#4B4A54" strokeWidth="1.8"/><circle cx="7.5" cy="33" r="1.8" fill="#fff" stroke="#4B4A54" strokeWidth="1.5"/></svg>},
+    /* 배너/리본 */
+    {id:'shp-bn1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M4 11 H36 L31 20 L36 29 H4 Z" fill="#534AB7"/></svg>},
+    {id:'shp-bn2',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M36 11 H4 L9 20 L4 29 H36 Z" fill="#E24B4A"/></svg>},
+    /* 형광 하이라이트 바 */
+    {id:'shp-hly',cat:'s',render:()=><svg viewBox="0 0 80 20" width="100%" height="100%"><rect x="2" y="4" width="76" height="12" rx="4" fill="#FFE94A" opacity="0.6"/></svg>},
+    {id:'shp-hlg',cat:'s',render:()=><svg viewBox="0 0 80 20" width="100%" height="100%"><rect x="2" y="4" width="76" height="12" rx="4" fill="#7BE495" opacity="0.55"/></svg>},
+    {id:'shp-hlp',cat:'s',render:()=><svg viewBox="0 0 80 20" width="100%" height="100%"><rect x="2" y="4" width="76" height="12" rx="4" fill="#FF9EC0" opacity="0.55"/></svg>},
+    /* 밑줄 */
+    {id:'shp-un1',cat:'s',render:()=><svg viewBox="0 0 80 16" width="100%" height="100%"><path d="M4 8 H76" stroke="#E24B4A" strokeWidth="4.5" strokeLinecap="round"/></svg>},
+    {id:'shp-un2',cat:'s',render:()=><svg viewBox="0 0 80 16" width="100%" height="100%"><path d="M4 9 Q11 3 18 9 T32 9 T46 9 T60 9 T74 9" fill="none" stroke="#E24B4A" strokeWidth="3.2" strokeLinecap="round"/></svg>},
+    /* 프레임 (강조 테두리) */
+    {id:'shp-fr1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="3.5" y="7" width="33" height="26" rx="6" fill="none" stroke="#E24B4A" strokeWidth="2.6"/></svg>},
+    {id:'shp-fr2',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="3.5" y="7" width="33" height="26" rx="6" fill="none" stroke="#534AB7" strokeWidth="2.6" strokeDasharray="6 4"/></svg>},
+    {id:'shp-fr3',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><ellipse cx="20" cy="20" rx="16.5" ry="13" fill="none" stroke="#E24B4A" strokeWidth="2.6"/></svg>},
+    {id:'shp-fr4',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><ellipse cx="20" cy="20" rx="16.5" ry="13" fill="none" stroke="#534AB7" strokeWidth="2.6" strokeDasharray="6 4"/></svg>},
+    /* 중괄호 */
+    {id:'shp-br1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M24 4 Q17 4 17 11 V16 Q17 20 12 20 Q17 20 17 24 V29 Q17 36 24 36" fill="none" stroke="#4B4A54" strokeWidth="2.6" strokeLinecap="round"/></svg>},
+    /* 컬러 도트 */
+    {id:'shp-dr',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#E24B4A"/></svg>},
+    {id:'shp-dy',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#F5A623"/></svg>},
+    {id:'shp-dg',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#2FAE60"/></svg>},
+    {id:'shp-db',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#1B7FDB"/></svg>},
+    {id:'shp-dp',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#8B5CF6"/></svg>},
+    {id:'shp-dk',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#3B3A43"/></svg>},
+  ];
+  /* 레거시 도형 (이미 배치된 스티커 렌더 호환용 — 팔레트에는 미표시) */
   const arr=[];
   SHAPE_COLORS.forEach(c=>{
     const f=c.fill;
@@ -1023,7 +1104,7 @@ const SHAPE_STICKERS=(()=>{
     arr.push({id:`tf-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><polygon points="20,3 37,38 3,38" fill={f}/></svg>});
     arr.push({id:`to-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><polygon points="20,3 37,38 3,38" fill="none" stroke={f} strokeWidth="3.5"/></svg>});
   });
-  return arr;
+  return [...cur,...arr];
 })();
 
 // ─── ARROW SVG STICKERS ─────────────────────────────────────────────────────
@@ -1080,58 +1161,61 @@ const SKETCH_STICKERS=[
   {id:'sk-clock',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="15.5" fill="#fff" stroke="#3B3A43" strokeWidth="2.7"/><path d="M20 11.5 V20 L26.5 24" fill="none" stroke="#3B3A43" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round"/></svg>},
   {id:'sk-coin',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#FFD54F" stroke="#E8B10A" strokeWidth="1.6"/><text x="20" y="27" textAnchor="middle" fontSize="18" fontWeight="800" fill="#9A7409">₩</text></svg>},
   {id:'sk-gift',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="7" y="15.5" width="26" height="18.5" rx="3" fill="#F0527F"/><rect x="7" y="12.5" width="26" height="6.5" rx="2" fill="#D63A68"/><rect x="18.4" y="12.5" width="3.2" height="21.5" fill="#FFD9E4"/><path d="M20 11.5 Q13.5 11.5 13.5 8 Q13.5 5.5 16.5 5.5 Q20 5.5 20 11.5 Q20 5.5 23.5 5.5 Q26.5 5.5 26.5 8 Q26.5 11.5 20 11.5" fill="none" stroke="#D63A68" strokeWidth="2"/></svg>},
-  {id:'sk-n1',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">1</text></svg>},
-  {id:'sk-n2',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">2</text></svg>},
-  {id:'sk-n3',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">3</text></svg>},
-  {id:'sk-n4',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">4</text></svg>},
-  {id:'sk-n5',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">5</text></svg>},
-  {id:'sk-n6',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">6</text></svg>},
-  {id:'sk-n7',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">7</text></svg>},
-  {id:'sk-n8',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">8</text></svg>},
-  {id:'sk-n9',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">9</text></svg>},
-  {id:'sk-n10',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="25.5" textAnchor="middle" fontSize="15" fontWeight="800" fill="#534AB7">10</text></svg>},
+  {id:'sk-n1',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">1</text></svg>},
+  {id:'sk-n2',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">2</text></svg>},
+  {id:'sk-n3',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">3</text></svg>},
+  {id:'sk-n4',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">4</text></svg>},
+  {id:'sk-n5',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">5</text></svg>},
+  {id:'sk-n6',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">6</text></svg>},
+  {id:'sk-n7',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">7</text></svg>},
+  {id:'sk-n8',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">8</text></svg>},
+  {id:'sk-n9',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#534AB7">9</text></svg>},
+  {id:'sk-n10',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEDFE" stroke="#AFA9EC" strokeWidth="1.5"/><text x="20" y="25.5" textAnchor="middle" fontSize="15" fontWeight="800" fill="#534AB7">10</text></svg>},
   /* ── 다이어리 뱃지 ── */
-  {id:'sk-line2',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FFF4E0" stroke="#F5A623" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C97D06">중요</text></svg>},
-  {id:'sk-urgent',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E24B4A"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">긴급</text></svg>},
-  {id:'sk-wave',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">완료</text></svg>},
-  {id:'sk-dday',cat:'badge',render:()=><svg viewBox="0 0 64 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="61" height="25" rx="12.5" fill="#1F1F29"/><text x="32" y="19.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff" letterSpacing="0.5">D-DAY</text></svg>},
-  {id:'sk-conf',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E6F1FB" stroke="#1B7FDB" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#155F9E">확인</text></svg>},
-  {id:'sk-hold',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EFEFF3" stroke="#B4B4BC" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">보류</text></svg>},
-  {id:'sk-meet',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EEEDFE" stroke="#8B85C9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#534AB7">회의</text></svg>},
-  {id:'sk-due',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#C93736"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">마감</text></svg>},
-  {id:'sk-vac',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">휴가</text></svg>},
-  {id:'sk-bday',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">생일</text></svg>},
-  {id:'sk-anniv',cat:'badge',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#F1EAFE" stroke="#8B5CF6" strokeWidth="1.5"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6D3FD1">기념일</text></svg>},
-  {id:'sk-appt',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">약속</text></svg>},
-  {id:'sk-gym',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">운동</text></svg>},
-  {id:'sk-study',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8ECF8" stroke="#4A6BC4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#33529E">공부</text></svg>},
-  {id:'sk-trip',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDEEDF" stroke="#E8792B" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#BC5D1B">여행</text></svg>},
-  {id:'sk-hosp',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDE8E8" stroke="#E24B4A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13332">병원</text></svg>},
-  {id:'sk-pay',cat:'badge',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#FFF4D6" stroke="#E8B10A" strokeWidth="1.5"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#9A7409">월급날</text></svg>},
-  {id:'sk-todo',cat:'badge',render:()=><svg viewBox="0 0 64 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="61" height="25" rx="12.5" fill="#fff" stroke="#B4B4BC" strokeWidth="1.5" strokeDasharray="4 3"/><text x="32" y="19.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#6B6B75">TO DO</text></svg>},
-  {id:'sk-new',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E24B4A"/><text x="29" y="19.5" textAnchor="middle" fontSize="12" fontWeight="800" fill="#fff" letterSpacing="1">NEW</text></svg>},
-  {id:'sk-rate1',cat:'badge',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★</tspan><tspan fill="#DEDEE4">★★★★</tspan></text></svg>},
-  {id:'sk-rate2',cat:'badge',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★</tspan><tspan fill="#DEDEE4">★★★</tspan></text></svg>},
-  {id:'sk-rate3',cat:'badge',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★</tspan><tspan fill="#DEDEE4">★★</tspan></text></svg>},
-  {id:'sk-rate4',cat:'badge',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★★</tspan><tspan fill="#DEDEE4">★</tspan></text></svg>},
-  {id:'sk-rate5',cat:'badge',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★★★</tspan></text></svg>},
-  {id:'sk-biz',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">출장</text></svg>},
-  {id:'sk-report',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EEEDFE" stroke="#8B85C9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#534AB7">보고</text></svg>},
-  {id:'sk-pt',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#F1EAFE" stroke="#8B5CF6" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6D3FD1">발표</text></svg>},
-  {id:'sk-sign',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8ECF8" stroke="#4A6BC4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#33529E">결재</text></svg>},
-  {id:'sk-submit',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">제출</text></svg>},
-  {id:'sk-dinner',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDEEDF" stroke="#E8792B" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#BC5D1B">회식</text></svg>},
-  {id:'sk-edu',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">교육</text></svg>},
-  {id:'sk-interview',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#534AB7"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">면접</text></svg>},
-  {id:'sk-contract',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FFF4D6" stroke="#E8B10A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#9A7409">계약</text></svg>},
-  {id:'sk-halfday',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">반차</text></svg>},
-  {id:'sk-dayoff',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E6F1FB" stroke="#1B7FDB" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#155F9E">연차</text></svg>},
-  {id:'sk-remote',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EFEFF3" stroke="#B4B4BC" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">재택</text></svg>},
-  {id:'sk-bill',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDE8E8" stroke="#E24B4A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13332">납부</text></svg>},
-  {id:'sk-resv',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#128C8C"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">예약</text></svg>},
-  {id:'sk-shop',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">쇼핑</text></svg>},
-  {id:'sk-date',cat:'badge',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#E0447C"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">데이트</text></svg>},
-  {id:'sk-clean',cat:'badge',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EFEFF3" stroke="#B4B4BC" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">청소</text></svg>},
+  {id:'sk-line2',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FFF4E0" stroke="#F5A623" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C97D06">중요</text></svg>},
+  {id:'sk-urgent',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E24B4A"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">긴급</text></svg>},
+  {id:'sk-wave',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">완료</text></svg>},
+  {id:'sk-dday',cat:'work',render:()=><svg viewBox="0 0 64 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="61" height="25" rx="12.5" fill="#1F1F29"/><text x="32" y="19.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff" letterSpacing="0.5">D-DAY</text></svg>},
+  {id:'sk-conf',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E6F1FB" stroke="#1B7FDB" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#155F9E">확인</text></svg>},
+  {id:'sk-hold',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EFEFF3" stroke="#B4B4BC" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">보류</text></svg>},
+  {id:'sk-meet',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EEEDFE" stroke="#8B85C9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#534AB7">회의</text></svg>},
+  {id:'sk-due',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#C93736"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">마감</text></svg>},
+  {id:'sk-vac',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">휴가</text></svg>},
+  {id:'sk-bday',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">생일</text></svg>},
+  {id:'sk-anniv',cat:'life',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#F1EAFE" stroke="#8B5CF6" strokeWidth="1.5"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6D3FD1">기념일</text></svg>},
+  {id:'sk-appt',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">약속</text></svg>},
+  {id:'sk-gym',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">운동</text></svg>},
+  {id:'sk-study',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8ECF8" stroke="#4A6BC4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#33529E">공부</text></svg>},
+  {id:'sk-trip',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDEEDF" stroke="#E8792B" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#BC5D1B">여행</text></svg>},
+  {id:'sk-hosp',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDE8E8" stroke="#E24B4A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13332">병원</text></svg>},
+  {id:'sk-pay',cat:'life',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#FFF4D6" stroke="#E8B10A" strokeWidth="1.5"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#9A7409">월급날</text></svg>},
+  {id:'sk-todo',cat:'work',render:()=><svg viewBox="0 0 64 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="61" height="25" rx="12.5" fill="#fff" stroke="#B4B4BC" strokeWidth="1.5" strokeDasharray="4 3"/><text x="32" y="19.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#6B6B75">TO DO</text></svg>},
+  {id:'sk-new',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E24B4A"/><text x="29" y="19.5" textAnchor="middle" fontSize="12" fontWeight="800" fill="#fff" letterSpacing="1">NEW</text></svg>},
+  {id:'sk-rate1',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★</tspan><tspan fill="#DEDEE4">★★★★</tspan></text></svg>},
+  {id:'sk-rate2',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★</tspan><tspan fill="#DEDEE4">★★★</tspan></text></svg>},
+  {id:'sk-rate3',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★</tspan><tspan fill="#DEDEE4">★★</tspan></text></svg>},
+  {id:'sk-rate4',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★★</tspan><tspan fill="#DEDEE4">★</tspan></text></svg>},
+  {id:'sk-rate5',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★★★</tspan></text></svg>},
+  {id:'sk-biz',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">출장</text></svg>},
+  {id:'sk-report',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EEEDFE" stroke="#8B85C9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#534AB7">보고</text></svg>},
+  {id:'sk-pt',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#F1EAFE" stroke="#8B5CF6" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6D3FD1">발표</text></svg>},
+  {id:'sk-sign',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8ECF8" stroke="#4A6BC4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#33529E">결재</text></svg>},
+  {id:'sk-submit',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">제출</text></svg>},
+  {id:'sk-dinner',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDEEDF" stroke="#E8792B" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#BC5D1B">회식</text></svg>},
+  {id:'sk-edu',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">교육</text></svg>},
+  {id:'sk-interview',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#534AB7"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">면접</text></svg>},
+  {id:'sk-contract',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FFF4D6" stroke="#E8B10A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#9A7409">계약</text></svg>},
+  {id:'sk-halfday',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">반차</text></svg>},
+  {id:'sk-dayoff',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E6F1FB" stroke="#1B7FDB" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#155F9E">연차</text></svg>},
+  {id:'sk-remote',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EFEFF3" stroke="#B4B4BC" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">재택</text></svg>},
+  {id:'sk-bill',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDE8E8" stroke="#E24B4A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13332">납부</text></svg>},
+  {id:'sk-resv',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#128C8C"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">예약</text></svg>},
+  {id:'sk-shop',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">쇼핑</text></svg>},
+  {id:'sk-date',cat:'life',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#E0447C"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">데이트</text></svg>},
+  {id:'sk-clean',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EFEFF3" stroke="#B4B4BC" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">청소</text></svg>},
+  {id:'sk-gather',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">모임</text></svg>},
+  {id:'sk-hair',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">미용</text></svg>},
+  {id:'sk-cafe',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#F3EDE6" stroke="#A67B52" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#7C5836">카페</text></svg>},
 ];
 
 const FACE_STICKERS=[
@@ -1968,7 +2052,7 @@ function FreeNotePanel(){
     const x=c?Math.max(24,(c.clientWidth-170)/2-90+off):80;
     const y=c?c.scrollTop+c.clientHeight/2-(type==='text'?30:70)-40+off:200;
     const newId='n'+Date.now();
-    dispatch({type:'ADD_STICKY_NOTE',note:{id:newId,x,y,w:170,h:type==='text'?60:140,text:'',
+    dispatch({type:'ADD_STICKY_NOTE',note:{id:newId,x,y,w:type==='text'?200:170,h:type==='text'?32:140,text:'',
       color:type==='text'?'transparent':STICKY_COLORS[n%STICKY_COLORS.length],type,createdAt:new Date().toISOString()}});
     if(!freeLayerVisible)setFreeLayerVisible(true);
     setActiveNoteId(newId);
@@ -2050,7 +2134,7 @@ function FreeNotePanel(){
         </div>
         {/* Active note format controls */}
         {activeNote&&(
-          <div style={{padding:'6px 8px',backgroundColor:'#FAFAFA',borderRadius:6,marginBottom:8,border:'0.5px solid #F0F0F0'}}>
+          <div style={{padding:'8px 10px',backgroundColor:'#FBFBFD',borderRadius:8,marginBottom:8,border:'0.5px solid #ECECF1'}}>
             <div style={{fontSize:10,color:'#8E8E96',marginBottom:4,fontWeight:500}}>{activeNote.type==='text'?'텍스트박스 서식':'포스트잇 색상'}</div>
             {activeNote.type==='text'?(
               <div style={{display:'flex',flexDirection:'column',gap:5}}>
@@ -2163,8 +2247,8 @@ function FreeNotePanel(){
             <div style={{flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
               {(()=>{
                 const g=EMOJI_TABS.groups[stickerTab];
-                const svgBtn=(s,w,h)=>(
-                  <button key={s.id} onClick={()=>addSticker(g.type==='arrow'?'arrow_svg':'sketch',s.id)}
+                const svgBtn=(s,w,h,type)=>(
+                  <button key={s.id} onClick={()=>addSticker(type,s.id)}
                     style={{width:w,height:h,padding:3,borderRadius:6,border:'0.5px solid #EFEFF3',
                       backgroundColor:'#FAFAFC',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.1s'}}
                     onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F0EFFE';e.currentTarget.style.borderColor='#C5C0F0';e.currentTarget.style.transform='scale(1.08)';}}
@@ -2172,9 +2256,9 @@ function FreeNotePanel(){
                     {s.render()}
                   </button>
                 );
-                if(g.type==='emoji')return(
+                const emojiGrid=(items)=>(
                   <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:1}}>
-                    {g.items.map((em,i)=>(
+                    {items.map((em,i)=>(
                       <button key={i} onClick={()=>addSticker('emoji',em)}
                         style={{fontSize:16,padding:'3px 1px',borderRadius:4,border:'none',
                           backgroundColor:'transparent',cursor:'pointer',lineHeight:1}}
@@ -2185,9 +2269,30 @@ function FreeNotePanel(){
                     ))}
                   </div>
                 );
-                if(g.type==='badge')return(
+                if(g.type==='work'||g.type==='life')return(
                   <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-                    {SKETCH_STICKERS.filter(s=>s.cat==='badge').map(s=>svgBtn(s,64,32))}
+                    {SKETCH_STICKERS.filter(s=>s.cat===g.type).map(s=>svgBtn(s,64,32,'sketch'))}
+                  </div>
+                );
+                if(g.type==='num')return(
+                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                    <div>
+                      <div style={{fontSize:9,color:'#A2A2AA',marginBottom:3,fontWeight:500}}>순번</div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:2}}>
+                        {SKETCH_STICKERS.filter(s=>s.cat==='num'&&s.id.startsWith('sk-n')).map(s=>svgBtn(s,40,40,'sketch'))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,color:'#A2A2AA',marginBottom:3,fontWeight:500}}>별점</div>
+                      <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                        {SKETCH_STICKERS.filter(s=>s.cat==='num'&&s.id.startsWith('sk-rate')).map(s=>svgBtn(s,110,28,'sketch'))}
+                      </div>
+                    </div>
+                  </div>
+                );
+                if(g.type==='mark')return(
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:2}}>
+                    {SKETCH_STICKERS.filter(s=>s.cat==='mark').map(s=>svgBtn(s,34,34,'sketch'))}
                   </div>
                 );
                 if(g.type==='arrow')return(
@@ -2195,32 +2300,29 @@ function FreeNotePanel(){
                     <div>
                       <div style={{fontSize:9,color:'#A2A2AA',marginBottom:3,fontWeight:500}}>기본</div>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:2}}>
-                        {ARROW_SVG_STICKERS.filter(s=>s.cat==='plain').map(s=>svgBtn(s,34,34))}
+                        {ARROW_SVG_STICKERS.filter(s=>s.cat==='plain').map(s=>svgBtn(s,34,34,'arrow_svg'))}
                       </div>
                     </div>
                     <div>
                       <div style={{fontSize:9,color:'#A2A2AA',marginBottom:3,fontWeight:500}}>원형 뱃지</div>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:2}}>
-                        {ARROW_SVG_STICKERS.filter(s=>s.cat==='circle').map(s=>svgBtn(s,34,34))}
+                        {ARROW_SVG_STICKERS.filter(s=>s.cat==='circle').map(s=>svgBtn(s,34,34,'arrow_svg'))}
                       </div>
                     </div>
                   </div>
                 );
-                if(g.type==='mark')return(
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:2}}>
-                    {SKETCH_STICKERS.filter(s=>s.cat==='mark').map(s=>svgBtn(s,34,34))}
+                if(g.type==='shape')return(
+                  <div style={{display:'flex',flexWrap:'wrap',gap:3,alignItems:'center'}}>
+                    {SHAPE_STICKERS.filter(s=>s.cat==='s').map(s=>svgBtn(s,s.id.startsWith('shp-hl')||s.id.startsWith('shp-un')?66:34,s.id.startsWith('shp-hl')||s.id.startsWith('shp-un')?24:34,'shape'))}
                   </div>
                 );
-                if(g.type==='shape')return(
-                  <div style={{display:'flex',flexWrap:'wrap',gap:2}}>
-                    {SHAPE_STICKERS.map(s=>(
-                      <button key={s.id} onClick={()=>addSticker('shape',s.id)}
-                        style={{width:22,height:22,padding:1.5,borderRadius:4,border:'none',
-                          backgroundColor:'transparent',cursor:'pointer'}}
-                        onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F5F5F5';e.currentTarget.style.transform='scale(1.15)';}}
-                        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='transparent';e.currentTarget.style.transform='scale(1)';}}>
-                        {s.render()}
-                      </button>
+                if(g.type==='emojiset')return(
+                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                    {g.sets.map((sec,si2)=>(
+                      <div key={si2}>
+                        <div style={{fontSize:9,color:'#A2A2AA',marginBottom:3,fontWeight:500}}>{sec.label}</div>
+                        {emojiGrid(sec.items)}
+                      </div>
                     ))}
                   </div>
                 );
@@ -2228,12 +2330,12 @@ function FreeNotePanel(){
                   <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:3}}>
                     {FACE_STICKERS.map(s=>(
                       <button key={s.id} onClick={()=>addSticker('face',s.id)}
-                        style={{padding:'3px 2px',borderRadius:6,border:'0.5px solid #F0F0F0',
+                        style={{padding:'5px 2px',borderRadius:6,border:'0.5px solid #F0F0F0',
                           backgroundColor:'#FAFAFA',cursor:'pointer',
-                          display:'flex',flexDirection:'column',alignItems:'center',gap:1,transition:'all 0.12s'}}
+                          display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.12s'}}
                         onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#FFF3E0';e.currentTarget.style.borderColor='#FFB74D';e.currentTarget.style.transform='scale(1.1)';}}
                         onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#FAFAFA';e.currentTarget.style.borderColor='#F0F0F0';e.currentTarget.style.transform='scale(1)';}}>
-                        <span style={{fontSize:28,lineHeight:1.1}}>{s.emoji}</span>
+                        <span style={{fontSize:26,lineHeight:1.1}}>{s.emoji}</span>
                       </button>
                     ))}
                   </div>
