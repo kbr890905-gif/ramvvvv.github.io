@@ -499,12 +499,12 @@ function SettingsModal({onClose}){
                     <span style={{fontSize:13,color:'#534AB7',fontWeight:600}}>✓ {state.outlookUser}</span>
                     <span style={{fontSize:11,color:'#8E8E96',flexShrink:0}}>{state.outlookSyncedAt?'마지막 동기화: '+new Date(state.outlookSyncedAt).toLocaleString('ko-KR'):''}</span>
                   </div>
-                  <div style={{fontSize:11,color:'#7A73C4',marginTop:6,lineHeight:1.6}}>상단바 아웃룩 칩 옆 <b>↻</b> 버튼으로 언제든 즉시 동기화할 수 있습니다. 동기화된 일정은 클라우드 동기화를 통해 다른 기기에도 자동 반영됩니다.</div>
+                  <div style={{fontSize:11,color:'#7A73C4',marginTop:6,lineHeight:1.6}}>자동 동기화: <b>Claude 스케줄 작업</b>이 평일 아침 7:35에 아웃룩 웹 캘린더를 읽어 자동 반영합니다. 상단바 <b>↻</b> 버튼으로 수동 즉시 동기화도 가능하며, 결과는 클라우드를 통해 모든 기기에 반영됩니다.</div>
                 </div>
               ):(
                 <div style={{backgroundColor:'#F8F8F8',borderRadius:8,padding:'10px 14px'}}>
                   <div style={{fontSize:12,color:'#666',fontWeight:600,marginBottom:4}}>이 기기에서 연결되지 않음</div>
-                  <div style={{fontSize:11,color:'#8E8E96',lineHeight:1.6}}>다른 기기에서 아웃룩을 연결해 동기화 중이라면, 이 기기에서는 별도 연결 없이 <b>클라우드 동기화</b>로 아웃룩 일정이 표시됩니다(우회 방식). 이 기기에서 직접 동기화하려면 아래 Client ID로 연결하세요.</div>
+                  <div style={{fontSize:11,color:'#8E8E96',lineHeight:1.6}}>아웃룩 동기화는 <b>Claude 스케줄 작업</b>(평일 아침 7:35)이 아웃룩 웹 캘린더를 읽어 클라우드에 자동 반영하는 방식으로 동작합니다. 이 기기에 별도 연결은 필요 없습니다. 아래 Client ID 직접 연결(MSAL)은 선택 사항입니다.</div>
                 </div>
               )}
               <div>
@@ -826,6 +826,7 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
   const textColor=note.textColor||(isText?'#1A1A1A':'#333');
   const bgColor=isText?(note.bgColor||'transparent'):(note.color||STICKY_COLORS[0]);
   const edRef=React.useRef(null);
+  const rootRef=React.useRef(null);
 
   /* contentEditable 초기화 (plain text → HTML 마이그레이션) */
   React.useEffect(()=>{
@@ -849,6 +850,7 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
     onFocus?.();
     if(!freeLayerVisible)return;
     if(e.target.isContentEditable||e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+    rootRef.current&&rootRef.current.focus();
     startDrag(e);
   };
   /* 리사이즈: 텍스트박스는 가로만, 포스트잇은 양방향 */
@@ -876,7 +878,7 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
   };
 
   return(
-    <div data-sticky-note="true" tabIndex={0}
+    <div ref={rootRef} data-sticky-note="true" tabIndex={0}
       className={isText?'txt-note':''}
       onKeyDown={e=>{if((e.key==='Delete'||e.key==='Backspace')&&isActive&&e.target===e.currentTarget){e.preventDefault();e.stopPropagation();onDelete();}}}
       onMouseDown={onRootDown}
@@ -893,7 +895,7 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
         pointerEvents:'all',
         userSelect:'none',display:'flex',flexDirection:'column',
         overflow:isText?'visible':'hidden',
-        zIndex:isActive?50:30,
+        zIndex:isActive?50:30,outline:'none',
         transition:'box-shadow 0.15s,border-color 0.15s'}}>
 
       {/* ── 플로팅 서식 툴바 (선택 시, Miro 스타일) ── */}
@@ -978,7 +980,7 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
           className="note-editor"
           data-placeholder={isText?'텍스트 입력':'메모 입력...'}
           spellCheck={false}
-          onMouseDown={e=>{e.stopPropagation();if(!freeLayerVisible)return;if(!isActive){e.preventDefault();onFocus?.();startDrag(e);}}}
+          onMouseDown={e=>{e.stopPropagation();if(!freeLayerVisible)return;if(!isActive){e.preventDefault();onFocus?.();rootRef.current&&rootRef.current.focus();startDrag(e);}}}
           onFocus={()=>onFocus?.()}
           onInput={syncNote}
           onBlur={syncNote}
@@ -3392,8 +3394,8 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44}){
       <div style={{height:28,display:'flex',alignItems:'center',justifyContent:'center',gap:4,backgroundColor:hdrBg,borderBottom:'0.5px solid #F0F0F2',flexShrink:0}}>
         <span style={{fontSize:10.5,color:dayColor,fontWeight:600,letterSpacing:'0.5px'}}>{DAY_NAMES[dow]}</span>
         <span style={{fontSize:13.5,color:dateColor,fontWeight:todayDate?700:600,fontVariantNumeric:'tabular-nums'}}>{date.getDate()}</span>
+        {getHoliday(dk)&&<span style={{fontSize:9,color:todayDate?'rgba(255,255,255,0.85)':'#E24B4A',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'46%'}}>{getHoliday(dk)}</span>}
       </div>
-      <div style={{height:14,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>{getHoliday(dk)&&!todayDate&&<span style={{fontSize:9,color:'#E24B4A',letterSpacing:'-0.2px',fontWeight:500}}>{getHoliday(dk)}</span>}</div>
       <div onDoubleClick={()=>onAddEvent(dk)} title="더블클릭 → 일정 추가" style={{flexShrink:0,overflow:'hidden',padding:'4px 5px 3px',borderBottom:'0.5px solid #F0F0F3',height:evtH,minHeight:evtH,cursor:'pointer'}}>
         {events.slice(0,visibleEvt).map(e=><EventChip key={e.id} event={e} onClick={()=>setDetailEvent(e)}/>)}
         {hiddenEvt>0&&<div style={{fontSize:8,color:'#A2A2AA',paddingLeft:2,paddingTop:1}}>+{hiddenEvt}개 더</div>}
