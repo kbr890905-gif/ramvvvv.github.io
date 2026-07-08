@@ -3193,7 +3193,8 @@ function EventDetailPopover({event,onClose,onDelete,onUpdate,onOpenNote}){
   const noteExists=noteDraft?(state.meetingNotes||[]).some(n=>n.id===noteDraft.id):false;
   const noteDirty=()=>noteDraft&&JSON.stringify(noteDraft)!==noteSnapRef.current;
   const closeGuard=()=>{
-    if(!noteDirty()||confirm('저장하지 않은 회의록 변경사항이 있습니다. 닫을까요?'))onClose();
+    if(noteDirty())saveNote();
+    onClose();
   };
   React.useEffect(()=>{const h=(e)=>{
     if(e.key==='Escape')closeGuard();
@@ -3388,7 +3389,7 @@ function EventChip({event,onClick}){
   const catStyle=useDynCatStyle();const cs=catStyle[event.category]||catStyle.work;
   const{state}=useStore();const bdayPfx=getBdayPrefix(event.category,state);
   const isBday=bdayPfx!=='';
-  const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:4,marginBottom:1.5,fontSize:11.5,fontWeight:500,color:cs.text,lineHeight:1.55,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text),borderRadius:4,marginBottom:1.5,fontSize:11.5,fontWeight:500,color:cs.text,lineHeight:1.55,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
+  const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:6,marginBottom:1.5,fontSize:11.5,fontWeight:500,color:cs.text,lineHeight:1.55,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text),borderRadius:6,marginBottom:1.5,fontSize:11.5,fontWeight:500,color:cs.text,lineHeight:1.55,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
   return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:3,padding:'1px 5px 1px 8px',...chipStyle}}>{event.time&&<span style={{opacity:0.7,flexShrink:0,fontSize:10.5,fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0}}>🔗</span>}</div>;
 }
 function TodoItem({todo,onToggle,onDelete}){
@@ -3429,7 +3430,7 @@ function MemoEditor({memoKey,value,onUpdate}){
 }
 function DayColumn({date,onAddEvent,colH=220,evtH=44}){
   const{state,dispatch}=useStore();
-  const[evtDragHover,setEvtDragHover]=useState(false);const catStyle=useDynCatStyle();const dk=toDateKey(date);const dow=(date.getDay()+6)%7;const todayDate=isToday(date);const weekend=isSat(date)||isSun(date);
+  const[evtDragIdx,setEvtDragIdx]=useState(null);const catStyle=useDynCatStyle();const dk=toDateKey(date);const dow=(date.getDay()+6)%7;const todayDate=isToday(date);const weekend=isSat(date)||isSun(date);
   const events=(state.weeklyEvents||[]).filter(e=>{if(e.date!==dk)return false;if(e.category==='work')return state.workVisible;if(e.category==='personal')return state.personalVisible;if(e.isOutlook)return state.outlookVisible!==false;const cl=(state.customLayers||[]).find(l=>l.id===e.category);if(cl)return cl.visible!==false;return true;});
   const todos=(state.todos||[]).filter(t=>{if(t.date!==dk)return false;if(t.category==='work')return state.workVisible;if(t.category==='personal')return state.personalVisible;return true;});
   const memo=state.weekMemos[dk]||'';
@@ -3452,12 +3453,18 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44}){
         {getHoliday(dk)&&<span style={{fontSize:9,color:todayDate?'rgba(255,255,255,0.85)':'#E24B4A',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'46%'}}>{getHoliday(dk)}</span>}
       </div>
       <div onDoubleClick={()=>onAddEvent(dk)} title="더블클릭 → 일정 추가"
-        onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';if(!evtDragHover)setEvtDragHover(true);}}}
-        onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setEvtDragHover(false);}}
-        onDrop={e=>{setEvtDragHover(false);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk,updatedAt:new Date().toISOString()}});}}
+        onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';
+          const r=e.currentTarget.getBoundingClientRect();
+          let idx=Math.round((e.clientY-r.top-4)/CHIP_H);
+          idx=Math.max(0,Math.min(idx,Math.min(events.length,visibleEvt)));
+          if(evtDragIdx!==idx)setEvtDragIdx(idx);}}}
+        onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setEvtDragIdx(null);}}
+        onDrop={e=>{setEvtDragIdx(null);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk,updatedAt:new Date().toISOString()}});}}
         style={{flexShrink:0,overflow:'hidden',padding:'4px 5px 3px',borderBottom:'0.5px solid #EFEFEF',height:evtH,minHeight:evtH,cursor:'pointer'}}>
-        {evtDragHover&&<div style={{height:19,borderRadius:4,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.06)',animation:'slotIn 0.15s ease',overflow:'hidden',marginBottom:1}}/>}
-        {events.slice(0,visibleEvt).map(e=><EventChip key={e.id} event={e} onClick={()=>setDetailEvent(e)}/>)}
+        <div style={{position:'relative'}}>
+          {evtDragIdx!==null&&<div style={{position:'absolute',left:0,right:0,top:evtDragIdx*CHIP_H,height:19,borderRadius:6,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.07)',pointerEvents:'none',transition:'top 0.12s ease',zIndex:2}}/>}
+          {events.slice(0,visibleEvt).map((e2,ci)=><div key={e2.id} style={{transform:(evtDragIdx!==null&&ci>=evtDragIdx)?'translateY(21px)':'translateY(0)',transition:'transform 0.15s ease'}}><EventChip event={e2} onClick={()=>setDetailEvent(e2)}/></div>)}
+        </div>
         {hiddenEvt>0&&<div style={{fontSize:8,color:'#ABABAB',paddingLeft:2,paddingTop:1}}>+{hiddenEvt}개 더</div>}
       </div>
       <div style={{flex:2,overflowY:'auto',padding:'3px 4px 2px',borderBottom:'0.5px solid #EFEFEF',minHeight:0,cursor:todoActive?'default':'text'}} onClick={()=>{if(!todoActive)activateTodo();}}>
@@ -3523,7 +3530,7 @@ function WeeklySection(){
     document.addEventListener('mouseup',onUp);
   },[weeklyHeight,setWeeklyHeight]);
   return(
-    <section style={{borderBottom:'0.5px solid #EBEBEB',backgroundColor:'#fff',flexShrink:0,position:'relative'}}>
+    <section style={{backgroundColor:'#fff',flexShrink:0,position:'relative',borderRadius:12,border:'0.5px solid #E6E6E6',overflow:'hidden',boxShadow:'0 1px 3px rgba(20,20,40,0.05)'}}>
       <WeeklyHeader weekDates={weekDates} collapsed={state.weeklyCollapsed} onPrev={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset-1})} onNext={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset+1})} onToday={()=>dispatch({type:'SET_WEEK_OFFSET',payload:0})} onToggleCollapse={()=>dispatch({type:'TOGGLE_WEEKLY_COLLAPSED'})}/>
       <div style={{height:state.weeklyCollapsed?0:weeklyHeight,overflow:'hidden',transition:state.weeklyCollapsed?'height 200ms ease':undefined}}><WeeklyGrid weekOffset={state.weekOffset} colH={weeklyHeight-34}/></div>
       {/* Resize handle */}
@@ -3598,7 +3605,7 @@ function MultiDayBlockPopover({initialStart,initialEnd,editBlock,onClose}){
 // ─── CALENDAR DATE CELL ───────────────────────
 function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouseEnter,onMouseUp,onDoubleClick,onEventClick}){
   const{state,dispatch}=useStore();
-  const[dragHover,setDragHover]=useState(false);
+  const[dragIdx,setDragIdx]=useState(null);const chipsRef=useRef(null);
   const catStyle=useDynCatStyle();
   const todayCell=isToday(date);const weekend=isSat(date)||isSun(date);
   const isFirstOfMonth=date.getDate()===1;
@@ -3612,9 +3619,13 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
   return(
     <div className="cal-cell" onMouseDown={onMouseDown} onMouseEnter={onMouseEnter} onMouseUp={onMouseUp}
       onDoubleClick={onDoubleClick}
-      onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';if(!dragHover)setDragHover(true);}}}
-      onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragHover(false);}}
-      onDrop={e=>{setDragHover(false);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const dk2=toDateKey(date);const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk2)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk2}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk2,updatedAt:new Date().toISOString()}});}}
+      onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';
+        const CH=21;let idx=0;
+        if(chipsRef.current){const r=chipsRef.current.getBoundingClientRect();idx=Math.round((e.clientY-r.top)/CH);}
+        idx=Math.max(0,Math.min(idx,Math.min(events.length,4)));
+        if(dragIdx!==idx)setDragIdx(idx);}}}
+      onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragIdx(null);}}
+      onDrop={e=>{setDragIdx(null);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const dk2=toDateKey(date);const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk2)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk2}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk2,updatedAt:new Date().toISOString()}});}}
       style={{minHeight:148,padding:'4px 6px 4px',backgroundColor:cellBg,
         borderRight:cellBorder,borderBottom:cellBorder,cursor:'pointer',userSelect:'none',
         display:'flex',flexDirection:'column',gap:1}}>
@@ -3631,11 +3642,12 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
           fontVariantNumeric:'tabular-nums'}}>{dateLabel}</span>
         {holiday&&<span style={{fontSize:11,color:'#E24B4A',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',flex:1}}>{holiday}</span>}
       </div>
-      {dragHover&&<div style={{height:19,borderRadius:4,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.06)',flexShrink:0,animation:'slotIn 0.15s ease',overflow:'hidden'}}/>}
+      {dragIdx!==null&&events.length===0&&<div style={{height:19,borderRadius:6,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.06)',flexShrink:0,animation:'slotIn 0.15s ease',overflow:'hidden'}}/>}
       {/* Events as chips */}
       {events.length>0&&(
-        <div style={{display:'flex',flexDirection:'column',gap:1,overflow:'hidden',flex:1}}>
-          {events.slice(0,4).map(ev=>{
+        <div ref={chipsRef} style={{display:'flex',flexDirection:'column',gap:1,overflow:'hidden',flex:1,position:'relative',paddingBottom:dragIdx!==null?21:0,transition:'padding-bottom 0.15s ease'}}>
+          {dragIdx!==null&&<div style={{position:'absolute',left:0,right:0,top:dragIdx*21,height:19,borderRadius:6,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.07)',pointerEvents:'none',transition:'top 0.12s ease',zIndex:2}}/>}
+          {events.slice(0,4).map((ev,ci)=>{
             const cs=catStyle[ev.category]||catStyle.work;
             const isBdayEv=getBdayPrefix(ev.category,state)!=='';
             return(
@@ -3644,8 +3656,10 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
                 onMouseDown={e=>e.stopPropagation()}
                 onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',ev.id);e.dataTransfer.effectAllowed='move';}}
                 style={{display:'flex',alignItems:'center',gap:3,padding:'1.5px 5px 1.5px 8px',
-                  backgroundColor:isBdayEv?'transparent':cs.bg,borderRadius:4,overflow:'hidden',
+                  backgroundColor:isBdayEv?'transparent':cs.bg,borderRadius:6,overflow:'hidden',
                   boxShadow:isBdayEv?'none':'inset 2.5px 0 0 '+(cs.dot||cs.text),
+                  transform:(dragIdx!==null&&ci>=dragIdx)?'translateY(21px)':'translateY(0)',
+                  transition:'transform 0.15s ease',
                   cursor:'pointer',flexShrink:0,lineHeight:1.4}}>
                 {ev.time&&<span style={{fontSize:10.5,color:cs.text,opacity:0.75,flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
                 <span style={{fontSize:11.5,color:cs.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
@@ -3965,7 +3979,7 @@ function CalendarSection(){
   const visibleMonthLabel=navLabel||`${navYear}년 ${navMonth+1}월`;
 
   return(
-    <section style={{display:'flex',flexDirection:'column',flex:1,minHeight:0}}>
+    <section style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,backgroundColor:'#fff',borderRadius:12,border:'0.5px solid #E6E6E6',overflow:'hidden',boxShadow:'0 1px 3px rgba(20,20,40,0.05)'}}>
       {/* Sticky header */}
       <div style={{flexShrink:0,backgroundColor:'#fff',borderBottom:'0.5px solid #EBEBEB',zIndex:10}}>
         {/* Year/month nav row */}
@@ -3974,13 +3988,13 @@ function CalendarSection(){
           <div style={{display:'flex',alignItems:'center',gap:0}}>
             <button onClick={goPrevYear} style={{fontSize:15,color:'#CDCDCD',padding:'2px 5px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
             <input type="number" value={navYear} onChange={handleYearInput}
-              style={{width:54,textAlign:'center',fontSize:16,fontWeight:700,color:'#1A1A1A',letterSpacing:'-0.3px',borderBottom:'none',paddingBottom:0}}
+              style={{width:64,textAlign:'center',fontSize:18,fontWeight:700,color:'#1A1A1A',letterSpacing:'-0.4px',borderBottom:'none',paddingBottom:0}}
               onFocus={e=>e.target.select()}/>
             <button onClick={goNextYear} style={{fontSize:15,color:'#CDCDCD',padding:'2px 5px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>›</button>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:0}}>
             <button onClick={goPrev} style={{fontSize:15,color:'#CDCDCD',padding:'2px 5px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>&#8249;</button>
-            <span style={{fontSize:16,color:'#1A1A1A',fontWeight:700,minWidth:48,textAlign:'center',userSelect:'none',letterSpacing:'-0.3px'}}>{navMonth+1}월</span>
+            <span style={{fontSize:18,color:'#1A1A1A',fontWeight:700,minWidth:54,textAlign:'center',userSelect:'none',letterSpacing:'-0.4px'}}>{navMonth+1}월</span>
             <button onClick={goNext} style={{fontSize:15,color:'#CDCDCD',padding:'2px 5px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>&#8250;</button>
           </div>
           <div style={{flex:1}}/>
@@ -4048,9 +4062,8 @@ function CalendarSection(){
 function MainArea(){
   const{leftWidth,leftCollapsed}=useLayout();
   return(
-    <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',backgroundColor:'#FAFAFA',transition:'margin-left 0.2s ease'}}>
+    <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-left 0.2s ease'}}>
       <WeeklySection/>
-      <div style={{height:8,backgroundColor:'#F3F3F3',flexShrink:0,borderBottom:'0.5px solid #EBEBEB'}}/>
       <CalendarSection/>
     </main>
   );
