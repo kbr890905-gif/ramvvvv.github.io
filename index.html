@@ -47,6 +47,7 @@
   @keyframes popIn{from{opacity:0;transform:scale(0.97) translateY(4px);}to{opacity:1;transform:scale(1) translateY(0);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes slideInRight{from{transform:translateX(28px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+  @keyframes slotIn{from{height:0;opacity:0;margin-top:0;}to{height:19px;opacity:1;margin-top:1px;}}
   button{transition:background-color 0.12s ease,color 0.12s ease,border-color 0.12s ease,opacity 0.12s ease,box-shadow 0.12s ease;}
   input,select,textarea{transition:border-color 0.12s ease,background-color 0.12s ease;}
   ::selection{background:#DDD9F7;}
@@ -2978,7 +2979,7 @@ function LeftPanel(){
   },[leftWidth,setLeftWidth]);
   return(
     <aside style={{position:'fixed',top:56,left:0,width:leftCollapsed?0:leftWidth,height:'calc(100vh - 56px)',
-      borderRight:'0.5px solid #E9E9E7',backgroundColor:'#fff',zIndex:100,
+      borderRight:'0.5px solid #E9E9E7',backgroundColor:'#FCFCFD',zIndex:100,
       boxSizing:'border-box',display:'flex',flexDirection:'column',overflow:'hidden',
       transition:'width 0.2s ease'}}>
       {/* Tab bar */}
@@ -3427,7 +3428,8 @@ function MemoEditor({memoKey,value,onUpdate}){
   );
 }
 function DayColumn({date,onAddEvent,colH=220,evtH=44}){
-  const{state,dispatch}=useStore();const catStyle=useDynCatStyle();const dk=toDateKey(date);const dow=(date.getDay()+6)%7;const todayDate=isToday(date);const weekend=isSat(date)||isSun(date);
+  const{state,dispatch}=useStore();
+  const[evtDragHover,setEvtDragHover]=useState(false);const catStyle=useDynCatStyle();const dk=toDateKey(date);const dow=(date.getDay()+6)%7;const todayDate=isToday(date);const weekend=isSat(date)||isSun(date);
   const events=(state.weeklyEvents||[]).filter(e=>{if(e.date!==dk)return false;if(e.category==='work')return state.workVisible;if(e.category==='personal')return state.personalVisible;if(e.isOutlook)return state.outlookVisible!==false;const cl=(state.customLayers||[]).find(l=>l.id===e.category);if(cl)return cl.visible!==false;return true;});
   const todos=(state.todos||[]).filter(t=>{if(t.date!==dk)return false;if(t.category==='work')return state.workVisible;if(t.category==='personal')return state.personalVisible;return true;});
   const memo=state.weekMemos[dk]||'';
@@ -3450,9 +3452,11 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44}){
         {getHoliday(dk)&&<span style={{fontSize:9,color:todayDate?'rgba(255,255,255,0.85)':'#E24B4A',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'46%'}}>{getHoliday(dk)}</span>}
       </div>
       <div onDoubleClick={()=>onAddEvent(dk)} title="더블클릭 → 일정 추가"
-        onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';}}}
-        onDrop={e=>{const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk,updatedAt:new Date().toISOString()}});}}
+        onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';if(!evtDragHover)setEvtDragHover(true);}}}
+        onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setEvtDragHover(false);}}
+        onDrop={e=>{setEvtDragHover(false);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk,updatedAt:new Date().toISOString()}});}}
         style={{flexShrink:0,overflow:'hidden',padding:'4px 5px 3px',borderBottom:'0.5px solid #EFEEEB',height:evtH,minHeight:evtH,cursor:'pointer'}}>
+        {evtDragHover&&<div style={{height:19,borderRadius:4,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.06)',animation:'slotIn 0.15s ease',overflow:'hidden',marginBottom:1}}/>}
         {events.slice(0,visibleEvt).map(e=><EventChip key={e.id} event={e} onClick={()=>setDetailEvent(e)}/>)}
         {hiddenEvt>0&&<div style={{fontSize:8,color:'#A5A39D',paddingLeft:2,paddingTop:1}}>+{hiddenEvt}개 더</div>}
       </div>
@@ -3594,6 +3598,7 @@ function MultiDayBlockPopover({initialStart,initialEnd,editBlock,onClose}){
 // ─── CALENDAR DATE CELL ───────────────────────
 function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouseEnter,onMouseUp,onDoubleClick,onEventClick}){
   const{state,dispatch}=useStore();
+  const[dragHover,setDragHover]=useState(false);
   const catStyle=useDynCatStyle();
   const todayCell=isToday(date);const weekend=isSat(date)||isSun(date);
   const isFirstOfMonth=date.getDate()===1;
@@ -3607,8 +3612,9 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
   return(
     <div className="cal-cell" onMouseDown={onMouseDown} onMouseEnter={onMouseEnter} onMouseUp={onMouseUp}
       onDoubleClick={onDoubleClick}
-      onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';}}}
-      onDrop={e=>{const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const dk2=toDateKey(date);const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk2)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk2}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk2,updatedAt:new Date().toISOString()}});}}
+      onDragOver={e=>{if(e.dataTransfer.types.includes('text/evtid')){e.preventDefault();e.dataTransfer.dropEffect='move';if(!dragHover)setDragHover(true);}}}
+      onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragHover(false);}}
+      onDrop={e=>{setDragHover(false);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const dk2=toDateKey(date);const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk2)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk2}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk2,updatedAt:new Date().toISOString()}});}}
       style={{minHeight:148,padding:'4px 6px 4px',backgroundColor:cellBg,
         borderRight:cellBorder,borderBottom:cellBorder,cursor:'pointer',userSelect:'none',
         display:'flex',flexDirection:'column',gap:1}}>
@@ -3625,6 +3631,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
           fontVariantNumeric:'tabular-nums'}}>{dateLabel}</span>
         {holiday&&<span style={{fontSize:11,color:'#E24B4A',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',flex:1}}>{holiday}</span>}
       </div>
+      {dragHover&&<div style={{height:19,borderRadius:4,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.06)',flexShrink:0,animation:'slotIn 0.15s ease',overflow:'hidden'}}/>}
       {/* Events as chips */}
       {events.length>0&&(
         <div style={{display:'flex',flexDirection:'column',gap:1,overflow:'hidden',flex:1}}>
