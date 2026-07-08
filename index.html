@@ -4249,10 +4249,31 @@ function CalendarSection(){
   );
 }
 // ─── MAIN AREA ───────────────────────────────
+function HeaderBanner(){
+  const{state}=useStore();
+  const today=new Date();
+  const dk=toDateKey(today);
+  const days=['일','월','화','수','목','금','토'];
+  const wd=getWeekDates(0).map(toDateKey);
+  const evN=(state.weeklyEvents||[]).filter(e=>wd.includes(e.date)).length;
+  const mtN=(state.weeklyEvents||[]).filter(e=>wd.includes(e.date)&&e.meetingNoteId).length;
+  const tdN=(state.todos||[]).filter(t=>wd.includes(t.date)&&!t.done).length;
+  const todayEv=(state.weeklyEvents||[]).filter(e=>e.date===dk).length;
+  return(
+    <div style={{background:'linear-gradient(105deg,#534AB7 0%,#6E63D6 100%)',borderRadius:12,padding:'12px 20px',
+      display:'flex',alignItems:'center',gap:14,flexShrink:0,flexWrap:'wrap',
+      boxShadow:'0 2px 10px rgba(83,74,183,0.28)'}}>
+      <span style={{fontSize:18,fontWeight:600,color:'#fff',letterSpacing:'-0.3px'}}>{today.getMonth()+1}월 {today.getDate()}일 {days[today.getDay()]}요일</span>
+      <span style={{fontSize:11.5,color:'#DAD7F7'}}>오늘 일정 {todayEv}개 · 이번 주 {evN}개 · 회의 {mtN}건 · 남은 할 일 {tdN}개</span>
+      <span style={{marginLeft:'auto',fontSize:11,color:'#C5C0F0',fontWeight:600,letterSpacing:'1px'}}>{today.getFullYear()}</span>
+    </div>
+  );
+}
 function MainArea(){
   const{leftWidth,leftCollapsed,rightDockOpen,dockW}=useLayout();
   return(
     <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',marginRight:rightDockOpen?(dockW||308)+16:0,transition:'margin-left 0.2s ease,margin-right 0.2s ease'}}>
+      <HeaderBanner/>
       <WeeklySection/>
       <CalendarSection/>
     </main>
