@@ -978,7 +978,7 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
           className="note-editor"
           data-placeholder={isText?'텍스트 입력':'메모 입력...'}
           spellCheck={false}
-          onMouseDown={e=>{e.stopPropagation();if(freeLayerVisible)onFocus?.();}}
+          onMouseDown={e=>{e.stopPropagation();if(!freeLayerVisible)return;if(!isActive){e.preventDefault();onFocus?.();startDrag(e);}}}
           onFocus={()=>onFocus?.()}
           onInput={syncNote}
           onBlur={syncNote}
@@ -1292,6 +1292,8 @@ function PlacedSticker({sticker,freeLayerVisible,selectedId,setSelectedId}){
     if(!isSelected)return;
     const onKey=(e)=>{
       if(e.key==='Delete'||e.key==='Backspace'){
+        const t=e.target;
+        if(t&&(t.tagName==='TEXTAREA'||t.tagName==='INPUT'||t.isContentEditable))return;
         e.preventDefault();
         dispatch({type:'DELETE_PLACED_STICKER',id:sticker.id});
         setSelectedId(null);
