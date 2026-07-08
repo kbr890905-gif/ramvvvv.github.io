@@ -183,6 +183,7 @@ const initialState={
   projects:lsLoad('projects',initProjects),
   monthlyHighlights:lsLoad('monthlyHighlights',[]),projectMemos:lsLoad('projectMemos',{}),
   weeklyEvents:lsLoad('weeklyEvents',[]),
+  projectFolders:lsLoad('projectFolders',[]),
   todos:lsLoad('todos',[]),weekMemos:lsLoad('weekMemos',{}),
   weekOffset:0,weeklyCollapsed:lsLoad('weeklyCollapsed',false),hlYear:new Date().getFullYear(),hlMonth:new Date().getMonth(),
   multiDayBlocks:lsLoad('multiDayBlocks',[]),
@@ -258,6 +259,9 @@ function reducer(state,action){
     case 'UPDATE_PLACED_STICKER':return{...state,placedStickers:state.placedStickers.map(s=>s.id===action.id?{...s,...action.updates}:s)};
     case 'DELETE_PLACED_STICKER':return{...state,placedStickers:state.placedStickers.filter(s=>s.id!==action.id)};
       case 'CLEAR_ALL_STICKERS':return{...state,placedStickers:[]};
+    case 'ADD_FOLDER':return{...state,projectFolders:[...(state.projectFolders||[]),action.folder]};
+    case 'UPDATE_FOLDER':return{...state,projectFolders:(state.projectFolders||[]).map(f=>f.id===action.id?{...f,...action.updates}:f)};
+    case 'DELETE_FOLDER':return{...state,projectFolders:(state.projectFolders||[]).filter(f=>f.id!==action.id),projects:state.projects.map(p=>p.folderId===action.id?{...p,folderId:null}:p)};
     case 'SET_HL_MONTH':return{...state,hlYear:action.hlYear,hlMonth:action.hlMonth};
     case 'SET_OUTLOOK_EVENTS':return{...state,weeklyEvents:[...state.weeklyEvents.filter(e=>!e.isOutlook),...action.events],outlookSyncedAt:new Date().toISOString()};
     case 'SET_OUTLOOK_USER':return{...state,outlookUser:action.user,outlookClientId:action.clientId||state.outlookClientId};
@@ -752,7 +756,7 @@ function StoreProvider({children}){
   useEffect(()=>{
     if(lsTimerRef.current)clearTimeout(lsTimerRef.current);
     lsTimerRef.current=setTimeout(()=>{
-      const LS_KEYS=['workVisible','personalVisible','projects','monthlyHighlights','projectMemos',
+      const LS_KEYS=['workVisible','personalVisible','projects','projectFolders','monthlyHighlights','projectMemos',
         'weeklyEvents','todos','weekMemos','weeklyCollapsed','multiDayBlocks','outlookVisible','outlookColor',
         'customLayers','layerOrder','meetingNotes','stickyNotes','placedStickers','workLabel','personalLabel','workColor','personalColor',
         'titleText','topBarBg','topBarImg',
@@ -890,8 +894,8 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
       onMouseDown={onRootDown}
       style={{position:'absolute',left:note.x,top:note.y,
         width:note.w||170,
-        height:collapsed?(isActive?26:22):(isText?(note.h||'auto'):undefined),
-        minHeight:collapsed?undefined:(isText?Math.round(fontSize*1.6)+6:(note.h||140)),
+        height:collapsed?(isActive?26:22):(isText?'auto':undefined),
+        minHeight:collapsed?undefined:(isText?Math.max(note.h||0,Math.round(fontSize*1.6)+6):(note.h||140)),
         backgroundColor:bgColor,
         borderRadius:isText?3:6,
         boxShadow:isText?'none':(isActive?'0 4px 20px rgba(0,0,0,0.18)':'0 2px 10px rgba(0,0,0,0.11)'),
@@ -980,6 +984,13 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
         </div>
       )}
 
+      {/* ── 가장자리 이동존 (PPT식) ── */}
+      {isActive&&freeLayerVisible&&!collapsed&&(<>
+        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',top:-5,left:0,right:0,height:9,cursor:'move',zIndex:55}}/>
+        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',bottom:-5,left:0,right:0,height:9,cursor:'move',zIndex:55}}/>
+        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',left:-5,top:0,bottom:0,width:9,cursor:'move',zIndex:55}}/>
+        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',right:-5,top:0,bottom:0,width:9,cursor:'move',zIndex:55}}/>
+      </>)}
       {/* ── 본문 (리치 텍스트) ── */}
       {!collapsed&&(
         <div ref={edRef} contentEditable={freeLayerVisible} suppressContentEditableWarning
@@ -1026,7 +1037,7 @@ function StickyNotesCanvas(){
 
   // Deactivate note when clicking outside any note
   useEffect(()=>{
-    const h=(e)=>{if(!e.target.closest('[data-sticky-note]')&&!e.target.closest('[data-free-note-panel]'))setActiveNoteId(null);};
+    const h=(e)=>{if(!e.target.closest('[data-sticky-note]')&&!e.target.closest('[data-free-note-panel]')){setActiveNoteId(null);const sel=window.getSelection();if(sel&&!sel.isCollapsed)sel.removeAllRanges();}};
     document.addEventListener('mousedown',h);
     return()=>document.removeEventListener('mousedown',h);
   },[setActiveNoteId]);
@@ -2025,6 +2036,38 @@ function ProjectItem({project,dragId,dragOverId,onDragStart,onDragEnd,onDragOver
     </div>
   );
 }
+function FolderRow({f,count,dragId,dispatch,clearDrag}){
+  const[hover,setHover]=useState(false);
+  const[edit,setEdit]=useState(false);
+  const[val,setVal]=useState(f.name);
+  const[over,setOver]=useState(false);
+  const save=()=>{const t=val.trim();if(t)dispatch({type:'UPDATE_FOLDER',id:f.id,updates:{name:t}});setEdit(false);};
+  return(
+    <div onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}
+      onDragOver={e=>{if(dragId){e.preventDefault();e.dataTransfer.dropEffect='move';setOver(true);}}}
+      onDragLeave={()=>setOver(false)}
+      onDrop={e=>{setOver(false);if(dragId){e.preventDefault();dispatch({type:'UPDATE_PROJECT',id:dragId,updates:{folderId:f.id}});clearDrag();}}}
+      onClick={()=>dispatch({type:'UPDATE_FOLDER',id:f.id,updates:{folded:!f.folded}})}
+      style={{display:'flex',alignItems:'center',gap:5,padding:'4px 7px',borderRadius:7,cursor:'pointer',
+        backgroundColor:over?'#EEEDFE':'#F7F7F8',border:`0.5px solid ${over?'#AFA9EC':'#EFEFEF'}`,transition:'all 0.12s'}}>
+      <span style={{fontSize:8,color:'#B8B8B8',display:'inline-block',transform:f.folded?'rotate(-90deg)':'none',transition:'transform 0.15s',flexShrink:0}}>▼</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M3 7 Q3 5 5 5 H9 L11.5 7.5 H19 Q21 7.5 21 9.5 V17 Q21 19 19 19 H5 Q3 19 3 17 Z"/></svg>
+      {edit?(
+        <input autoFocus value={val} onClick={e=>e.stopPropagation()} onChange={e=>setVal(e.target.value)} onBlur={save}
+          onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setVal(f.name);setEdit(false);}}}
+          style={{flex:1,fontSize:12.5,fontWeight:600,color:'#2F2F2F',borderBottom:'0.5px solid #AFA9EC',minWidth:0,background:'transparent'}}/>
+      ):(
+        <span onDoubleClick={e=>{e.stopPropagation();setVal(f.name);setEdit(true);}}
+          style={{flex:1,fontSize:12.5,fontWeight:600,color:'#3D3D3D',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',userSelect:'none'}}>{f.name}</span>
+      )}
+      <span style={{fontSize:9.5,color:'#9A9A9A',backgroundColor:'#EFEFEF',borderRadius:8,padding:'1px 6px',flexShrink:0}}>{count}</span>
+      {hover&&!edit&&<button onClick={e=>{e.stopPropagation();if(confirm('폴더를 삭제할까요? 하위 프로젝트는 미분류로 이동합니다.'))dispatch({type:'DELETE_FOLDER',id:f.id});}}
+        style={{fontSize:12,color:'#D2D2D2',lineHeight:1,flexShrink:0,padding:'0 2px'}}
+        onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
+        onMouseLeave={e=>e.currentTarget.style.color='#D2D2D2'}>×</button>}
+    </div>
+  );
+}
 function ProjectsSection(){
   const{state,dispatch}=useStore();const[adding,setAdding]=useState(false);
   const[fold,setFold]=useState(()=>lsLoad('foldPj',false));
@@ -2045,9 +2088,9 @@ function ProjectsSection(){
   };
   return(
     <section className="lp-sec">
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
+      <div onDragOver={e=>{if(dragId)e.preventDefault();}} onDrop={e=>{if(dragId){e.preventDefault();dispatch({type:'UPDATE_PROJECT',id:dragId,updates:{folderId:null}});setDragId(null);setDragOverId(null);}}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
         <button onClick={toggleFold} style={{display:'inline-flex',alignItems:'center',gap:4,background:'none',border:'none',cursor:'pointer',padding:0}}><span style={{fontSize:8,color:'#C4C4C4',display:'inline-block',transform:fold?'rotate(-90deg)':'none',transition:'transform 0.15s'}}>▼</span><span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>프로젝트</span></button>
-        <button className="lp-add" onClick={()=>{setAdding(true);setTimeout(()=>nameRef.current?.focus(),30);}} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E4E4E4';}}>+ 추가</button>
+        <span className="lp-add" style={{display:'inline-flex',gap:4}}><button onClick={()=>dispatch({type:'ADD_FOLDER',folder:{id:uid(),name:'새 폴더',folded:false}})} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';}}>+ 폴더</button><button onClick={()=>{setAdding(true);setTimeout(()=>nameRef.current?.focus(),30);}} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E4E4E4',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E4E4E4';}}>+ 추가</button></span>
       </div>
       {!fold&&(<>
       {adding&&<div style={{border:'0.5px solid #E8E8E8',borderRadius:6,padding:'8px',marginBottom:10,backgroundColor:'#FAFAFA'}}>
@@ -2061,7 +2104,23 @@ function ProjectsSection(){
           <button onClick={handleAdd} style={{fontSize:12,color:'#fff',padding:'3px 8px',backgroundColor:'#534AB7',borderRadius:4,opacity:newName.trim()?1:0.4}}>추가</button>
         </div>
       </div>}
-      {state.projects.length===0&&!adding?<div style={{fontSize:13,color:'#CDCDCD',textAlign:'center',padding:'10px 0'}}>프로젝트를 추가해보세요</div>:<div style={{display:'flex',flexDirection:'column',gap:8}}>{state.projects.map(p=><ProjectItem key={p.id} project={p} dragId={dragId} dragOverId={dragOverId} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={handleDrop}/>)}</div>}
+      {state.projects.length===0&&!adding&&(state.projectFolders||[]).length===0?<div style={{fontSize:13,color:'#CDCDCD',textAlign:'center',padding:'10px 0'}}>프로젝트를 추가해보세요</div>:(
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {(state.projectFolders||[]).map(f=>{
+          const inFolder=state.projects.filter(p=>p.folderId===f.id);
+          return(
+            <div key={f.id}>
+              <FolderRow f={f} count={inFolder.length} dragId={dragId} dispatch={dispatch} clearDrag={()=>{setDragId(null);setDragOverId(null);}}/>
+              {!f.folded&&inFolder.length>0&&(
+                <div style={{display:'flex',flexDirection:'column',gap:8,paddingLeft:12,marginTop:7,marginLeft:5,borderLeft:'1.5px solid #F0F0F0'}}>
+                  {inFolder.map(p=><ProjectItem key={p.id} project={p} dragId={dragId} dragOverId={dragOverId} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={handleDrop}/>)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {state.projects.filter(p=>!p.folderId||!(state.projectFolders||[]).some(f=>f.id===p.folderId)).map(p=><ProjectItem key={p.id} project={p} dragId={dragId} dragOverId={dragOverId} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={handleDrop}/>)}
+      </div>)}
       </>)}
     </section>
   );
@@ -3565,7 +3624,7 @@ function MultiDayBlockPopover({initialStart,initialEnd,editBlock,onClose}){
 // ─── CALENDAR DATE CELL ───────────────────────
 function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouseEnter,onMouseUp,onDoubleClick,onEventClick}){
   const{state,dispatch}=useStore();
-  const[dragIdx,setDragIdx]=useState(null);const chipsRef=useRef(null);
+  const[dragIdx,setDragIdx]=useState(null);const chipsRef=useRef(null);const[morePop,setMorePop]=useState(false);
   const catStyle=useDynCatStyle();
   const todayCell=isToday(date);const weekend=isSat(date)||isSun(date);
   const isFirstOfMonth=date.getDate()===1;
@@ -3586,7 +3645,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
         if(dragIdx!==idx)setDragIdx(idx);}}}
       onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragIdx(null);}}
       onDrop={e=>{setDragIdx(null);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const dk2=toDateKey(date);const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk2)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk2}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk2,updatedAt:new Date().toISOString()}});}}
-      style={{minHeight:148,padding:'4px 6px 4px',backgroundColor:cellBg,
+      style={{minHeight:148,padding:'4px 6px 4px',position:'relative',backgroundColor:cellBg,
         borderRight:cellBorder,borderBottom:cellBorder,cursor:'pointer',userSelect:'none',
         display:'flex',flexDirection:'column',gap:1}}>
       {/* Date number */}
@@ -3627,7 +3686,28 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
               </div>
             );
           })}
-          {events.length>4&&<span style={{fontSize:10,color:'#ABABAB',paddingLeft:4}}>+{events.length-4}개</span>}
+          {events.length>4&&<span onClick={e=>{e.stopPropagation();setMorePop(true);}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C8C'} style={{fontSize:10,color:'#8C8C8C',paddingLeft:4,cursor:'pointer',fontWeight:600}}>+{events.length-4}개 더보기</span>}
+        </div>
+      )}
+      {morePop&&(
+        <div onMouseDown={e=>e.stopPropagation()} onDoubleClick={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()}
+          onMouseLeave={()=>setMorePop(false)}
+          style={{position:'absolute',top:2,left:2,right:2,zIndex:300,backgroundColor:'#fff',borderRadius:10,
+            border:'0.5px solid #E4E4E4',boxShadow:'0 0 0 1px rgba(15,15,35,0.04), 0 10px 28px rgba(15,15,35,0.16)',
+            padding:'8px 9px',animation:'popIn 0.14s ease',cursor:'default'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:5}}>
+            <span style={{fontSize:11.5,fontWeight:700,color:'#2F2F2F'}}>{date.getMonth()+1}/{date.getDate()} · {events.length}개</span>
+            <button onClick={()=>setMorePop(false)} style={{fontSize:13,color:'#B8B8B8',lineHeight:1}}>×</button>
+          </div>
+          <div style={{maxHeight:180,overflowY:'auto',display:'flex',flexDirection:'column',gap:2}}>
+            {events.map(ev=>{const cs2=catStyle[ev.category]||catStyle.work;return(
+              <div key={ev.id} onClick={()=>{setMorePop(false);onEventClick&&onEventClick(ev);}}
+                style={{display:'flex',alignItems:'center',gap:3,padding:'3px 6px 3px 9px',backgroundColor:cs2.bg,borderRadius:6,
+                  boxShadow:'inset 2.5px 0 0 '+(cs2.dot||cs2.text),cursor:'pointer',lineHeight:1.4}}>
+                {ev.time&&<span style={{fontSize:10.5,color:cs2.text,opacity:0.75,flexShrink:0}}>{ev.time}</span>}
+                <span style={{fontSize:11.5,color:cs2.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{ev.title}</span>
+              </div>);})}
+          </div>
         </div>
       )}
     </div>
