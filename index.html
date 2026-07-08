@@ -490,13 +490,17 @@ function SettingsModal({onClose}){
           {tab==='outlook'&&(
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
               {state.outlookUser?(
-                <div style={{backgroundColor:'#F0EFFE',borderRadius:8,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                  <span style={{fontSize:13,color:'#534AB7',fontWeight:500}}>✓ {state.outlookUser}</span>
-                  <span style={{fontSize:11,color:'#888'}}>{state.outlookSyncedAt?'마지막 동기화: '+new Date(state.outlookSyncedAt).toLocaleString('ko-KR'):''}</span>
+                <div style={{backgroundColor:'#F0EFFE',borderRadius:8,padding:'10px 14px'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                    <span style={{fontSize:13,color:'#534AB7',fontWeight:600}}>✓ {state.outlookUser}</span>
+                    <span style={{fontSize:11,color:'#8E8E96',flexShrink:0}}>{state.outlookSyncedAt?'마지막 동기화: '+new Date(state.outlookSyncedAt).toLocaleString('ko-KR'):''}</span>
+                  </div>
+                  <div style={{fontSize:11,color:'#7A73C4',marginTop:6,lineHeight:1.6}}>상단바 아웃룩 칩 옆 <b>↻</b> 버튼으로 언제든 즉시 동기화할 수 있습니다. 동기화된 일정은 클라우드 동기화를 통해 다른 기기에도 자동 반영됩니다.</div>
                 </div>
               ):(
                 <div style={{backgroundColor:'#F8F8F8',borderRadius:8,padding:'10px 14px'}}>
-                  <span style={{fontSize:12,color:'#888'}}>연결되지 않음</span>
+                  <div style={{fontSize:12,color:'#666',fontWeight:600,marginBottom:4}}>이 기기에서 연결되지 않음</div>
+                  <div style={{fontSize:11,color:'#8E8E96',lineHeight:1.6}}>다른 기기에서 아웃룩을 연결해 동기화 중이라면, 이 기기에서는 별도 연결 없이 <b>클라우드 동기화</b>로 아웃룩 일정이 표시됩니다(우회 방식). 이 기기에서 직접 동기화하려면 아래 Client ID로 연결하세요.</div>
                 </div>
               )}
               <div>
@@ -505,15 +509,17 @@ function SettingsModal({onClose}){
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                   style={{width:'100%',fontSize:12,padding:'8px 10px',borderRadius:6,border:'1px solid #E0E0E0',backgroundColor:'#FAFAFA',fontFamily:'monospace'}}/>
               </div>
-              <div style={{backgroundColor:'#FFFBEB',borderRadius:8,padding:'12px 14px',fontSize:11,color:'#78600A',lineHeight:1.6}}>
-                <div style={{fontWeight:600,marginBottom:4}}>Azure 앱 등록 방법</div>
-                <div>1. portal.azure.com → 앱 등록 → 새 등록</div>
-                <div>2. 지원되는 계정 유형: 모든 조직 디렉터리 + 개인 계정</div>
-                <div>3. 리디렉션 URI: 공개 클라이언트 / 네이티브 선택 후</div>
-                <div style={{fontFamily:'monospace',marginLeft:8}}>https://login.microsoftonline.com/common/oauth2/nativeclient</div>
-                <div>4. API 사용 권한: Calendars.Read + User.Read 추가</div>
-                <div>5. 개요 탭의 애플리케이션(클라이언트) ID 복사</div>
-              </div>
+              <details style={{backgroundColor:'#FFFBEB',borderRadius:8,padding:'10px 14px',fontSize:11,color:'#78600A',lineHeight:1.6}}>
+                <summary style={{fontWeight:600,cursor:'pointer',userSelect:'none'}}>Azure 앱 등록 방법 (처음 연결할 때만 필요)</summary>
+                <div style={{marginTop:6}}>
+                  <div>1. portal.azure.com → 앱 등록 → 새 등록</div>
+                  <div>2. 지원되는 계정 유형: 모든 조직 디렉터리 + 개인 계정</div>
+                  <div>3. 리디렉션 URI: 공개 클라이언트 / 네이티브 선택 후</div>
+                  <div style={{fontFamily:'monospace',marginLeft:8}}>https://login.microsoftonline.com/common/oauth2/nativeclient</div>
+                  <div>4. API 사용 권한: Calendars.Read + User.Read 추가</div>
+                  <div>5. 개요 탭의 애플리케이션(클라이언트) ID 복사</div>
+                </div>
+              </details>
               <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                 {!state.outlookUser?(
                   <button disabled={syncing} onClick={handleConnect} style={{...btnBase,backgroundColor:'#534AB7',color:'#fff',opacity:syncing?0.6:1}}>
@@ -1415,6 +1421,19 @@ function TopBar(){
   const{freeLayerVisible,setFreeLayerVisible,stickerMode,setStickerMode,scrollToTodayRef}=useLayout();
   const catStyle=useDynCatStyle();
   const[settingsOpen,setSettingsOpen]=useState(false);
+  const showToast=useToast();
+  const[olSyncing,setOlSyncing]=useState(false);
+  const doQuickSync=async()=>{
+    if(!state.outlookUser||!state.outlookClientId){setSettingsOpen(true);return;}
+    if(olSyncing)return;
+    setOlSyncing(true);
+    try{
+      const events=await outlookSync(state.outlookClientId);
+      dispatch({type:'SET_OUTLOOK_EVENTS',events});
+      showToast(events.length+'개 아웃룩 일정 동기화 완료','success');
+    }catch(e){showToast('아웃룩 동기화 실패: '+e.message,'error');}
+    setOlSyncing(false);
+  };
   const[addLayerOpen,setAddLayerOpen]=useState(false);
   const[newLayerName,setNewLayerName]=useState('');
   const[newLayerColor,setNewLayerColor]=useState(PROJECT_COLORS[0]);
@@ -1587,11 +1606,13 @@ function TopBar(){
             <span style={{width:4,height:4,borderRadius:'50%',backgroundColor:outlookVisible?catStyle.outlook.dot:'#C8C8C8',flexShrink:0}}/>
             아웃룩
           </button>
-          <button title="아웃룩 동기화 설정" onClick={()=>setSettingsOpen(true)}
+          <button title={state.outlookUser?'아웃룩 지금 동기화':'아웃룩 연동 설정 열기'} onClick={doQuickSync}
             style={{padding:'3px 7px',borderRadius:'0 20px 20px 0',fontSize:11,
               color:outlookVisible?catStyle.outlook.text:'#A2A2AA',
               border:`0.5px solid ${outlookVisible?catStyle.outlook.border:'#DEDEDE'}`,
-              backgroundColor:outlookVisible?catStyle.outlook.bg:'#F7F7F7',lineHeight:1}}>↻</button>
+              backgroundColor:outlookVisible?catStyle.outlook.bg:'#F7F7F7',lineHeight:1,cursor:olSyncing?'wait':'pointer'}}>
+            <span style={{display:'inline-block',animation:olSyncing?'_spin 0.8s linear infinite':'none'}}>↻</span>
+          </button>
         </div>
         {/* + 레이어 add */}
         {addLayerOpen?(
