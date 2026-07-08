@@ -3648,12 +3648,13 @@ function CalendarSection(){
   const scrollToYearMonth=useCallback((yr,mo)=>{
     const idx=allWeeks.findIndex(wk=>wk.some(d=>d.getFullYear()===yr&&d.getMonth()===mo&&d.getDate()===1));
     const el=weekRefs.current[idx>=0?idx:0];
-    if(el&&calendarScrollRef?.current)calendarScrollRef.current.scrollTo({top:el.offsetTop,behavior:'smooth'});
+    if(el&&calendarScrollRef?.current)calendarScrollRef.current.scrollTo({top:el.offsetTop,behavior:'auto'});
   },[allWeeks,calendarScrollRef]);
 
   useEffect(()=>{
     scrollToTodayRef.current=()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();};
-    setTimeout(()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();},200);
+    const _go=()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();};
+    setTimeout(_go,250);setTimeout(_go,900);setTimeout(_go,2000);
   },[scrollToYearMonth,updateNavFromScroll]);
   const goPrev=()=>{const nm=navMonth===0?11:navMonth-1;const ny=navMonth===0?navYear-1:navYear;setNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
   const goNext=()=>{const nm=navMonth===11?0:navMonth+1;const ny=navMonth===11?navYear+1:navYear;setNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
@@ -3667,7 +3668,7 @@ function CalendarSection(){
       if(el){
         const containerH=container.clientHeight;
         const targetScroll=el.offsetTop-containerH/2+el.offsetHeight/2;
-        container.scrollTo({top:Math.max(0,targetScroll),behavior:'smooth'});
+        container.scrollTo({top:Math.max(0,targetScroll),behavior:'auto'});
       }
     } else {
       scrollToYearMonth(todayDate.getFullYear(),todayDate.getMonth());
