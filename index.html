@@ -3564,7 +3564,7 @@ function WeeklyHeader({weekDates,collapsed,onPrev,onNext,onToday,onToggleCollaps
   const s=weekDates[0],e=weekDates[6];const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
   return(
     <div style={{height:34,display:'flex',alignItems:'center',padding:'0 14px',gap:6,backgroundColor:'#fff',borderBottom:'0.5px solid #EBEBEB'}}>
-      <span style={{fontSize:11,fontWeight:700,color:'#555555',letterSpacing:'0.8px',flexShrink:0,backgroundColor:'#F0F0F0',padding:'3px 9px',borderRadius:6}}>위클리</span>
+      <span style={{fontSize:11.5,fontWeight:600,color:'#1A1A1A',flexShrink:0,backgroundColor:'#F0F0F1',padding:'4px 13px',borderRadius:7}}>위클리</span>
       <div style={{display:'flex',alignItems:'center',gap:1}}>
         <button onClick={onPrev} style={{fontSize:14,color:'#C8C8C8',padding:'2px 6px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#534AB7'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
         <span style={{fontSize:13,color:'#222',fontWeight:600,minWidth:100,textAlign:'center',userSelect:'none',fontVariantNumeric:'tabular-nums'}}>{fmt(s)} — {fmt(e)}</span>
@@ -4197,7 +4197,7 @@ function PanelToggle(){
   return(
     <button onClick={()=>setLeftCollapsed(c=>!c)} title={leftCollapsed?'패널 열기':'패널 닫기'}
       style={{position:'fixed',top:80,left:leftCollapsed?0:leftWidth,
-        width:16,height:36,backgroundColor:'#F0EFF8',borderRadius:'0 7px 7px 0',zIndex:200,
+        width:16,height:36,backgroundColor:'#F0F0F1',borderRadius:'0 7px 7px 0',zIndex:200,
         display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#534AB7',
         border:'0.5px solid #D5D2EE',borderLeft:'none',cursor:'pointer',
         transition:'left 0.2s ease',padding:0,
