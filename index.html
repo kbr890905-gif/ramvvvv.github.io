@@ -1266,7 +1266,6 @@ function PlacedSticker({sticker,freeLayerVisible,selectedId,setSelectedId}){
 function StickerCanvas(){
   const{state}=useStore();
   const{freeLayerVisible,stickerMode,selectedStickerId,setSelectedStickerId}=useLayout();
-  if(!stickerMode)return null;
   // Deselect on outside click
   useEffect(()=>{
     const onClick=(e)=>{
@@ -1275,6 +1274,7 @@ function StickerCanvas(){
     document.addEventListener('click',onClick);
     return()=>document.removeEventListener('click',onClick);
   },[setSelectedStickerId]);
+  if(!freeLayerVisible)return null;
   return(
     <div style={{position:'absolute',top:0,left:0,right:0,bottom:0,minHeight:'100%',
       pointerEvents:'none',zIndex:21}}>
@@ -1624,24 +1624,16 @@ function TopBar(){
           onMouseEnter={e=>{e.currentTarget.style.color='#534AB7';e.currentTarget.style.borderColor='#AFA9EC';e.currentTarget.style.backgroundColor='#EEEDFE';}}
           onMouseLeave={e=>{e.currentTarget.style.color='#8E8E96';e.currentTarget.style.borderColor='#E8E8E8';e.currentTarget.style.backgroundColor='#FAFAFA';}}>⚙</button>
         <div style={{width:'0.5px',height:14,backgroundColor:'#E8E8E8',margin:'0 2px',flexShrink:0}}/>
-        <button onClick={()=>setFreeLayerVisible(v=>!v)}
+        <button onClick={()=>{const nv=!freeLayerVisible;setFreeLayerVisible(nv);if(!nv)setStickerMode(false);}}
           style={{display:'flex',alignItems:'center',gap:5,padding:'3px 11px',borderRadius:20,fontSize:12,
-            fontWeight:freeLayerVisible?500:400,
+            fontWeight:freeLayerVisible?600:400,
             border:`0.5px solid ${freeLayerVisible?'#AFA9EC':'#DEDEDE'}`,
             backgroundColor:freeLayerVisible?'#EEEDFE':'#F7F7F7',
             color:freeLayerVisible?'#534AB7':'#96969E',
-            transition:'all 0.15s',userSelect:'none',flexShrink:0}}>
+            transition:'all 0.15s',userSelect:'none',flexShrink:0}}
+          title="포스트잇·스티커 레이어 켜기/끄기">
           <span style={{width:5,height:5,borderRadius:1,backgroundColor:freeLayerVisible?'#534AB7':'#C8C8C8',flexShrink:0,transform:'rotate(45deg)'}}/>
-          자유 노트
-        </button>
-        <button onClick={()=>{setStickerMode(v=>{const nv=!v;if(nv)setFreeLayerVisible(true);return nv;});}}
-          style={{display:'flex',alignItems:'center',gap:5,padding:'3px 11px',borderRadius:20,fontSize:12,
-            fontWeight:stickerMode?500:400,
-            border:`0.5px solid ${stickerMode?'#F48FB1':'#DEDEDE'}`,
-            backgroundColor:stickerMode?'#FCE4EC':'#F7F7F7',
-            color:stickerMode?'#E91E63':'#96969E',
-            transition:'all 0.15s',userSelect:'none',flexShrink:0}}>
-          🎨 스티커
+          노트·스티커
         </button>
       </div>
     </div>
@@ -1778,19 +1770,7 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
       </div>
       {!memo.collapsed&&(
         <div style={{position:'relative'}}>
-          {/* Floating selection toolbar */}
-          {selBar&&(
-            <div onMouseDown={e=>e.preventDefault()}
-              style={{position:'fixed',top:selBar.y-40,left:Math.max(8,selBar.x-110),backgroundColor:'#222',borderRadius:8,
-                padding:'5px 8px',display:'flex',alignItems:'center',gap:5,zIndex:99999,
-                boxShadow:'0 4px 16px rgba(0,0,0,0.35)',userSelect:'none'}}>
-              <button onMouseDown={e=>{e.preventDefault();applyFmt('bold');}} style={{color:'#fff',fontWeight:700,fontSize:13,background:'none',border:'none',padding:'2px 6px',borderRadius:4,cursor:'pointer',fontFamily:'inherit'}}>B</button>
-              <div style={{width:'0.5px',backgroundColor:'#555',alignSelf:'stretch'}}/>
-              <button onMouseDown={e=>{e.preventDefault();applyFmt('backColor','rgba(0,0,0,0)');}} title="형광펜 제거" style={{width:16,height:16,borderRadius:3,backgroundColor:'#fff',border:'1px solid #555',cursor:'pointer',padding:0,fontSize:9,color:'#888',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
-              {HIGHLIGHT_COLORS.map(c=>(<button key={c} onMouseDown={e=>{e.preventDefault();applyFmt('backColor',c);}} style={{width:16,height:16,borderRadius:3,backgroundColor:c,border:'none',cursor:'pointer',padding:0,flexShrink:0}}/>))}
-              <button onMouseDown={e=>{e.preventDefault();applyFmt('removeFormat');}} style={{color:'#aaa',fontSize:10,background:'none',border:'none',padding:'2px 4px',borderRadius:4,cursor:'pointer'}}>✕모두</button>
-            </div>
-          )}
+          {/* 드래그 선택 팝업 제거됨 — 포커스 시 고정 툴바만 사용 */}
           {/* Static toolbar — shown when focused */}
           {bodyFocus&&(
             <div onMouseDown={e=>e.preventDefault()} style={{display:'flex',gap:3,marginTop:5,marginBottom:3,flexWrap:'wrap',alignItems:'center'}}>
@@ -1814,8 +1794,6 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
             onFocus={()=>setBodyFocus(true)}
             onBlur={()=>{setBodyFocus(false);save();setSelBar(null);}}
             onInput={save}
-            onMouseUp={checkSel}
-            onKeyUp={checkSel}
             onKeyDown={e=>{if(e.key==='Tab'){e.preventDefault();e.shiftKey?doOutdent():doIndent();}}}
             style={{minHeight:24,marginTop:3,fontSize:11,color:'#555',lineHeight:1.6,
               borderBottom:`0.5px solid ${bodyFocus?projectColor:'#F0F0F0'}`,
@@ -2008,17 +1986,9 @@ function FreeNotePanel(){
     </div>
   );
   return(
-    <div data-free-note-panel="true" style={{borderTop:'0.5px solid #EBEBEB',flexShrink:0,backgroundColor:'#fff',
-      height:freeNotePanelHeight,display:'flex',flexDirection:'column',
-      overflow:'hidden',position:'relative'}}>
-      {/* Resize handle at top */}
-      <div onMouseDown={onResizeMouseDown}
-        style={{height:5,cursor:'row-resize',flexShrink:0,
-          display:'flex',alignItems:'center',justifyContent:'center'}}
-        onMouseEnter={e=>e.currentTarget.style.backgroundColor='rgba(83,74,183,0.12)'}
-        onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}>
-        <div style={{width:24,height:2,borderRadius:1,backgroundColor:'#DEDEDE'}}/>
-      </div>
+    <div data-free-note-panel="true" style={{flex:1,minHeight:0,backgroundColor:'#fff',
+      display:'flex',flexDirection:'column',
+      overflow:'hidden',position:'relative',paddingTop:6}}>
       <div style={{flex:1,overflowY:'auto',padding:'0 14px 14px'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,paddingTop:4}}>
           <span style={{fontSize:11,fontWeight:600,color:'#8E8E96',letterSpacing:'0.5px',textTransform:'uppercase'}}>자유 노트</span>
@@ -2852,7 +2822,6 @@ function LeftPanel(){
           <MeetingNoteList onOpen={note=>setMeetingModal(note)}/>
         </div>
       )}
-      <FreeNotePanel/>
       <div onMouseDown={onResizeMouseDown}
         style={{position:'absolute',top:0,right:0,width:5,height:'100%',cursor:'col-resize',zIndex:101}}
         onMouseEnter={e=>e.currentTarget.style.backgroundColor='rgba(83,74,183,0.12)'}
@@ -3510,7 +3479,7 @@ function YearView({year,onSelectMonth}){
   const[holidayTooltip,setHolidayTooltip]=useState(null);
   const scrollRef=useRef(null);
   const yearRefs=useRef({});
-  const years=[year-1,year,year+1];
+  const years=Array.from({length:8},(_,i)=>today.getFullYear()-2+i);
   const getBdayEvents=(dateKey)=>(state.weeklyEvents||[]).filter(e=>getBdayPrefix(e.category,state)!==''&&e.date===dateKey);
   useEffect(()=>{
     const el=yearRefs.current[year];
@@ -3531,7 +3500,7 @@ function YearView({year,onSelectMonth}){
         <div style={{fontSize:13,fontWeight:700,color:'#534AB7',marginBottom:10,paddingLeft:2,letterSpacing:'-0.2px'}}>{mo+1}월</div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',rowGap:2,columnGap:0}}>
           {['M','T','W','T','F','S','S'].map((d,i)=>(
-            <div key={i} style={{textAlign:'center',fontSize:9,color:i>=5?'#FDAAB0':'#D0D0D0',paddingBottom:5,fontWeight:600,letterSpacing:'0.2px'}}>{d}</div>
+            <div key={i} style={{textAlign:'center',fontSize:9,color:i===6?'#FDAAB0':i===5?'#A9C4E8':'#D0D0D0',paddingBottom:5,fontWeight:600,letterSpacing:'0.2px'}}>{d}</div>
           ))}
           {cells.map((d,ci)=>{
             if(!d)return<div key={'e'+ci}/>;
@@ -3542,8 +3511,9 @@ function YearView({year,onSelectMonth}){
             const bdayEvs=getBdayEvents(dateKey);
             const isBday=bdayEvs.length>0;
             const isTd=today.getFullYear()===yr&&today.getMonth()===mo&&today.getDate()===d;
-            const isRed=isHoliday||colDow===6||colDow===5;
-            const textColor=isTd?'#fff':isRed?'#E24B4A':'#444';
+            const isRed=isHoliday||colDow===6;
+            const isBlue=colDow===5&&!isHoliday;
+            const textColor=isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':'#444';
             return(
               <div key={d} onClick={e=>{e.stopPropagation();onSelectMonth(yr,mo);}}
                 style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
@@ -3611,7 +3581,7 @@ function YearView({year,onSelectMonth}){
 }
 function CalendarSection(){
   const{state,dispatch}=useStore();
-  const{freeLayerVisible,calendarScrollRef,scrollToTodayRef}=useLayout();
+  const{freeLayerVisible,setFreeLayerVisible,setStickerMode,setRightDockOpen,calendarScrollRef,scrollToTodayRef}=useLayout();
   const showToast=useToast();
   const today_=new Date();
   const[navLabel,setNavLabel]=useState('');
@@ -3629,11 +3599,11 @@ function CalendarSection(){
   // Generate flat list of all weeks (-13..+13 months from today)
   const allWeeks=useMemo(()=>{
     const weeks=[];
-    const start=new Date(today_.getFullYear()-1,today_.getMonth()-1,1);
+    const start=new Date(today_.getFullYear()-2,0,1);
     // Align to Monday
     const dow=(start.getDay()+6)%7;
     start.setDate(start.getDate()-dow);
-    const end=new Date(today_.getFullYear()+1,today_.getMonth()+2,0);
+    const end=new Date(today_.getFullYear()+5,11,31);
     const cur=new Date(start);
     while(cur<=end){
       const wk=Array.from({length:7},(_,i)=>{const d=new Date(cur);d.setDate(cur.getDate()+i);return d;});
@@ -3704,9 +3674,10 @@ function CalendarSection(){
     }
     setNavYear(todayDate.getFullYear());setNavMonth(todayDate.getMonth());
   };
-  const goPrevYear=()=>{setNavYear(y=>y-1);scrollToYearMonth(navYear-1,navMonth);};
-  const goNextYear=()=>{setNavYear(y=>y+1);scrollToYearMonth(navYear+1,navMonth);};
-  const handleYearInput=(e)=>{const y=parseInt(e.target.value,10);if(y>=2000&&y<=2100){setNavYear(y);scrollToYearMonth(y,navMonth);}};
+  const _minYear=today_.getFullYear()-2,_maxYear=today_.getFullYear()+5;
+  const goPrevYear=()=>{const ny=Math.max(_minYear,navYear-1);setNavYear(ny);scrollToYearMonth(ny,navMonth);};
+  const goNextYear=()=>{const ny=Math.min(_maxYear,navYear+1);setNavYear(ny);scrollToYearMonth(ny,navMonth);};
+  const handleYearInput=(e)=>{const y=parseInt(e.target.value,10);if(y>=_minYear&&y<=_maxYear){setNavYear(y);scrollToYearMonth(y,navMonth);}};
 
   const handleCellMouseDown=(dk,e)=>{e.preventDefault();setDrag({start:dk,current:dk});};
   const handleCellMouseEnter=(dk)=>{if(drag)setDrag(d=>({...d,current:dk}));};
@@ -3790,6 +3761,16 @@ function CalendarSection(){
         <StickyNotesCanvas/>
         <StickerCanvas/>
       </div>
+      {/* 노트·스티커 추가 FAB */}
+      {!yearView&&<button onClick={()=>{setFreeLayerVisible(true);setStickerMode(true);setRightDockOpen(true);}}
+        title="포스트잇·스티커 추가"
+        style={{position:'fixed',right:26,bottom:26,width:48,height:48,borderRadius:'50%',
+          backgroundColor:'#534AB7',color:'#fff',fontSize:26,fontWeight:300,lineHeight:1,zIndex:940,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          boxShadow:'0 4px 14px rgba(83,74,183,0.38), 0 1px 3px rgba(15,15,35,0.12)',
+          transition:'transform 0.15s,background-color 0.15s'}}
+        onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#463DA3';e.currentTarget.style.transform='scale(1.06)';}}
+        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#534AB7';e.currentTarget.style.transform='scale(1)';}}>+</button>}
       {eventPopoverDate&&<EventPopover date={eventPopoverDate} onClose={()=>setEventPopoverDate(null)}/>}
       {(blockPopoverDates||editBlock)&&<MultiDayBlockPopover
         initialStart={blockPopoverDates?.start}
@@ -3831,6 +3812,23 @@ function PanelToggle(){
     </button>
   );
 }
+function RightDock(){
+  const{rightDockOpen,setRightDockOpen,setStickerMode}=useLayout();
+  if(!rightDockOpen)return null;
+  return(
+    <aside style={{position:'fixed',top:56,right:0,width:302,height:'calc(100vh - 56px)',backgroundColor:'#fff',
+      borderLeft:'0.5px solid #E7E7EC',zIndex:950,display:'flex',flexDirection:'column',overflow:'hidden',
+      boxShadow:'-10px 0 30px rgba(15,15,35,0.10)',animation:'popIn 0.16s ease'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'0.5px solid #F0F0F3',flexShrink:0}}>
+        <span style={{fontSize:11,color:'#8B85C9',letterSpacing:'1px',textTransform:'uppercase',fontWeight:700}}>노트 · 스티커</span>
+        <button onClick={()=>{setRightDockOpen(false);setStickerMode(false);}} style={{fontSize:16,color:'#ACACB4',lineHeight:1}}
+          onMouseEnter={e=>e.currentTarget.style.color='#666'}
+          onMouseLeave={e=>e.currentTarget.style.color='#ACACB4'}>×</button>
+      </div>
+      <FreeNotePanel/>
+    </aside>
+  );
+}
 function App(){
   const[leftWidth,setLeftWidth]=React.useState(300);
   const[leftCollapsed,setLeftCollapsed]=React.useState(false);
@@ -3840,16 +3838,20 @@ function App(){
   const[activeNoteId,setActiveNoteId]=React.useState(null);
   const[stickerMode,setStickerMode]=React.useState(false);
   const[selectedStickerId,setSelectedStickerId]=React.useState(null);
+  const[rightDockOpen,setRightDockOpen]=React.useState(false);
   const calendarScrollRef=React.useRef(null);
   const scrollToTodayRef=React.useRef(null);
+  React.useEffect(()=>{if(activeNoteId)setRightDockOpen(true);},[activeNoteId]);
+  React.useEffect(()=>{if(selectedStickerId)setRightDockOpen(true);},[selectedStickerId]);
   return(
-    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId}}>
+    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId,rightDockOpen,setRightDockOpen}}>
       <StoreProvider>
         <ToastProvider>
           <TopBar/>
           <LeftPanel/>
           <PanelToggle/>
           <MainArea/>
+          <RightDock/>
         </ToastProvider>
       </StoreProvider>
     </LayoutContext.Provider>
