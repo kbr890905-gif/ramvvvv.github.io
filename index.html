@@ -714,7 +714,7 @@ function StoreProvider({children}){
     rawDispatch({type:'RESTORE_STATE',state:nxt});
   },[rawDispatch]);
   // Auto-snapshot on mount
-  useEffect(()=>{setTimeout(()=>autoSnapshot(stateRef.current),1000);},[]);
+  useEffect(()=>{try{manualSnapshot(stateRef.current,'자동 백업 (앱 시작)');}catch(e){}setTimeout(()=>autoSnapshot(stateRef.current),1000);},[]);
 
   // 할일 자동 이동: 오전 7시 이후 앱 열 때, 미완료 과거 할일 → 오늘(금요일 미완료 → 다음 월요일)
   useEffect(()=>{
@@ -753,7 +753,9 @@ function StoreProvider({children}){
       return;
     }
     cloudLoad(apiKey,binId).then(s=>{
-      if(s){rawDispatch({type:'RESTORE_FULL',state:s});doMigrate(s.customLayers);}
+      const localMod=+(localStorage.getItem('lastMod')||0);
+      const cloudMod=+((s&&s._mod)||0);
+      if(s&&cloudMod>=localMod){rawDispatch({type:'RESTORE_FULL',state:s});doMigrate(s.customLayers);}
       else{doMigrate(stateRef.current.customLayers);}
       localStorage.setItem(CLOUD_STATUS,'ok');
     }).catch(()=>{
@@ -785,10 +787,11 @@ function StoreProvider({children}){
         'titleText','topBarBg','topBarImg',
         'outlookUser','outlookClientId','outlookSyncedAt'];
       LS_KEYS.forEach(k=>lsSave(k,state[k]));
+      const _now=Date.now();localStorage.setItem('lastMod',String(_now));
       // Also push to cloud if configured — cloudLoad 완료 후에만 실행
       const{apiKey,binId}=cloudGetCreds();
       if(apiKey&&binId&&cloudLoadedRef.current){
-        cloudSave(apiKey,binId,state)
+        cloudSave(apiKey,binId,{...state,_mod:_now})
           .then(()=>localStorage.setItem(CLOUD_STATUS,'ok'))
           .catch(()=>localStorage.setItem(CLOUD_STATUS,'error'));
       }
@@ -4360,12 +4363,14 @@ function MobileApp(){
   const[detailEv,setDetailEv]=React.useState(null);
   const[noteMdl,setNoteMdl]=React.useState(null);
   const[settingsOpen,setSettingsOpen]=React.useState(false);
+  const[mdEdit,setMdEdit]=React.useState(null);
   const[drawer,setDrawer]=React.useState(false);
   const[todoAdd,setTodoAdd]=React.useState(false);
   const[todoVal,setTodoVal]=React.useState('');
   const weekAddRef=React.useRef(null);
 
   const layerLabel=(cat)=>cat==='work'?(state.workLabel||'업무'):cat==='personal'?(state.personalLabel||'개인'):cat==='outlook'?'아웃룩':((state.customLayers||[]).find(l=>l.id===cat)||{}).name||'기타';
+  const blocksOn=(dk)=>(state.multiDayBlocks||[]).filter(b=>{if(b.category==='work'&&!state.workVisible)return false;if(b.category==='personal'&&!state.personalVisible)return false;return b.startDate<=dk&&b.endDate>=dk;});
   const evByDate=React.useMemo(()=>{
     const m={};
     (state.weeklyEvents||[]).forEach(e=>{
@@ -4455,7 +4460,8 @@ function MobileApp(){
                   const hol=getHoliday(dk);
                   const isRed=(dObj.getDay()===0||hol)&&!isTd;const isBlue=dObj.getDay()===6&&!isTd&&!hol;
                   const evs=evByDate[dk]||[];
-                  const dots=evs.slice(0,4);
+                  const blks=blocksOn(dk);
+                  const dots=[...blks,...evs].slice(0,4);
                   return(
                     <div key={ci} onClick={()=>setSelDate(dk)} style={{height:52,display:'flex',flexDirection:'column',alignItems:'center',paddingTop:5,cursor:'pointer',borderRadius:10,backgroundColor:isSel&&!isTd?'#EFEBE2':'transparent'}}>
                       <span style={{fontSize:14,fontWeight:isTd?700:500,width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontVariantNumeric:'tabular-nums'}}>{d}</span>
@@ -4473,7 +4479,15 @@ function MobileApp(){
               <span style={{fontSize:12,fontWeight:700,color:C.t2,letterSpacing:'0.4px'}}>{selD.getMonth()+1}월 {selD.getDate()}일 ({DAY_NAMES[(selD.getDay()+6)%7]}) · {selEvents.length}건{getHoliday(selDate)?' · '+getHoliday(selDate):''}</span>
               <button onClick={()=>setEventPop(selDate)} style={{width:26,height:26,borderRadius:'50%',color:C.brand,fontSize:18,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
             </div>
-            {selEvents.length===0&&<div style={{fontSize:13,color:C.t3,padding:'10px 0'}}>일정이 없습니다</div>}
+            {selEvents.length===0&&blocksOn(selDate).length===0&&<div style={{fontSize:13,color:C.t3,padding:'10px 0'}}>일정이 없습니다</div>}
+            {blocksOn(selDate).map(b=>{const cs=catStyle[b.category]||catStyle.work;return(
+              <div key={b.id} onClick={()=>setMdEdit(b)} style={{display:'flex',alignItems:'center',gap:10,padding:'11px 4px',borderBottom:`0.5px solid ${C.line}`,cursor:'pointer'}}>
+                <span style={{width:3.5,alignSelf:'stretch',borderRadius:2,backgroundColor:cs.dot||cs.text,flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.title}</div>
+                  <div style={{fontSize:11.5,color:cs.text,marginTop:2,fontWeight:500}}>기간 · {b.startDate.slice(5).replace('-','/')}~{b.endDate.slice(5).replace('-','/')}</div>
+                </div>
+              </div>);})}
             {selEvents.map(ev=><EventRow key={ev.id} ev={ev}/>)}
             {/* todos */}
             {(selTodos.length>0||todoAdd)&&<div style={{fontSize:11,fontWeight:700,color:C.t2,letterSpacing:'0.4px',margin:'14px 0 4px'}}>할 일</div>}
@@ -4508,7 +4522,12 @@ function MobileApp(){
                   <div style={{width:34,height:34,margin:'2px auto 0',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontSize:19,fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{d.getDate()}</div>
                 </div>
                 <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:6}}>
-                  {evs.length===0&&<button onClick={()=>setEventPop(dk)} style={{fontSize:12.5,color:C.t3,textAlign:'left',padding:'8px 0'}}>+ 일정</button>}
+                  {evs.length===0&&blocksOn(dk).length===0&&<button onClick={()=>setEventPop(dk)} style={{fontSize:12.5,color:C.t3,textAlign:'left',padding:'8px 0'}}>+ 일정</button>}
+                  {blocksOn(dk).map(b=>{const cs=catStyle[b.category]||catStyle.work;return(
+                    <div key={b.id} onClick={()=>setMdEdit(b)} style={{backgroundColor:C.card,borderRadius:12,padding:'9px 13px',boxShadow:`inset 3px 0 0 ${cs.dot||cs.text}, 0 1px 3px rgba(20,20,40,0.05)`,cursor:'pointer'}}>
+                      <div style={{fontSize:11.5,color:cs.text,fontWeight:600,marginBottom:1}}>기간 · {layerLabel(b.category)}</div>
+                      <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.title}</div>
+                    </div>);})}
                   {evs.map(ev=>{const cs=catStyle[ev.category]||catStyle.work;return(
                     <div key={ev.id} onClick={()=>setDetailEv(ev)} style={{backgroundColor:C.card,borderRadius:12,padding:'9px 13px',boxShadow:`inset 3px 0 0 ${cs.dot||cs.text}, 0 1px 3px rgba(20,20,40,0.05)`,cursor:'pointer'}}>
                       <div style={{fontSize:11.5,color:cs.text,fontWeight:600,marginBottom:1}}>{layerLabel(ev.category)}{ev.meetingNoteId?' · 📋':''}</div>
@@ -4559,6 +4578,7 @@ function MobileApp(){
       {eventPop&&<EventPopover date={eventPop} onClose={()=>setEventPop(null)}/>}
       {detailEv&&<EventDetailPopover event={detailEv} onClose={()=>setDetailEv(null)} onDelete={()=>{dispatch({type:'DELETE_EVENT',id:detailEv.id});setDetailEv(null);}} onUpdate={u=>{dispatch({type:'UPDATE_EVENT',id:detailEv.id,updates:u});setDetailEv(null);}} onOpenNote={n=>{setDetailEv(null);setTimeout(()=>setNoteMdl(n),50);}}/>}
       {noteMdl!==null&&<MeetingNoteModal initialNote={noteMdl&&noteMdl.id?noteMdl:null} onClose={()=>setNoteMdl(null)}/>}
+      {mdEdit&&<MultiDayBlockPopover editBlock={mdEdit} onClose={()=>setMdEdit(null)}/>}
       {settingsOpen&&<SettingsModal onClose={()=>setSettingsOpen(false)}/>}
     </div>
   );
