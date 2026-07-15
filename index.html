@@ -52,6 +52,7 @@
   @keyframes slideInRight{from{transform:translateX(28px);opacity:0;}to{transform:translateX(0);opacity:1;}}
   @keyframes slotIn{from{height:0;opacity:0;margin-top:0;}to{height:19px;opacity:1;margin-top:1px;}}
   @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  @keyframes slideInLeft{from{transform:translateX(-100%);}to{transform:translateX(0);}}
   button{transition:background-color 0.12s ease,color 0.12s ease,border-color 0.12s ease,opacity 0.12s ease,box-shadow 0.12s ease;}
   input,select,textarea{transition:border-color 0.12s ease,background-color 0.12s ease;}
   ::selection{background:#DDD9F7;}
@@ -4347,17 +4348,21 @@ function MobileApp(){
   const{state,dispatch}=useStore();
   const catStyle=useDynCatStyle();
   const today=new Date();
-  const[tab,setTab]=React.useState('cal');
+  const[tab,setTab]=React.useState('month');
   const[navY,setNavY]=React.useState(today.getFullYear());
   const[navM,setNavM]=React.useState(today.getMonth());
-  const[selDate,setSelDate]=React.useState(null);
+  const[weekOff,setWeekOff]=React.useState(0);
+  const[selDate,setSelDate]=React.useState(toDateKey(today));
   const[eventPop,setEventPop]=React.useState(null);
   const[detailEv,setDetailEv]=React.useState(null);
   const[noteMdl,setNoteMdl]=React.useState(null);
   const[settingsOpen,setSettingsOpen]=React.useState(false);
+  const[drawer,setDrawer]=React.useState(false);
   const[todoAdd,setTodoAdd]=React.useState(false);
   const[todoVal,setTodoVal]=React.useState('');
+  const weekAddRef=React.useRef(null);
 
+  const layerLabel=(cat)=>cat==='work'?(state.workLabel||'업무'):cat==='personal'?(state.personalLabel||'개인'):cat==='outlook'?'아웃룩':((state.customLayers||[]).find(l=>l.id===cat)||{}).name||'기타';
   const evByDate=React.useMemo(()=>{
     const m={};
     (state.weeklyEvents||[]).forEach(e=>{
@@ -4366,151 +4371,182 @@ function MobileApp(){
       else if(e.category==='personal')vis=state.personalVisible;
       else if(e.isOutlook)vis=state.outlookVisible!==false;
       else{const cl=(state.customLayers||[]).find(l=>l.id===e.category);vis=cl?cl.visible!==false:true;}
-      if(vis){(m[e.date]=m[e.date]||[]).push(e);}
+      if(vis)(m[e.date]=m[e.date]||[]).push(e);
     });
     Object.keys(m).forEach(k=>m[k].sort((a,b)=>((a.time||'99:99').localeCompare(b.time||'99:99'))));
     return m;
   },[state.weeklyEvents,state.workVisible,state.personalVisible,state.outlookVisible,state.customLayers]);
 
-  const goPrev=()=>{const m=navM===0?11:navM-1,y=navM===0?navY-1:navY;setNavM(m);setNavY(y);};
-  const goNext=()=>{const m=navM===11?0:navM+1,y=navM===11?navY+1:navY;setNavM(m);setNavY(y);};
-  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());};
+  const goPrev=()=>{if(tab==='month'){const mm=navM===0?11:navM-1,yy=navM===0?navY-1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w-1);};
+  const goNext=()=>{if(tab==='month'){const mm=navM===11?0:navM+1,yy=navM===11?navY+1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w+1);};
+  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());setWeekOff(0);setSelDate(toDateKey(today));};
 
-  // month grid
+  // month grid cells
   const first=new Date(navY,navM,1);
   const startDow=(first.getDay()+6)%7;
   const daysIn=new Date(navY,navM+1,0).getDate();
   const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=daysIn;d++)cells.push(d);
   while(cells.length%7)cells.push(null);
 
-  const selEvents=selDate?(evByDate[selDate]||[]):[];
-  const selTodos=selDate?(state.todos||[]).filter(t=>t.date===selDate):[];
+  const selEvents=evByDate[selDate]||[];
+  const selTodos=(state.todos||[]).filter(t=>t.date===selDate);
+  const selD=new Date(selDate+'T00:00:00');
 
-  const HDR_H=48,TAB_H=56;
-  const layers=[{id:'work',label:state.workLabel||'업무',on:state.workVisible,type:'w'},{id:'personal',label:state.personalLabel||'개인',on:state.personalVisible,type:'p'},...(state.customLayers||[]).filter(l=>(state.layerOrder||[]).includes(l.id)).map(l=>({id:l.id,label:l.name,on:l.visible!==false,type:'c'})),{id:'outlook',label:'아웃룩',on:state.outlookVisible!==false,type:'o'}];
-  const toggleLayer=(l)=>{if(l.type==='w')dispatch({type:'SET_WORK_VISIBLE',payload:!l.on});else if(l.type==='p')dispatch({type:'SET_PERSONAL_VISIBLE',payload:!l.on});else if(l.type==='o')dispatch({type:'SET_OUTLOOK_VISIBLE',payload:!l.on});else dispatch({type:'TOGGLE_CUSTOM_LAYER',id:l.id});};
+  const weekDates=getWeekDates(weekOff);
+  const weekLabel=`${weekDates[0].getMonth()+1}/${weekDates[0].getDate()} – ${weekDates[6].getMonth()+1}/${weekDates[6].getDate()}`;
+
+  const HDR=52,TAB=58;
+  const C={bg:'#F6F4EE',card:'#FFFFFF',line:'#EAE7DE',t1:'#2B2926',t2:'#9A968C',t3:'#C4BFB4',brand:'#9B3B6A'};
+
+  const EventRow=({ev})=>{
+    const cs=catStyle[ev.category]||catStyle.work;
+    return(
+      <div onClick={()=>setDetailEv(ev)} style={{display:'flex',alignItems:'stretch',gap:10,padding:'11px 4px',borderBottom:`0.5px solid ${C.line}`,cursor:'pointer'}}>
+        <span style={{width:3.5,borderRadius:2,backgroundColor:cs.dot||cs.text,flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</div>
+          <div style={{fontSize:11.5,color:cs.text,marginTop:2,fontWeight:500}}>{layerLabel(ev.category)}{ev.meetingNoteId?' · 📋':''}</div>
+        </div>
+        <span style={{fontSize:13,color:C.t2,fontVariantNumeric:'tabular-nums',flexShrink:0,alignSelf:'center',fontWeight:600}}>{ev.time||'종일'}</span>
+      </div>
+    );
+  };
 
   return(
-    <div style={{position:'fixed',inset:0,display:'flex',flexDirection:'column',backgroundColor:'#F2F2F4',fontFamily:'inherit'}}>
+    <div style={{position:'fixed',inset:0,display:'flex',flexDirection:'column',backgroundColor:C.bg,fontFamily:'inherit',overflow:'hidden'}}>
       {/* Header */}
-      <div style={{height:HDR_H,flexShrink:0,backgroundColor:'#fff',borderBottom:'0.5px solid #E8E8E8',display:'flex',alignItems:'center',padding:'0 14px',gap:8}}>
-        <span style={{width:26,height:26,borderRadius:7,background:'#9B3B6A',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,flexShrink:0}}>B</span>
-        {tab==='cal'?(
-          <div style={{display:'flex',alignItems:'center',gap:2,flex:1}}>
-            <span style={{fontSize:17,fontWeight:700,color:'#1A1A1A'}}>{navY}. {navM+1}</span>
-            <button onClick={goPrev} style={{marginLeft:6,fontSize:18,color:'#ACACB4',padding:'0 6px'}}>‹</button>
-            <button onClick={goNext} style={{fontSize:18,color:'#ACACB4',padding:'0 6px'}}>›</button>
-          </div>
+      <div style={{height:HDR,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:6,backgroundColor:C.bg,borderBottom:`0.5px solid ${C.line}`}}>
+        <button onClick={()=>setDrawer(true)} aria-label="메뉴" style={{width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center',color:C.t1}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 7h11M4 12h16M4 17h9"/></svg>
+        </button>
+        {tab==='notes'?(
+          <span style={{flex:1,fontSize:19,fontWeight:700,color:C.t1}}>회의록</span>
         ):(
-          <span style={{flex:1,fontSize:17,fontWeight:700,color:'#1A1A1A'}}>{tab==='tasks'?'할 일 · 프로젝트':'회의록'}</span>
+          <div style={{flex:1,display:'flex',alignItems:'center',gap:4}}>
+            <span style={{fontSize:19,fontWeight:700,color:C.t1,letterSpacing:'-0.3px'}}>{tab==='month'?`${navY}. ${navM+1}`:weekLabel}</span>
+            <button onClick={goPrev} style={{fontSize:20,color:C.t3,padding:'0 5px',lineHeight:1}}>‹</button>
+            <button onClick={goNext} style={{fontSize:20,color:C.t3,padding:'0 5px',lineHeight:1}}>›</button>
+          </div>
         )}
-        {tab==='cal'&&<button onClick={goToday} style={{fontSize:12,color:'#fff',padding:'5px 12px',backgroundColor:'#9B3B6A',borderRadius:7,fontWeight:600}}>오늘</button>}
-        <button onClick={()=>setSettingsOpen(true)} style={{fontSize:18,color:'#9A9A9A',padding:'2px 4px'}}>⚙</button>
+        {tab!=='notes'&&<button onClick={goToday} style={{fontSize:12.5,color:'#fff',padding:'6px 13px',backgroundColor:C.brand,borderRadius:18,fontWeight:600}}>오늘</button>}
+        <button onClick={()=>setSettingsOpen(true)} aria-label="설정" style={{width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',color:C.t2}}>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>
+        </button>
       </div>
 
-      {/* Body */}
-      <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
-        {tab==='cal'&&(<div style={{padding:'8px 8px 90px'}}>
-          {/* layer chips */}
-          <div style={{display:'flex',gap:6,overflowX:'auto',padding:'2px 2px 8px'}}>
-            {layers.map(l=>{const cs=catStyle[l.id]||catStyle.work;return(
-              <button key={l.id} onClick={()=>toggleLayer(l)} style={{flexShrink:0,display:'flex',alignItems:'center',gap:4,padding:'4px 11px',borderRadius:16,fontSize:12,fontWeight:l.on?600:400,border:`0.5px solid ${l.on?cs.border:'#DEDEDE'}`,backgroundColor:l.on?cs.bg:'#F7F7F7',color:l.on?cs.text:'#ADADAD'}}>
-                <span style={{width:6,height:6,borderRadius:'50%',backgroundColor:l.on?cs.dot:'#C8C8C8'}}/>{l.label}
-              </button>);})}
+      {/* MONTH */}
+      {tab==='month'&&(
+        <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',display:'flex',flexDirection:'column',paddingBottom:TAB+8}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',padding:'6px 6px 2px',flexShrink:0}}>
+            {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:i===6?'#E24B4A':i===5?'#4A7BC4':C.t2}}>{d}</div>)}
           </div>
-          {/* weekday header */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',marginBottom:2}}>
-            {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:i===6?'#E24B4A':i===5?'#4A7BC4':'#9A9A9A',padding:'4px 0'}}>{d}</div>)}
-          </div>
-          {/* month grid */}
-          <div style={{backgroundColor:'#fff',borderRadius:12,overflow:'hidden',border:'0.5px solid #E8E8E8'}}>
+          <div style={{padding:'0 6px',flexShrink:0}}>
             {Array.from({length:cells.length/7}).map((_,r)=>(
               <div key={r} style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)'}}>
                 {cells.slice(r*7,r*7+7).map((d,ci)=>{
-                  if(!d)return<div key={ci} style={{minHeight:62,borderTop:r?'0.5px solid #F1F1F1':'none',borderRight:ci<6?'0.5px solid #F1F1F1':'none',backgroundColor:'#FCFCFC'}}/>;
+                  if(!d)return<div key={ci} style={{height:52}}/>;
                   const dk=`${navY}-${String(navM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                   const dObj=new Date(navY,navM,d);
-                  const isTd=toDateKey(dObj)===toDateKey(today);
+                  const isTd=dk===toDateKey(today);const isSel=dk===selDate;
                   const hol=getHoliday(dk);
                   const isRed=(dObj.getDay()===0||hol)&&!isTd;const isBlue=dObj.getDay()===6&&!isTd&&!hol;
                   const evs=evByDate[dk]||[];
+                  const dots=evs.slice(0,4);
                   return(
-                    <div key={ci} onClick={()=>setSelDate(dk)} style={{minHeight:62,padding:'4px 3px',borderTop:r?'0.5px solid #F1F1F1':'none',borderRight:ci<6?'0.5px solid #F1F1F1':'none',cursor:'pointer',backgroundColor:selDate===dk?'#FBEAF1':'#fff'}}>
-                      <div style={{display:'flex',justifyContent:'center'}}>
-                        <span style={{fontSize:12.5,fontWeight:isTd?700:500,width:isTd?20:'auto',height:isTd?20:'auto',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?'#9B3B6A':'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':'#3A3A40'}}>{d}</span>
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:1.5,marginTop:2,alignItems:'center'}}>
-                        {evs.slice(0,3).map(ev=>{const cs=catStyle[ev.category]||catStyle.work;return<span key={ev.id} style={{width:'88%',height:4,borderRadius:2,backgroundColor:cs.dot||cs.text}}/>;})}
-                        {evs.length>3&&<span style={{fontSize:8,color:'#ACACB4',lineHeight:1}}>+{evs.length-3}</span>}
+                    <div key={ci} onClick={()=>setSelDate(dk)} style={{height:52,display:'flex',flexDirection:'column',alignItems:'center',paddingTop:5,cursor:'pointer',borderRadius:10,backgroundColor:isSel&&!isTd?'#EFEBE2':'transparent'}}>
+                      <span style={{fontSize:14,fontWeight:isTd?700:500,width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontVariantNumeric:'tabular-nums'}}>{d}</span>
+                      <div style={{display:'flex',gap:3,marginTop:3,height:6,alignItems:'center'}}>
+                        {dots.map((ev,i)=>{const cs=catStyle[ev.category]||catStyle.work;return<span key={i} style={{width:5,height:5,borderRadius:'50%',backgroundColor:cs.dot||cs.text}}/>;})}
                       </div>
                     </div>);
                 })}
               </div>
             ))}
           </div>
-        </div>)}
+          {/* Events list for selected date */}
+          <div style={{flex:1,backgroundColor:C.card,borderTop:`0.5px solid ${C.line}`,marginTop:8,borderRadius:'18px 18px 0 0',padding:'14px 18px 20px',boxShadow:'0 -2px 12px rgba(20,20,40,0.04)'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+              <span style={{fontSize:12,fontWeight:700,color:C.t2,letterSpacing:'0.4px'}}>{selD.getMonth()+1}월 {selD.getDate()}일 ({DAY_NAMES[(selD.getDay()+6)%7]}) · {selEvents.length}건{getHoliday(selDate)?' · '+getHoliday(selDate):''}</span>
+              <button onClick={()=>setEventPop(selDate)} style={{width:26,height:26,borderRadius:'50%',color:C.brand,fontSize:18,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+            </div>
+            {selEvents.length===0&&<div style={{fontSize:13,color:C.t3,padding:'10px 0'}}>일정이 없습니다</div>}
+            {selEvents.map(ev=><EventRow key={ev.id} ev={ev}/>)}
+            {/* todos */}
+            {(selTodos.length>0||todoAdd)&&<div style={{fontSize:11,fontWeight:700,color:C.t2,letterSpacing:'0.4px',margin:'14px 0 4px'}}>할 일</div>}
+            {selTodos.map(t=>(
+              <div key={t.id} style={{display:'flex',alignItems:'center',gap:9,padding:'7px 2px'}}>
+                <button onClick={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} style={{width:18,height:18,borderRadius:5,flexShrink:0,border:`1.5px solid ${t.done?'#D0D0D0':C.brand}`,backgroundColor:t.done?'#F0F0F0':'transparent',color:C.brand,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>{t.done?'✓':''}</button>
+                <span style={{fontSize:14,flex:1,color:t.done?'#C8C8C8':C.t1,textDecoration:t.done?'line-through':'none'}}>{t.text}</span>
+                <button onClick={()=>dispatch({type:'DELETE_TODO',id:t.id})} style={{fontSize:15,color:'#D8D8D8'}}>×</button>
+              </div>))}
+            {todoAdd?(
+              <input autoFocus value={todoVal} onChange={e=>setTodoVal(e.target.value)}
+                onBlur={()=>{const v=todoVal.trim();if(v)dispatch({type:'ADD_TODO',date:selDate,text:v,category:'work'});setTodoVal('');setTodoAdd(false);}}
+                onKeyDown={e=>{if(e.key==='Enter'){const v=todoVal.trim();if(v)dispatch({type:'ADD_TODO',date:selDate,text:v,category:'work'});setTodoVal('');setTodoAdd(false);}}}
+                placeholder="할 일 입력" style={{width:'100%',fontSize:14,padding:'8px 10px',border:`0.5px solid ${C.brand}`,borderRadius:8,marginTop:4}}/>
+            ):(
+              <button onClick={()=>setTodoAdd(true)} style={{fontSize:13,color:C.t2,padding:'8px 0',marginTop:2}}>+ 할 일 추가</button>
+            )}
+          </div>
+        </div>
+      )}
 
-        {tab==='tasks'&&(<div style={{padding:'12px 14px 90px'}}>
-          <MonthlyHighlights/>
-          <ProjectsSection/>
-        </div>)}
+      {/* WEEK (agenda) */}
+      {tab==='week'&&(
+        <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:`8px 12px ${TAB+16}px`}}>
+          {weekDates.map(d=>{
+            const dk=toDateKey(d);const evs=evByDate[dk]||[];const isTd=dk===toDateKey(today);
+            const hol=getHoliday(dk);const isRed=(d.getDay()===0||hol)&&!isTd;const isBlue=d.getDay()===6&&!isTd&&!hol;
+            return(
+              <div key={dk} style={{display:'flex',gap:12,padding:'10px 0',borderBottom:`0.5px solid ${C.line}`}}>
+                <div style={{width:44,flexShrink:0,textAlign:'center',paddingTop:2}}>
+                  <div style={{fontSize:11,fontWeight:600,color:isRed?'#E24B4A':isBlue?'#4A7BC4':C.t2}}>{DAY_NAMES[(d.getDay()+6)%7]}</div>
+                  <div style={{width:34,height:34,margin:'2px auto 0',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontSize:19,fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{d.getDate()}</div>
+                </div>
+                <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:6}}>
+                  {evs.length===0&&<button onClick={()=>setEventPop(dk)} style={{fontSize:12.5,color:C.t3,textAlign:'left',padding:'8px 0'}}>+ 일정</button>}
+                  {evs.map(ev=>{const cs=catStyle[ev.category]||catStyle.work;return(
+                    <div key={ev.id} onClick={()=>setDetailEv(ev)} style={{backgroundColor:C.card,borderRadius:12,padding:'9px 13px',boxShadow:`inset 3px 0 0 ${cs.dot||cs.text}, 0 1px 3px rgba(20,20,40,0.05)`,cursor:'pointer'}}>
+                      <div style={{fontSize:11.5,color:cs.text,fontWeight:600,marginBottom:1}}>{layerLabel(ev.category)}{ev.meetingNoteId?' · 📋':''}</div>
+                      <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</div>
+                      <div style={{fontSize:17,fontWeight:700,color:C.t1,marginTop:2,fontVariantNumeric:'tabular-nums'}}>{ev.time||'종일'}</div>
+                    </div>);})}
+                </div>
+                <button onClick={()=>setEventPop(dk)} style={{width:28,height:28,borderRadius:'50%',flexShrink:0,alignSelf:'flex-start',backgroundColor:'#EFEBE2',color:C.brand,fontSize:17,marginTop:2}}>+</button>
+              </div>);
+          })}
+        </div>
+      )}
 
-        {tab==='notes'&&(<div style={{padding:'12px 14px 90px'}}>
-          <button onClick={()=>setNoteMdl({})} style={{width:'100%',fontSize:13,fontWeight:600,color:'#9B3B6A',padding:'10px',border:'0.5px solid #E3B9CC',borderRadius:9,backgroundColor:'#FBEAF1',marginBottom:12}}>+ 새 회의록</button>
+      {/* NOTES */}
+      {tab==='notes'&&(
+        <div style={{flex:1,overflowY:'auto',padding:`12px 16px ${TAB+16}px`}}>
+          <button onClick={()=>setNoteMdl({})} style={{width:'100%',fontSize:13,fontWeight:600,color:C.brand,padding:'11px',border:'0.5px solid #E3B9CC',borderRadius:10,backgroundColor:'#FBEAF1',marginBottom:12}}>+ 새 회의록</button>
           <MeetingNoteList onOpen={n=>setNoteMdl(n)}/>
-        </div>)}
-      </div>
+        </div>
+      )}
 
-      {/* Bottom tab bar */}
-      <div style={{height:TAB_H,flexShrink:0,backgroundColor:'#fff',borderTop:'0.5px solid #E8E8E8',display:'flex',paddingBottom:'env(safe-area-inset-bottom)'}}>
-        {[{id:'cal',label:'달력'},{id:'tasks',label:'할일'},{id:'notes',label:'회의록'}].map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,color:tab===t.id?'#9B3B6A':'#B0B0B8',background:'none',border:'none'}}>
-            {t.id==='cal'?<IcCal s={20}/>:t.id==='notes'?<IcNote s={20}/>:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>}
-            <span style={{fontSize:10.5,fontWeight:tab===t.id?600:400}}>{t.label}</span>
+      {/* Bottom tabs */}
+      <div style={{height:TAB,flexShrink:0,backgroundColor:'#fff',borderTop:`0.5px solid ${C.line}`,display:'flex',paddingBottom:'env(safe-area-inset-bottom)'}}>
+        {[{id:'month',label:'먼슬리'},{id:'week',label:'위클리'},{id:'notes',label:'회의록'}].map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,color:tab===t.id?C.brand:'#B7B2A6',background:'none',border:'none'}}>
+            {t.id==='notes'?<IcNote s={21}/>:<IcCal s={21}/>}
+            <span style={{fontSize:10.5,fontWeight:tab===t.id?700:500}}>{t.label}</span>
           </button>
         ))}
       </div>
 
-      {/* FAB add event on cal */}
-      {tab==='cal'&&<button onClick={()=>setEventPop(selDate||toDateKey(today))} style={{position:'fixed',right:16,bottom:TAB_H+16,width:52,height:52,borderRadius:'50%',backgroundColor:'#9B3B6A',color:'#fff',fontSize:28,fontWeight:300,lineHeight:1,zIndex:900,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 14px rgba(155,59,106,0.4)'}}>+</button>}
-
-      {/* Day sheet */}
-      {selDate&&(
-        <div onClick={e=>{if(e.target===e.currentTarget)setSelDate(null);}} style={{position:'fixed',inset:0,zIndex:850,backgroundColor:'rgba(15,15,35,0.32)',display:'flex',alignItems:'flex-end',animation:'fadeIn 0.15s ease'}}>
-          <div style={{width:'100%',maxHeight:'72vh',backgroundColor:'#fff',borderRadius:'18px 18px 0 0',display:'flex',flexDirection:'column',animation:'slideUp 0.2s ease',paddingBottom:'env(safe-area-inset-bottom)'}}>
-            <div style={{padding:'10px 18px 8px',borderBottom:'0.5px solid #F1F1F1',flexShrink:0}}>
-              <div style={{width:36,height:4,borderRadius:2,backgroundColor:'#E0E0E0',margin:'0 auto 10px'}}/>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                <span style={{fontSize:16,fontWeight:700,color:'#1A1A1A'}}>{(()=>{const d=new Date(selDate+'T00:00:00');return `${d.getMonth()+1}월 ${d.getDate()}일 (${DAY_NAMES[(d.getDay()+6)%7]})`;})()}{getHoliday(selDate)?' · '+getHoliday(selDate):''}</span>
-                <button onClick={()=>setSelDate(null)} style={{fontSize:20,color:'#B8B8B8',lineHeight:1}}>×</button>
-              </div>
+      {/* Drawer */}
+      {drawer&&(
+        <div onClick={e=>{if(e.target===e.currentTarget)setDrawer(false);}} style={{position:'fixed',inset:0,zIndex:860,backgroundColor:'rgba(15,15,35,0.35)',animation:'fadeIn 0.15s ease'}}>
+          <div style={{position:'absolute',left:0,top:0,bottom:0,width:'82%',maxWidth:340,backgroundColor:'#fff',display:'flex',flexDirection:'column',animation:'slideInLeft 0.2s ease',boxShadow:'4px 0 24px rgba(15,15,35,0.2)'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 18px 10px',borderBottom:`0.5px solid ${C.line}`,flexShrink:0}}>
+              <span style={{fontSize:17,fontWeight:700,color:C.t1}}>{state.titleText||'보람 스케줄러'}</span>
+              <button onClick={()=>setDrawer(false)} style={{fontSize:20,color:C.t3}}>×</button>
             </div>
-            <div style={{flex:1,overflowY:'auto',padding:'12px 18px'}}>
-              <div style={{fontSize:11,fontWeight:700,color:'#9B9A97',letterSpacing:'0.5px',marginBottom:6}}>일정</div>
-              {selEvents.length===0&&<div style={{fontSize:13,color:'#C4C4C4',padding:'4px 0 10px'}}>일정 없음</div>}
-              {selEvents.map(ev=>{const cs=catStyle[ev.category]||catStyle.work;return(
-                <div key={ev.id} onClick={()=>{setDetailEv(ev);}} style={{display:'flex',alignItems:'center',gap:8,padding:'9px 11px',marginBottom:5,borderRadius:9,backgroundColor:cs.bg,boxShadow:'inset 3px 0 0 '+(cs.dot||cs.text),cursor:'pointer'}}>
-                  {ev.time&&<span style={{fontSize:12,color:cs.text,opacity:0.8,fontVariantNumeric:'tabular-nums',flexShrink:0}}>{ev.time}</span>}
-                  <span style={{fontSize:14,color:cs.text,fontWeight:500,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</span>
-                  {ev.meetingNoteId&&<span style={{fontSize:12}}>📋</span>}
-                </div>);})}
-              <button onClick={()=>setEventPop(selDate)} style={{width:'100%',fontSize:13,color:'#9B3B6A',padding:'9px',border:'0.5px dashed #E3B9CC',borderRadius:9,backgroundColor:'#FDF7FA',marginTop:2,marginBottom:16}}>+ 일정 추가</button>
-
-              <div style={{fontSize:11,fontWeight:700,color:'#9B9A97',letterSpacing:'0.5px',marginBottom:6}}>할 일</div>
-              {selTodos.map(t=>(
-                <div key={t.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 2px'}}>
-                  <button onClick={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} style={{width:18,height:18,borderRadius:5,flexShrink:0,border:`1.5px solid ${t.done?'#D0D0D0':'#9B3B6A'}`,backgroundColor:t.done?'#F0F0F0':'transparent',color:'#9B3B6A',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>{t.done?'✓':''}</button>
-                  <span style={{fontSize:14,flex:1,color:t.done?'#C8C8C8':'#3A3A40',textDecoration:t.done?'line-through':'none'}}>{t.text}</span>
-                  <button onClick={()=>dispatch({type:'DELETE_TODO',id:t.id})} style={{fontSize:15,color:'#D8D8D8'}}>×</button>
-                </div>))}
-              {todoAdd?(
-                <input autoFocus value={todoVal} onChange={e=>setTodoVal(e.target.value)}
-                  onBlur={()=>{const v=todoVal.trim();if(v)dispatch({type:'ADD_TODO',date:selDate,text:v,category:'work'});setTodoVal('');setTodoAdd(false);}}
-                  onKeyDown={e=>{if(e.key==='Enter'){const v=todoVal.trim();if(v)dispatch({type:'ADD_TODO',date:selDate,text:v,category:'work'});setTodoVal('');setTodoAdd(false);}}}
-                  placeholder="할 일 입력" style={{width:'100%',fontSize:14,padding:'8px 10px',border:'0.5px solid #E3B9CC',borderRadius:8,marginTop:4}}/>
-              ):(
-                <button onClick={()=>setTodoAdd(true)} style={{width:'100%',fontSize:13,color:'#9B3B6A',padding:'9px',border:'0.5px dashed #E3B9CC',borderRadius:9,backgroundColor:'#FDF7FA',marginTop:2}}>+ 할 일 추가</button>
-              )}
+            <div style={{flex:1,overflowY:'auto',padding:'14px 16px'}}>
+              <MonthlyHighlights/>
+              <ProjectsSection/>
             </div>
           </div>
         </div>
