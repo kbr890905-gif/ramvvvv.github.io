@@ -3477,8 +3477,8 @@ function EventChip({event,onClick}){
   const catStyle=useDynCatStyle();const cs=catStyle[event.category]||catStyle.work;
   const{state}=useStore();const bdayPfx=getBdayPrefix(event.category,state);
   const isBday=bdayPfx!=='';
-  const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:6,marginBottom:2,fontSize:12,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text),borderRadius:6,marginBottom:2,fontSize:12,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
-  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:3,padding:'3px 6px 3px 9px',...chipStyle}}>{event.time&&<span style={{opacity:0.7,flexShrink:0,fontSize:10.5,fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0}}>🔗</span>}</div>;
+  const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:6,marginBottom:2,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text),borderRadius:6,marginBottom:2,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
+  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:3,padding:'3px 6px 3px 9px',...chipStyle}}>{event.time&&<span style={{opacity:0.7,flexShrink:0,fontSize:9.5,fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0}}>🔗</span>}</div>;
 }
 function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCol,cycleCat}){
   const[hovered,setHovered]=useState(false);
@@ -3497,7 +3497,7 @@ function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCo
           style={{flex:1,fontSize:13,color:'#2F2F2F',minWidth:0,borderBottom:'0.5px solid #E3B9CC',background:'transparent'}}/>
       ):(
         <span onDoubleClick={()=>{setVal(todo.text);setEditing(true);}} title="더블클릭 → 수정"
-          style={{fontSize:13,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:todo.done?'#C8C8C8':'#444444',textDecoration:todo.done?'line-through':'none',cursor:'text'}}>{todo.text}</span>
+          style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:todo.done?'#C8C8C8':'#444444',textDecoration:todo.done?'line-through':'none',cursor:'text'}}>{todo.text}</span>
       )}
       {hovered&&!editing&&<button onClick={onDelete} style={{fontSize:11,color:'#E0E0E0',flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'} onMouseLeave={e=>e.currentTarget.style.color='#E0E0E0'}>×</button>}
     </div>
@@ -3629,7 +3629,7 @@ function WeeklyGrid({weekOffset,colH}){
           {wkBlocks.map(b=>{const pos=getBlockWeekPos(b,weekDates);const cs=catStyle[b.category]||catStyle.work;return(
             <div key={b.id} onClick={()=>setWkEditBlock(b)} title={b.title}
               style={{position:'absolute',top:2+b.lane*20,left:`calc(${pos.startCol}/7*100% + 3px)`,width:`calc(${(pos.endCol-pos.startCol+1)}/7*100% - 6px)`,height:17,
-                backgroundColor:cs.bg,color:cs.text,fontSize:12,fontWeight:500,padding:'1px 8px 1px 9px',
+                backgroundColor:cs.bg,color:cs.text,fontSize:11,fontWeight:500,padding:'1px 8px 1px 9px',
                 borderRadius:6,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',cursor:'pointer',pointerEvents:'auto',
                 boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text)}}>
               {b.title}
@@ -3801,8 +3801,8 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
                   transform:(dragIdx!==null&&ci>=dragIdx)?'translateY(25px)':'translateY(0)',
                   transition:'transform 0.15s ease',
                   cursor:'pointer',flexShrink:0,lineHeight:1.4}}>
-                {ev.time&&<span style={{fontSize:10.5,color:cs.text,opacity:0.75,flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
-                <span style={{fontSize:12,color:cs.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
+                {ev.time&&<span style={{fontSize:9.5,color:cs.text,opacity:0.75,flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
+                <span style={{fontSize:11,color:cs.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
                 {ev.isOutlook&&<span style={{fontSize:10,flexShrink:0}}>🔗</span>}
               </div>
             );
@@ -3890,7 +3890,7 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
                     boxShadow:pos.isStart?`inset 2.5px 0 0 ${color}`:'none',
                     borderRadius:pos.isStart&&pos.isEnd?6:pos.isStart?'6px 0 0 6px':pos.isEnd?'0 6px 6px 0':0,
                     padding:pos.isStart?'0 6px 0 9px':'0 6px',overflow:'hidden',whiteSpace:'nowrap',
-                    fontSize:12,fontWeight:500,color,display:'flex',alignItems:'center',
+                    fontSize:11,fontWeight:500,color,display:'flex',alignItems:'center',
                     cursor:'pointer',boxSizing:'border-box',pointerEvents:'all'}}>
                   {pos.isStart&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{getBdayPrefix(b.category,state)}{b.title}</span>}
                 </div>
