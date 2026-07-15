@@ -4,6 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>보람 스케줄러</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='6' width='24' height='22' rx='4' fill='%23534AB7'/%3E%3Crect x='4' y='6' width='24' height='7' rx='4' fill='%233C3489'/%3E%3Crect x='9' y='3' width='2.5' height='6' rx='1.25' fill='%23fff'/%3E%3Crect x='20.5' y='3' width='2.5' height='6' rx='1.25' fill='%23fff'/%3E%3Crect x='9' y='17' width='5' height='5' rx='1' fill='%23fff'/%3E%3C/svg%3E"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -113,6 +114,7 @@ const _HD = {};
   '2026-03-02:대체공휴일','2026-05-25:대체공휴일',
 ].forEach(s=>{const[k,v]=s.split(':');_HD[k]=v;});
 const getHoliday = (dk) => _HD[dk] || _HD[dk.slice(5)] || null;
+(function(){for(let y=2024;y<=2032;y++){['03-01','05-05','08-15','10-03','10-09','12-25'].forEach(md=>{const d=new Date(y+'-'+md+'T00:00:00');const w=d.getDay();if(w===0||w===6){const n=new Date(d);do{n.setDate(n.getDate()+1);}while(n.getDay()===0||n.getDay()===6||_HD[`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`]);const k=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;if(!_HD[k])_HD[k]='대체공휴일';}});}})();
 
 // ─── HELPERS ─────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2,9)+Date.now().toString(36);
@@ -717,7 +719,7 @@ function StoreProvider({children}){
     if(lastRun===today||hour<7)return;
     setTimeout(()=>{
       const todos=stateRef.current.todos||[];
-      const pastUndone=[...new Set(todos.filter(t=>!t.done&&t.date<today).map(t=>t.date))];
+      const pastUndone=[...new Set(todos.filter(t=>{if(t.done||t.date>=today)return false;const wd=new Date(t.date+'T00:00:00').getDay();return wd!==0&&wd!==6;}).map(t=>t.date))];
       if(pastUndone.length===0){localStorage.setItem('lastTodoAutoMove',today);return;}
       const toToday=[];const toMonday={};
       pastUndone.forEach(dk=>{
@@ -856,11 +858,11 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
 
   /* contentEditable 초기화 (plain text → HTML 마이그레이션) */
   React.useEffect(()=>{
-    if(edRef.current){
+    if(edRef.current&&!editing){
       const h=(note.html!=null&&note.html!=='')?note.html:(note.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
       if(edRef.current.innerHTML!==h)edRef.current.innerHTML=h;
     }
-  },[collapsed]);
+  },[collapsed,editing,note.html]);
   const syncNote=()=>{const el=edRef.current;if(el)onUpdate({html:el.innerHTML,text:el.textContent||''});};
   const fmt=(cmd,val)=>{setEditing(true);document.execCommand(cmd,false,val||null);edRef.current?.focus();syncNote();};
 
@@ -2206,7 +2208,7 @@ function FreeNotePanel(){
     const c=calendarScrollRef?.current;
     const n=(state.stickyNotes||[]).length;
     const off=(n%5)*26;
-    const x=c?Math.max(24,(c.clientWidth-170)/2-90+off):80;
+    const x=c?Math.max(24,c.clientWidth*0.32-85+off):80;
     const y=c?c.scrollTop+c.clientHeight/2-(type==='text'?30:70)-40+off:200;
     const newId='n'+Date.now();
     dispatch({type:'ADD_STICKY_NOTE',note:{id:newId,x,y,w:type==='text'?200:170,h:type==='text'?32:140,text:'',
@@ -2219,7 +2221,7 @@ function FreeNotePanel(){
     const c=calendarScrollRef?.current;
     const n=(state.placedStickers||[]).length;
     const off=(n%6)*30;
-    const x=c?Math.max(24,(c.clientWidth-48)/2-80+off):200;
+    const x=c?Math.max(24,c.clientWidth*0.30-40+off):200;
     const y=c?c.scrollTop+c.clientHeight/2-84+off*0.7:200;
     if(!freeLayerVisible)setFreeLayerVisible(true);
     dispatch({type:'ADD_PLACED_STICKER',sticker:{type:stickerType,content:stContent,x,y,size:48,rotation:0}});
@@ -2306,7 +2308,7 @@ function FreeNotePanel(){
               style={{flex:1,fontSize:11.5,fontWeight:600,color:'#5C5C5C',padding:'5px 0',border:'0.5px solid #E4E4E4',borderRadius:7,backgroundColor:'#FAFAFA',cursor:'pointer'}}>+ 텍스트</button>
             {editToggle}
           </div>
-          {activeNote&&(
+          {false&&activeNote&&(
             <div style={{padding:'8px 10px',backgroundColor:'#FAFAFA',borderRadius:8,marginBottom:8,border:'0.5px solid #E8E8E8'}}>
               <div style={{fontSize:10,color:'#8C8C8C',marginBottom:7,fontWeight:700,letterSpacing:'0.6px',textTransform:'uppercase'}}>{activeNote.type==='text'?'텍스트박스 서식':'포스트잇 서식'}</div>
               <div style={{display:'flex',flexDirection:'column',gap:7}}>
@@ -3470,7 +3472,7 @@ function EventChip({event,onClick}){
   const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:6,marginBottom:2,fontSize:11.5,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text),borderRadius:6,marginBottom:2,fontSize:11.5,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
   return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:3,padding:'3px 6px 3px 9px',...chipStyle}}>{event.time&&<span style={{opacity:0.7,flexShrink:0,fontSize:10.5,fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0}}>🔗</span>}</div>;
 }
-function TodoItem({todo,onToggle,onDelete,onEdit}){
+function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCol,cycleCat}){
   const[hovered,setHovered]=useState(false);
   const[editing,setEditing]=useState(false);
   const[val,setVal]=useState(todo.text);
@@ -3480,6 +3482,7 @@ function TodoItem({todo,onToggle,onDelete,onEdit}){
     <div draggable={!editing} onDragStart={e=>{if(e.target.tagName==='INPUT'){e.preventDefault();return;}e.stopPropagation();e.dataTransfer.setData('text/todoid',todo.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:4,marginBottom:2,cursor:'grab'}} onClick={e=>e.stopPropagation()} onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
       <button onClick={onToggle} style={{width:10,height:10,borderRadius:2,flexShrink:0,border:`0.5px solid ${todo.done?'#D0D0D0':cs.border}`,backgroundColor:todo.done?'#F0F0F0':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:7,color:'#A2A2A2',transition:'all 0.1s'}}>{todo.done?'✓':''}</button>
       <span style={{width:5,height:5,borderRadius:'50%',flexShrink:0,backgroundColor:todo.done?'#D0D0D0':cs.dot}}/>
+      {editing&&cycleCat&&<button onMouseDown={e=>e.preventDefault()} onClick={()=>onSetCat&&onSetCat(cycleCat(todo.category))} title="레이어 전환" style={{fontSize:7,padding:'1px 4px',borderRadius:3,flexShrink:0,border:`0.5px solid ${catCol(todo.category).border}`,backgroundColor:catCol(todo.category).bg,color:catCol(todo.category).text,maxWidth:34,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{catLabel(todo.category).slice(0,3)}</button>}
       {editing?(
         <input autoFocus value={val} onChange={e=>setVal(e.target.value)} onBlur={save}
           onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setVal(todo.text);setEditing(false);}}}
@@ -3529,9 +3532,13 @@ function MemoEditor({memoKey,value,onUpdate}){
 function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
   const{state,dispatch}=useStore();
   const[evtDragIdx,setEvtDragIdx]=useState(null);const[todoDragIdx,setTodoDragIdx]=useState(null);const catStyle=useDynCatStyle();const dk=toDateKey(date);const dow=(date.getDay()+6)%7;const todayDate=isToday(date);const weekend=isSat(date)||isSun(date);
-  const events=(state.weeklyEvents||[]).filter(e=>{if(e.date!==dk)return false;if(e.category==='work')return state.workVisible;if(e.category==='personal')return state.personalVisible;if(e.isOutlook)return state.outlookVisible!==false;const cl=(state.customLayers||[]).find(l=>l.id===e.category);if(cl)return cl.visible!==false;return true;});
+  const events=(state.weeklyEvents||[]).filter(e=>{if(e.date!==dk)return false;if(e.category==='work')return state.workVisible;if(e.category==='personal')return state.personalVisible;if(e.isOutlook)return state.outlookVisible!==false;const cl=(state.customLayers||[]).find(l=>l.id===e.category);if(cl)return cl.visible!==false;return true;}).sort((a,b)=>((a.time||'99:99').localeCompare(b.time||'99:99')));
   const todos=(state.todos||[]).filter(t=>{if(t.date!==dk)return false;if(t.category==='work')return state.workVisible;if(t.category==='personal')return state.personalVisible;return true;});
   const memo=state.weekMemos[dk]||'';
+  const allCats=(state.layerOrder&&state.layerOrder.length?state.layerOrder:['work','personal']).filter(id=>id==='work'||id==='personal'||(state.customLayers||[]).some(l=>l.id===id));
+  const catLabel=(id)=>id==='work'?(state.workLabel||'업무'):id==='personal'?(state.personalLabel||'개인'):((state.customLayers||[]).find(l=>l.id===id)||{}).name||id;
+  const catCol=(id)=>catStyle[id]||catStyle.work;
+  const cycleCat=(cur)=>{const i=allCats.indexOf(cur);return allCats[(i+1)%allCats.length]||'work';};
   const[todoActive,setTodoActive]=useState(false);const[todoVal,setTodoVal]=useState('');const[todoCat,setTodoCat]=useState('work');const[todoRepeat,setTodoRepeat]=useState(false);const todoRef=useRef(null);const[detailEvent,setDetailEvent]=useState(null);
   const[noteMdl,setNoteMdl]=useState(null);
   const activateTodo=()=>{setTodoActive(true);setTimeout(()=>todoRef.current?.focus(),20);};
@@ -3571,8 +3578,8 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
         onDrop={e=>{setTodoDragIdx(null);const id=e.dataTransfer.getData('text/todoid');if(!id)return;e.preventDefault();const td=(state.todos||[]).find(x=>x.id===id);if(!td||td.date===dk)return;dispatch({type:'UPDATE_TODO',id,updates:{date:dk}});}}
         style={{flex:2,overflowY:'auto',padding:'3px 4px 2px',borderBottom:'0.5px solid #EFEFEF',minHeight:0,cursor:todoActive?'default':'text',position:'relative'}} onClick={()=>{if(!todoActive)activateTodo();}}>
         {todoDragIdx!==null&&<div style={{position:'absolute',left:3,right:3,top:3+todoDragIdx*20,height:17,borderRadius:6,border:'1.5px dashed #AFA9EC',backgroundColor:'rgba(83,74,183,0.07)',pointerEvents:'none',transition:'top 0.12s ease',zIndex:2}}/>}
-        {todos.map((t,ci)=><div key={t.id} style={{transform:(todoDragIdx!==null&&ci>=todoDragIdx)?'translateY(20px)':'translateY(0)',transition:'transform 0.15s ease'}}><TodoItem todo={t} onToggle={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} onDelete={()=>dispatch({type:'DELETE_TODO',id:t.id})} onEdit={text=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{text}})}/></div>)}
-        {todoActive&&<div style={{display:'flex',alignItems:'center',gap:3,marginTop:todos.length?2:0}} onClick={e=>e.stopPropagation()}><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoCat(c=>c==='work'?'personal':'work')} style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:`0.5px solid ${todoCat==='work'?catStyle.work.border:catStyle.personal.border}`,backgroundColor:todoCat==='work'?catStyle.work.bg:catStyle.personal.bg,color:todoCat==='work'?catStyle.work.text:catStyle.personal.text}}>{todoCat==='work'?(state.workLabel||'업무').slice(0,1):(state.personalLabel||'개인').slice(0,1)}</button><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoRepeat(v=>!v)} title="매주 반복 (12주)" style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:'0.5px solid '+(todoRepeat?'#AFA9EC':'#E4E4E4'),backgroundColor:todoRepeat?'#EEEDFE':'#FAFAFA',color:todoRepeat?'#534AB7':'#ABABAB'}}>매주</button><input ref={todoRef} value={todoVal} onChange={e=>setTodoVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitTodo();if(e.key==='Escape'){setTodoVal('');setTodoActive(false);}}} onBlur={()=>setTimeout(submitTodo,120)} placeholder="할 일" style={{flex:1,fontSize:11,color:'#333',minWidth:0,borderBottom:'0.5px solid #E8E8E8'}}/></div>}
+        {todos.map((t,ci)=><div key={t.id} style={{transform:(todoDragIdx!==null&&ci>=todoDragIdx)?'translateY(20px)':'translateY(0)',transition:'transform 0.15s ease'}}><TodoItem todo={t} allCats={allCats} catLabel={catLabel} catCol={catCol} cycleCat={cycleCat} onToggle={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} onDelete={()=>dispatch({type:'DELETE_TODO',id:t.id})} onEdit={text=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{text}})} onSetCat={cat=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{category:cat}})}/></div>)}
+        {todoActive&&<div style={{display:'flex',alignItems:'center',gap:3,marginTop:todos.length?2:0}} onClick={e=>e.stopPropagation()}><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoCat(c=>cycleCat(c))} title="레이어 전환" style={{fontSize:7,padding:'1px 4px',borderRadius:3,flexShrink:0,border:`0.5px solid ${catCol(todoCat).border}`,backgroundColor:catCol(todoCat).bg,color:catCol(todoCat).text,maxWidth:34,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{catLabel(todoCat).slice(0,3)}</button><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoRepeat(v=>!v)} title="매주 반복 (12주)" style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:'0.5px solid '+(todoRepeat?'#AFA9EC':'#E4E4E4'),backgroundColor:todoRepeat?'#EEEDFE':'#FAFAFA',color:todoRepeat?'#534AB7':'#ABABAB'}}>매주</button><input ref={todoRef} value={todoVal} onChange={e=>setTodoVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitTodo();if(e.key==='Escape'){setTodoVal('');setTodoActive(false);}}} onBlur={()=>setTimeout(submitTodo,120)} placeholder="할 일" style={{flex:1,fontSize:11,color:'#333',minWidth:0,borderBottom:'0.5px solid #E8E8E8'}}/></div>}
         {!todoActive&&todos.length===0&&<div style={{fontSize:11,color:'#CFCFD7',paddingTop:2}}>+ 할 일</div>}
       </div>
       <div style={{flex:1.2,padding:'3px 5px',borderBottom:'0.5px solid #EFEFEF',minHeight:0,overflow:'hidden'}}><MemoEditor memoKey={dk} value={memo} onUpdate={html=>dispatch({type:'SET_WEEK_MEMO',date:dk,text:html})}/></div>
@@ -4122,6 +4129,7 @@ function CalendarSection(){
       if(cl&&cl.visible!==false)visible=true;
       if(visible){if(!m[e.date])m[e.date]=[];m[e.date].push(e);}
     });
+    Object.keys(m).forEach(k=>m[k].sort((a,b)=>((a.time||'99:99').localeCompare(b.time||'99:99'))));
     return m;
   },[state.weeklyEvents,state.workVisible,state.personalVisible,state.outlookVisible,state.customLayers]);
 
@@ -4188,8 +4196,8 @@ function CalendarSection(){
       {/* 노트·스티커 추가 FAB */}
       {!yearView&&<button data-fab="true" onClick={()=>{setFreeLayerVisible(true);setStickerMode(true);setRightDockOpen(true);}}
         title="포스트잇·스티커 추가"
-        style={{position:'fixed',right:26,bottom:26,width:48,height:48,borderRadius:'50%',
-          backgroundColor:'#534AB7',color:'#fff',fontSize:26,fontWeight:300,lineHeight:1,zIndex:940,
+        style={{position:'fixed',right:22,bottom:22,width:34,height:34,borderRadius:'50%',
+          backgroundColor:'#534AB7',color:'#fff',fontSize:19,fontWeight:300,lineHeight:1,zIndex:940,
           display:'flex',alignItems:'center',justifyContent:'center',
           boxShadow:'0 4px 14px rgba(83,74,183,0.38), 0 1px 3px rgba(15,15,35,0.12)',
           transition:'transform 0.15s,background-color 0.15s'}}
@@ -4260,10 +4268,10 @@ function HeaderBanner(){
   const tdN=(state.todos||[]).filter(t=>wd.includes(t.date)&&!t.done).length;
   const todayEv=(state.weeklyEvents||[]).filter(e=>e.date===dk).length;
   return(
-    <div style={{background:'linear-gradient(105deg,#534AB7 0%,#6E63D6 100%)',borderRadius:12,padding:'12px 20px',
+    <div style={{background:'linear-gradient(105deg,#534AB7 0%,#6E63D6 100%)',borderRadius:10,padding:'7px 16px',
       display:'flex',alignItems:'center',gap:14,flexShrink:0,flexWrap:'wrap',
       boxShadow:'0 2px 10px rgba(83,74,183,0.28)'}}>
-      <span style={{fontSize:18,fontWeight:600,color:'#fff',letterSpacing:'-0.3px'}}>{today.getMonth()+1}월 {today.getDate()}일 {days[today.getDay()]}요일</span>
+      <span style={{fontSize:14,fontWeight:600,color:'#fff',letterSpacing:'-0.3px'}}>{today.getMonth()+1}월 {today.getDate()}일 {days[today.getDay()]}요일</span>
       <span style={{fontSize:11.5,color:'#DAD7F7'}}>오늘 일정 {todayEv}개 · 이번 주 {evN}개 · 회의 {mtN}건 · 남은 할 일 {tdN}개</span>
       <span style={{marginLeft:'auto',fontSize:11,color:'#C5C0F0',fontWeight:600,letterSpacing:'1px'}}>{today.getFullYear()}</span>
     </div>
@@ -4272,7 +4280,7 @@ function HeaderBanner(){
 function MainArea(){
   const{leftWidth,leftCollapsed,rightDockOpen,dockW}=useLayout();
   return(
-    <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',marginRight:rightDockOpen?(dockW||308)+16:0,transition:'margin-left 0.2s ease,margin-right 0.2s ease'}}>
+    <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-left 0.2s ease'}}>
       <HeaderBanner/>
       <WeeklySection/>
       <CalendarSection/>
@@ -4284,8 +4292,8 @@ function PanelToggle(){
   const{leftWidth,leftCollapsed,setLeftCollapsed}=useLayout();
   return(
     <button onClick={()=>setLeftCollapsed(c=>!c)} title={leftCollapsed?'패널 열기':'패널 닫기'}
-      style={{position:'fixed',top:80,left:leftCollapsed?0:leftWidth,
-        width:16,height:36,backgroundColor:'#F0F0F1',borderRadius:'0 7px 7px 0',zIndex:200,
+      style={{position:'fixed',top:132,left:leftCollapsed?0:leftWidth-1,
+        width:14,height:40,backgroundColor:'#F0F0F1',borderRadius:'0 7px 7px 0',zIndex:200,
         display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#534AB7',
         border:'0.5px solid #D5D2EE',borderLeft:'none',cursor:'pointer',
         transition:'left 0.2s ease',padding:0,
@@ -4345,8 +4353,6 @@ function App(){
   const[dockW,setDockW]=React.useState(()=>lsLoad('dockW',308));
   const calendarScrollRef=React.useRef(null);
   const scrollToTodayRef=React.useRef(null);
-  React.useEffect(()=>{if(activeNoteId)setRightDockOpen(true);},[activeNoteId]);
-  React.useEffect(()=>{if(selectedStickerId)setRightDockOpen(true);},[selectedStickerId]);
   return(
     <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId,rightDockOpen,setRightDockOpen,dockW,setDockW}}>
       <StoreProvider>
