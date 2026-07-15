@@ -854,6 +854,7 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
   const textColor=note.textColor||(isText?'#1A1A1A':'#333');
   const bgColor=isText?(note.bgColor||'transparent'):(note.color||STICKY_COLORS[0]);
   const edRef=React.useRef(null);
+  const[editing,setEditing]=React.useState(false);
   const rootRef=React.useRef(null);
 
   /* contentEditable 초기화 (plain text → HTML 마이그레이션) */
@@ -911,7 +912,6 @@ function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
 
   const tbBtn={color:'#3F3E45',fontSize:11.5,background:'none',border:'none',minWidth:22,height:22,padding:'0 4px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',lineHeight:1,display:'inline-flex',alignItems:'center',justifyContent:'center',flexShrink:0};
   const[openPicker,setOpenPicker]=React.useState(null);
-  const[editing,setEditing]=React.useState(false);
   React.useEffect(()=>{if(!isActive)setEditing(false);},[isActive]);
   const SN_TEXT_COLORS=['#1A1A1A','#534AB7','#1B7FDB','#2FAE60','#E8792B','#E24B4A','#8B5CF6','#9A9A9A','#fff'];
   const SN_HL_COLORS=['#FFF176','#CCFF90','#FFB3C6','#80DEEA','#FFCC80','#CF9FFF'];
