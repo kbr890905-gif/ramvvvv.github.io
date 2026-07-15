@@ -4450,28 +4450,57 @@ function MobileApp(){
             {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:i===6?'#E24B4A':i===5?'#4A7BC4':C.t2}}>{d}</div>)}
           </div>
           <div style={{padding:'0 6px',flexShrink:0}}>
-            {Array.from({length:cells.length/7}).map((_,r)=>(
-              <div key={r} style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)'}}>
-                {cells.slice(r*7,r*7+7).map((d,ci)=>{
-                  if(!d)return<div key={ci} style={{height:52}}/>;
-                  const dk=`${navY}-${String(navM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            {Array.from({length:cells.length/7}).map((_,r)=>{
+              const rowCells=cells.slice(r*7,r*7+7);
+              const rowDks=rowCells.map(d=>d?`${navY}-${String(navM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`:null);
+              const realDks=rowDks.filter(Boolean);
+              const wStart=realDks[0],wEnd=realDks[realDks.length-1];
+              const rowBlocks=(state.multiDayBlocks||[]).filter(b=>{
+                if(b.category==='work'&&!state.workVisible)return false;
+                if(b.category==='personal'&&!state.personalVisible)return false;
+                return b.startDate<=wEnd&&b.endDate>=wStart;
+              });
+              const lanes=[];
+              const placed=rowBlocks.map(b=>{
+                let sc=rowDks.findIndex(dk=>dk&&dk>=b.startDate&&dk<=b.endDate);if(sc<0)sc=0;
+                let ec=sc;for(let i=6;i>=0;i--){if(rowDks[i]&&rowDks[i]>=b.startDate&&rowDks[i]<=b.endDate){ec=i;break;}}
+                let lane=0;while(lanes[lane]&&lanes[lane].some(x=>!(x.ec<sc||x.sc>ec)))lane++;
+                (lanes[lane]=lanes[lane]||[]).push({sc,ec});
+                return{b,sc,ec,lane,isS:b.startDate>=wStart,isE:b.endDate<=wEnd};
+              });
+              const laneN=lanes.length;const barH=13;
+              return(
+              <div key={r} style={{position:'relative'}}>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)'}}>
+                {rowCells.map((d,ci)=>{
+                  if(!d)return<div key={ci} style={{minHeight:52+laneN*barH}}/>;
+                  const dk=rowDks[ci];
                   const dObj=new Date(navY,navM,d);
                   const isTd=dk===toDateKey(today);const isSel=dk===selDate;
                   const hol=getHoliday(dk);
                   const isRed=(dObj.getDay()===0||hol)&&!isTd;const isBlue=dObj.getDay()===6&&!isTd&&!hol;
-                  const evs=evByDate[dk]||[];
-                  const blks=blocksOn(dk);
-                  const dots=[...blks,...evs].slice(0,4);
+                  const evs=evByDate[dk]||[];const dots=evs.slice(0,4);
                   return(
-                    <div key={ci} onClick={()=>setSelDate(dk)} style={{height:52,display:'flex',flexDirection:'column',alignItems:'center',paddingTop:5,cursor:'pointer',borderRadius:10,backgroundColor:isSel&&!isTd?'#EFEBE2':'transparent'}}>
+                    <div key={ci} onClick={()=>setSelDate(dk)} style={{minHeight:52+laneN*barH,display:'flex',flexDirection:'column',alignItems:'center',paddingTop:5,cursor:'pointer',borderRadius:10,backgroundColor:isSel&&!isTd?'#EFEBE2':'transparent'}}>
                       <span style={{fontSize:14,fontWeight:isTd?700:500,width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontVariantNumeric:'tabular-nums'}}>{d}</span>
-                      <div style={{display:'flex',gap:3,marginTop:3,height:6,alignItems:'center'}}>
+                      <div style={{height:laneN*barH}}/>
+                      <div style={{display:'flex',gap:3,marginTop:2,height:6,alignItems:'center'}}>
                         {dots.map((ev,i)=>{const cs=catStyle[ev.category]||catStyle.work;return<span key={i} style={{width:5,height:5,borderRadius:'50%',backgroundColor:cs.dot||cs.text}}/>;})}
                       </div>
                     </div>);
                 })}
-              </div>
-            ))}
+                </div>
+                {placed.map(({b,sc,ec,lane,isS,isE})=>{const cs=catStyle[b.category]||catStyle.work;return(
+                  <div key={b.id} onClick={()=>setMdEdit(b)}
+                    style={{position:'absolute',top:32+lane*barH,left:`calc(${sc}/7*100% + 2px)`,width:`calc(${ec-sc+1}/7*100% - 4px)`,height:barH-2,
+                      backgroundColor:cs.bg,color:cs.text,fontSize:9.5,fontWeight:600,lineHeight:`${barH-2}px`,
+                      paddingLeft:isS?6:4,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',cursor:'pointer',
+                      boxShadow:isS?`inset 2.5px 0 0 ${cs.dot||cs.text}`:'none',
+                      borderRadius:isS&&isE?5:isS?'5px 0 0 5px':isE?'0 5px 5px 0':0}}>
+                    {isS?b.title:''}
+                  </div>);})}
+              </div>);
+            })}
           </div>
           {/* Events list for selected date */}
           <div style={{flex:1,backgroundColor:C.card,borderTop:`0.5px solid ${C.line}`,marginTop:8,borderRadius:'18px 18px 0 0',padding:'14px 18px 20px',boxShadow:'0 -2px 12px rgba(20,20,40,0.04)'}}>
