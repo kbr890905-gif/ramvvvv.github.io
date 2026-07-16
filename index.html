@@ -688,6 +688,7 @@ function StoreProvider({children}){
   const [state,rawDispatch]=useReducer(reducer,initialState);
   const historyRef=useRef([]);
   const redoRef=useRef([]);
+  const dirtyRef=useRef(false);
   const stateRef=useRef(state);
   // cloudLoadedRef: cloudLoad 완료 전에는 cloudSave 차단 (race condition 방지)
   const cloudLoadedRef=useRef(false);
@@ -695,6 +696,7 @@ function StoreProvider({children}){
   const dispatch=useCallback((action)=>{
     historyRef.current=[...historyRef.current.slice(-49),stateRef.current];
     redoRef.current=[];
+    dirtyRef.current=true;
     rawDispatch(action);
   },[rawDispatch]);
   const undo=useCallback(()=>{
@@ -753,9 +755,7 @@ function StoreProvider({children}){
       return;
     }
     cloudLoad(apiKey,binId).then(s=>{
-      const localMod=+(localStorage.getItem('lastMod')||0);
-      const cloudMod=+((s&&s._mod)||0);
-      if(s&&cloudMod>=localMod){rawDispatch({type:'RESTORE_FULL',state:s});doMigrate(s.customLayers);}
+      if(s&&!dirtyRef.current){rawDispatch({type:'RESTORE_FULL',state:s});doMigrate(s.customLayers);}
       else{doMigrate(stateRef.current.customLayers);}
       localStorage.setItem(CLOUD_STATUS,'ok');
     }).catch(()=>{
@@ -792,7 +792,7 @@ function StoreProvider({children}){
       const{apiKey,binId}=cloudGetCreds();
       if(apiKey&&binId&&cloudLoadedRef.current){
         cloudSave(apiKey,binId,{...state,_mod:_now})
-          .then(()=>localStorage.setItem(CLOUD_STATUS,'ok'))
+          .then(()=>{dirtyRef.current=false;localStorage.setItem(CLOUD_STATUS,'ok');})
           .catch(()=>localStorage.setItem(CLOUD_STATUS,'error'));
       }
     },300);
