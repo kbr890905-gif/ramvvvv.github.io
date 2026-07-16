@@ -67,7 +67,7 @@
 <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>
 <script>
 // 노트북 연결 링크 자동 설정: ?k=base64(apiKey)&b=base64(binId)
-(function(){try{var p=new URLSearchParams(window.location.search),k=p.get('k'),b=p.get('b');if(k&&b){localStorage.setItem('cloudApiKey',atob(decodeURIComponent(k)));localStorage.setItem('cloudBinId',atob(decodeURIComponent(b)));localStorage.setItem('cloudStatus','ok');window.history.replaceState({},'',window.location.pathname);}}catch(e){}}());
+(function(){try{var p=new URLSearchParams(window.location.search),k=p.get('k'),b=p.get('b');if(k&&b){localStorage.setItem('cloudApiKey',atob(decodeURIComponent(k)));localStorage.setItem('cloudBinId',atob(decodeURIComponent(b)));localStorage.setItem('cloudStatus','ok');}var fa=p.get('fam'),fbb=p.get('fb'),fll=p.get('fl');if(fa&&fbb){localStorage.setItem('famApiKey',atob(decodeURIComponent(fa)));localStorage.setItem('famBinId',atob(decodeURIComponent(fbb)));if(fll)localStorage.setItem('familyLayers',atob(decodeURIComponent(fll)));}if(k||fa){window.history.replaceState({},'',window.location.pathname);}}catch(e){}}());
 </script>
 <script type="text/babel" data-presets="react">
 const {useState,useEffect,useContext,createContext,useRef,useCallback,useReducer,useMemo} = React;
@@ -191,7 +191,7 @@ const initialState={
   monthlyHighlights:lsLoad('monthlyHighlights',[]),projectMemos:lsLoad('projectMemos',{}),
   weeklyEvents:lsLoad('weeklyEvents',[]),
   projectFolders:lsLoad('projectFolders',[]),
-  todos:lsLoad('todos',[]),weekMemos:lsLoad('weekMemos',{}),
+  todos:lsLoad('todos',[]),weekMemos:lsLoad('weekMemos',{}),eventTombstones:lsLoad('eventTombstones',{}),
   weekOffset:0,weeklyCollapsed:lsLoad('weeklyCollapsed',false),hlYear:new Date().getFullYear(),hlMonth:new Date().getMonth(),
   multiDayBlocks:lsLoad('multiDayBlocks',[]),
   stickyNotes:lsLoad('stickyNotes',[]),
@@ -229,9 +229,11 @@ function reducer(state,action){
     case 'UPDATE_MEMO':return{...state,projectMemos:{...state.projectMemos,[action.projectId]:(getMemoList(state.projectMemos[action.projectId])||[]).map(m=>m.id===action.id?{...m,...action.updates}:m)}};
     case 'DELETE_MEMO':return{...state,projectMemos:{...state.projectMemos,[action.projectId]:(getMemoList(state.projectMemos[action.projectId])||[]).filter(m=>m.id!==action.id)}};
     case 'REORDER_MEMOS':return{...state,projectMemos:{...state.projectMemos,[action.projectId]:action.memos}};
-    case 'ADD_EVENT':return{...state,weeklyEvents:[...state.weeklyEvents,{id:uid(),...action.event}]};
-    case 'UPDATE_EVENT':return{...state,weeklyEvents:state.weeklyEvents.map(e=>e.id===action.id?{...e,...action.updates}:e)};
-    case 'DELETE_EVENT':return{...state,weeklyEvents:state.weeklyEvents.filter(e=>e.id!==action.id)};
+    case 'ADD_EVENT':return{...state,weeklyEvents:[...state.weeklyEvents,{id:uid(),updatedAt:Date.now(),...action.event}]};
+    case 'UPDATE_EVENT':return{...state,weeklyEvents:state.weeklyEvents.map(e=>e.id===action.id?{...e,...action.updates,updatedAt:Date.now()}:e)};
+    case 'DELETE_EVENT':return{...state,weeklyEvents:state.weeklyEvents.filter(e=>e.id!==action.id),eventTombstones:{...(state.eventTombstones||{}),[action.id]:Date.now()}};
+    case 'SET_WEEKLY_EVENTS':return{...state,weeklyEvents:action.events};
+    case 'ENSURE_CUSTOM_LAYER':{if((state.customLayers||[]).some(l=>l.id===action.layer.id))return state;const cl=[...(state.customLayers||[]),action.layer];const lo=(state.layerOrder||[]).includes(action.layer.id)?state.layerOrder:[...(state.layerOrder||[]),action.layer.id];return{...state,customLayers:cl,layerOrder:lo};}
     case 'ADD_TODO':return{...state,todos:[...state.todos,{id:uid(),date:action.date,text:action.text,done:false,category:action.category||'work'}]};
     case 'UPDATE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,...action.updates}:t)};
     case 'TOGGLE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,done:!t.done}:t)};
@@ -350,6 +352,51 @@ async function outlookDisconnect(clientId){
   _msalApp=null;
 }
 
+// ─── FAMILY SHARE ───────────────────────────
+function FamilyShareCard({showToast}){
+  const{state}=useStore();
+  const[on,setOn]=React.useState(!!localStorage.getItem('famBinId'));
+  const[busy,setBusy]=React.useState(false);
+  const[sel,setSel]=React.useState(()=>{try{return JSON.parse(localStorage.getItem('familyLayers')||'null')||(function(){const a=['personal'];(state.customLayers||[]).forEach(l=>{if((l.name||'').includes('기념일')||(l.name||'').includes('생일'))a.push(l.id);});return a;})();}catch(e){return['personal'];}});
+  const allLayers=[{id:'work',name:state.workLabel||'업무'},{id:'personal',name:state.personalLabel||'개인'},...((state.customLayers||[]).filter(l=>(state.layerOrder||[]).includes(l.id)))];
+  const persist=(arr)=>{setSel(arr);localStorage.setItem('familyLayers',JSON.stringify(arr));};
+  const toggle=(id)=>{persist(sel.includes(id)?sel.filter(x=>x!==id):[...sel,id]);};
+  const start=async()=>{
+    const apiKey=localStorage.getItem('cloudApiKey');
+    if(!apiKey){showToast('먼저 아래 클라우드 동기화를 연결해 주세요','error');return;}
+    setBusy(true);
+    try{const binId=await famCreate(apiKey);localStorage.setItem('famApiKey',apiKey);localStorage.setItem('famBinId',binId);localStorage.setItem('familyLayers',JSON.stringify(sel));setOn(true);showToast('가족 공유 시작됨! 초대 링크를 복사해 전달하세요','success');}
+    catch(e){showToast('시작 실패: '+e.message,'error');}
+    setBusy(false);
+  };
+  const stop=()=>{if(!confirm('가족 공유를 끌까요? (공유 저장소 연결만 해제되며 일정은 유지됩니다)'))return;localStorage.removeItem('famApiKey');localStorage.removeItem('famBinId');setOn(false);showToast('가족 공유 해제','info');};
+  const copyLink=()=>{
+    const k=encodeURIComponent(btoa(localStorage.getItem('famApiKey')||''));
+    const b=encodeURIComponent(btoa(localStorage.getItem('famBinId')||''));
+    const l=encodeURIComponent(btoa(JSON.stringify(sel)));
+    const url=location.origin+location.pathname+'?fam='+k+'&fb='+b+'&fl='+l;
+    if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>showToast('가족 초대 링크 복사됨! 카톡 등으로 전달하세요','success'));
+    else prompt('가족에게 이 링크를 전달하세요',url);
+  };
+  return(
+    <div style={{border:'0.5px solid #E3B9CC',borderRadius:10,padding:'14px 16px',backgroundColor:'#FDF7FA'}}>
+      <div style={{fontSize:13,fontWeight:700,color:'#9B3B6A',marginBottom:8}}>👪 가족 공유 {on?'· 켜짐':''}</div>
+      <div style={{fontSize:11.5,color:'#8C6076',lineHeight:1.6,marginBottom:10}}>선택한 레이어의 일정만 가족과 양방향으로 공유됩니다. 30초마다 자동 동기화되고, 서로 추가·수정한 일정이 계속 반영돼요. (업무·회의록 등 나머지는 비공개)</div>
+      <div style={{fontSize:11,color:'#9A9A9A',marginBottom:5}}>공유할 레이어</div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+        {allLayers.map(l=>{const a=sel.includes(l.id);return(<button key={l.id} onClick={()=>toggle(l.id)} style={{fontSize:11.5,padding:'4px 11px',borderRadius:16,border:`0.5px solid ${a?'#9B3B6A':'#E0DAD0'}`,backgroundColor:a?'#FBEAF1':'#fff',color:a?'#9B3B6A':'#ADA69C',fontWeight:a?600:400}}>{l.name}</button>);})}
+      </div>
+      {!on?(
+        <button disabled={busy} onClick={start} style={{fontSize:12.5,color:'#fff',padding:'8px 16px',backgroundColor:'#9B3B6A',borderRadius:8,fontWeight:600,opacity:busy?0.6:1}}>{busy?'준비 중...':'가족 공유 시작'}</button>
+      ):(
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <button onClick={copyLink} style={{fontSize:12.5,color:'#fff',padding:'8px 16px',backgroundColor:'#9B3B6A',borderRadius:8,fontWeight:600}}>🔗 가족 초대 링크 복사</button>
+          <button onClick={stop} style={{fontSize:12.5,color:'#9B3B6A',padding:'8px 14px',border:'0.5px solid #E3B9CC',borderRadius:8,backgroundColor:'#fff'}}>공유 끄기</button>
+        </div>
+      )}
+    </div>
+  );
+}
 // ─── SETTINGS MODAL ─────────────────────────
 function SettingsModal({onClose}){
   const{state,dispatch}=useStore();
@@ -591,6 +638,7 @@ function SettingsModal({onClose}){
           )}
           {tab==='cloud'&&(
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
+              <FamilyShareCard showToast={showToast}/>
               {cloudConnected?(
                 <>
                   <div style={{backgroundColor:'#EAF3DE',borderRadius:8,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -683,12 +731,63 @@ async function cloudLoad(apiKey,binId){
   const d=await r.json();
   return d.record?.state||d.record;
 }
+const FAM_K='famApiKey',FAM_B='famBinId',FAM_L='familyLayers';
+function famGetCreds(){return{apiKey:localStorage.getItem(FAM_K)||'',binId:localStorage.getItem(FAM_B)||''};}
+function famLayers(){try{return JSON.parse(localStorage.getItem(FAM_L)||'["personal"]');}catch(e){return['personal'];}}
+async function famCreate(apiKey){
+  const r=await fetch('https://api.jsonbin.io/v3/b',{method:'POST',headers:{'Content-Type':'application/json','X-Master-Key':apiKey,'X-Bin-Name':'boram-family','X-Bin-Private':'true'},body:JSON.stringify({v:1,_mod:Date.now(),items:{},layers:{}})});
+  if(!r.ok)throw new Error('가족 저장소 생성 실패: '+r.status);
+  const d=await r.json();return d.metadata.id;
+}
+async function famLoad(apiKey,binId){const r=await fetch('https://api.jsonbin.io/v3/b/'+binId+'/latest',{headers:{'X-Master-Key':apiKey}});if(!r.ok)throw new Error('fam load '+r.status);const d=await r.json();return d.record;}
+async function famSave(apiKey,binId,obj){const r=await fetch('https://api.jsonbin.io/v3/b/'+binId,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':apiKey},body:JSON.stringify(obj)});if(!r.ok)throw new Error('fam save '+r.status);}
 
 function StoreProvider({children}){
   const [state,rawDispatch]=useReducer(reducer,initialState);
   const historyRef=useRef([]);
   const redoRef=useRef([]);
   const dirtyRef=useRef(false);
+  const famBusyRef=useRef(false);
+  const familySync=useCallback(async()=>{
+    const{apiKey,binId}=famGetCreds();if(!apiKey||!binId||famBusyRef.current)return;
+    famBusyRef.current=true;
+    try{
+      const shared=new Set(famLayers());
+      const st=stateRef.current;
+      const tomb=st.eventTombstones||{};
+      const remote=await famLoad(apiKey,binId).catch(()=>null);
+      const rItems=(remote&&remote.items)||{};
+      const rLayers=(remote&&remote.layers)||{};
+      const local={};
+      (st.weeklyEvents||[]).forEach(e=>{if(shared.has(e.category)&&!e.isOutlook)local[e.id]={id:e.id,date:e.date,time:e.time||'',title:e.title,category:e.category,updatedAt:e.updatedAt||0};});
+      const merged={};const ids=new Set([...Object.keys(rItems),...Object.keys(local)]);
+      ids.forEach(id=>{
+        const r=rItems[id],l=local[id];
+        const rt=r?(r.updatedAt||0):-1,lt=l?(l.updatedAt||0):-1,tt=tomb[id]||0;
+        if(tt>rt&&tt>=lt){merged[id]={deleted:true,updatedAt:tt};return;}
+        if(r&&r.deleted&&(r.updatedAt||0)>=lt){merged[id]={deleted:true,updatedAt:r.updatedAt};return;}
+        const pick=rt>=lt?r:l;
+        if(pick)merged[id]=pick.deleted?{deleted:true,updatedAt:pick.updatedAt}:{id,date:pick.date,time:pick.time||'',title:pick.title,category:pick.category,updatedAt:pick.updatedAt||0};
+      });
+      // 공유 레이어 정의 병합 (커스텀 레이어 색/이름)
+      const outLayers={...rLayers};
+      shared.forEach(cid=>{if(cid==='personal'||cid==='work')return;const cl=(st.customLayers||[]).find(l=>l.id===cid);if(cl)outLayers[cid]={id:cl.id,name:cl.name,color:cl.color};});
+      Object.values(rLayers).forEach(l=>{if(l&&l.id)rawDispatch({type:'ENSURE_CUSTOM_LAYER',layer:{id:l.id,name:l.name,color:l.color,visible:true}});});
+      // 로컬 적용: 공유 이벤트를 merged 기준으로 교체
+      const keep=(st.weeklyEvents||[]).filter(e=>!(shared.has(e.category)&&!e.isOutlook));
+      const sharedEv=Object.values(merged).filter(m=>!m.deleted).map(m=>({id:m.id,date:m.date,time:m.time||undefined,title:m.title,category:m.category,isOutlook:false,projectId:null,updatedAt:m.updatedAt}));
+      const sig=JSON.stringify(sharedEv.map(e=>[e.id,e.date,e.time,e.title,e.category,e.updatedAt]).sort());
+      const curSig=JSON.stringify((st.weeklyEvents||[]).filter(e=>shared.has(e.category)&&!e.isOutlook).map(e=>[e.id,e.date,e.time||undefined,e.title,e.category,e.updatedAt||0]).sort());
+      if(sig!==curSig)rawDispatch({type:'SET_WEEKLY_EVENTS',events:[...keep,...sharedEv]});
+      await famSave(apiKey,binId,{v:1,_mod:Date.now(),items:merged,layers:outLayers}).catch(()=>{});
+    }finally{famBusyRef.current=false;}
+  },[rawDispatch]);
+  useEffect(()=>{
+    const{apiKey,binId}=famGetCreds();if(!apiKey||!binId)return;
+    const t0=setTimeout(familySync,2500);
+    const iv=setInterval(familySync,30000);
+    return()=>{clearTimeout(t0);clearInterval(iv);};
+  },[familySync]);
   const stateRef=useRef(state);
   // cloudLoadedRef: cloudLoad 완료 전에는 cloudSave 차단 (race condition 방지)
   const cloudLoadedRef=useRef(false);
@@ -784,10 +883,11 @@ function StoreProvider({children}){
       const LS_KEYS=['workVisible','personalVisible','projects','projectFolders','monthlyHighlights','projectMemos',
         'weeklyEvents','todos','weekMemos','weeklyCollapsed','multiDayBlocks','outlookVisible','outlookColor',
         'customLayers','layerOrder','meetingNotes','stickyNotes','placedStickers','workLabel','personalLabel','workColor','personalColor',
-        'titleText','topBarBg','topBarImg',
+        'titleText','topBarBg','topBarImg','eventTombstones',
         'outlookUser','outlookClientId','outlookSyncedAt'];
       LS_KEYS.forEach(k=>lsSave(k,state[k]));
       const _now=Date.now();localStorage.setItem('lastMod',String(_now));
+      {const fc=famGetCreds();if(fc.apiKey&&fc.binId){if(window.__famT)clearTimeout(window.__famT);window.__famT=setTimeout(()=>{try{familySync();}catch(e){}},2000);}}
       // Also push to cloud if configured — cloudLoad 완료 후에만 실행
       const{apiKey,binId}=cloudGetCreds();
       if(apiKey&&binId&&cloudLoadedRef.current){
