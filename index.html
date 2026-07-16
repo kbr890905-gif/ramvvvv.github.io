@@ -781,8 +781,8 @@ function StoreProvider({children}){
       ids.forEach(id=>{
         const r=rItems[id],l=local[id];
         const rt=r?(r.updatedAt||0):-1,lt=l?(l.updatedAt||0):-1,tt=tomb[id]||0;
-        if(tt>rt&&tt>=lt){merged[id]={deleted:true,updatedAt:tt};return;}
-        if(r&&r.deleted&&(r.updatedAt||0)>=lt){merged[id]={deleted:true,updatedAt:r.updatedAt};return;}
+        if(tt>0&&tt>rt&&tt>=lt){merged[id]={deleted:true,updatedAt:tt};return;}
+        if(r&&r.deleted&&(r.updatedAt||0)>0&&(r.updatedAt||0)>=lt){merged[id]={deleted:true,updatedAt:r.updatedAt};return;}
         const pick=rt>=lt?r:l;
         if(pick)merged[id]=pick.deleted?{deleted:true,updatedAt:pick.updatedAt}:{id,date:pick.date,time:pick.time||'',title:pick.title,category:pick.category,updatedAt:pick.updatedAt||0};
       });
