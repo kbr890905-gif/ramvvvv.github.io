@@ -927,6 +927,19 @@ function StoreProvider({children}){
         localStorage.setItem('monoV4','1');
         dirtyRef.current=true;
       }
+      if(!localStorage.getItem('monoV5')){
+        try{
+          const S=stateRef.current;
+          const RE=[/rgb\(\s*255,\s*241,\s*118\s*\)/g,/rgb\(\s*204,\s*255,\s*144\s*\)/g,/rgb\(\s*255,\s*179,\s*198\s*\)/g,/rgb\(\s*128,\s*222,\s*234\s*\)/g,/rgb\(\s*255,\s*204,\s*128\s*\)/g,/rgb\(\s*207,\s*159,\s*255\s*\)/g];
+          const HEX=['#FFF176','#CCFF90','#FFB3C6','#80DEEA','#FFCC80','#CF9FFF'];
+          const NEUT='rgb(234, 234, 230)';
+          const fix=(o)=>{if(o==null)return o;let s=JSON.stringify(o);RE.forEach(re=>{s=s.replace(re,NEUT);});HEX.forEach(h=>{s=s.split(h).join('#EAEAE6');s=s.split(h.toLowerCase()).join('#EAEAE6');});return JSON.parse(s);};
+          const patch={};['projectMemos','weekMemos','stickyNotes','meetingNotes','monthlyHighlights','projects'].forEach(k=>{if(S[k]!=null)patch[k]=fix(S[k]);});
+          rawDispatch({type:'RESTORE_FULL',state:patch});
+        }catch(e){}
+        localStorage.setItem('monoV5','1');
+        dirtyRef.current=true;
+      }
       localStorage.setItem(CLOUD_STATUS,'ok');
     }).catch(()=>{
       localStorage.setItem(CLOUD_STATUS,'error');
