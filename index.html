@@ -75,7 +75,7 @@ const {useState,useEffect,useContext,createContext,useRef,useCallback,useReducer
 if(!localStorage.getItem('monoSkinV1')){
   try{
     localStorage.setItem('workColor',JSON.stringify('#565651'));
-    localStorage.setItem('personalColor',JSON.stringify('#4F6DA6'));
+    localStorage.setItem('personalColor',JSON.stringify('#C05A3B'));
     localStorage.setItem('outlookColor',JSON.stringify('#8A7A57'));
     if(localStorage.getItem('topBarBg')&&JSON.parse(localStorage.getItem('topBarBg'))==='#1F1F1E')localStorage.setItem('topBarBg',JSON.stringify('#ffffff'));
   }catch(e){}
@@ -105,7 +105,7 @@ const PROJECT_COLORS = [
 const DAY_NAMES = ['월','화','수','목','금','토','일'];
 const CAT_STYLE = {
   work:     {bg:'#F0F0EE',text:'#565651',border:'#D9D9D4',dot:'#565651'},
-  personal: {bg:'#EAEEF4',text:'#4F6DA6',border:'#C3CEDE',dot:'#4F6DA6'},
+  personal: {bg:'#FCEEE9',text:'#C05A3B',border:'#EFC4B5',dot:'#C05A3B'},
   outlook:  {bg:'#F1F1EF',text:'#6E6E6A',border:'#E0E0DD',dot:'#8C8C87'},
 };
 
@@ -192,7 +192,7 @@ const initProjects=[{id:uid(),name:'업무 프로젝트',color:'#7F77DD',layer:'
 const initialState={
   workVisible:lsLoad('workVisible',true),personalVisible:lsLoad('personalVisible',true),
   workLabel:lsLoad('workLabel','업무'),personalLabel:lsLoad('personalLabel','개인'),
-  workColor:lsLoad('workColor','#565651'),personalColor:lsLoad('personalColor','#4F6DA6'),
+  workColor:lsLoad('workColor','#565651'),personalColor:lsLoad('personalColor','#C05A3B'),
   titleText:lsLoad('titleText','보람 스케줄러'),topBarBg:lsLoad('topBarBg','#ffffff'),topBarImg:lsLoad('topBarImg',''),
   outlookVisible:lsLoad('outlookVisible',true),outlookColor:lsLoad('outlookColor','#8C8C87'),
   customLayers:lsLoad('customLayers',[]),
@@ -233,7 +233,7 @@ function reducer(state,action){
     case 'ADD_HIGHLIGHT':return{...state,monthlyHighlights:[...state.monthlyHighlights,{id:uid(),projectId:null,date:'',text:'',yearMonth:action.yearMonth||''}]};
     case 'ADD_HIGHLIGHT_PREFILLED':return{...state,monthlyHighlights:[...state.monthlyHighlights,{id:uid(),projectId:action.projectId||null,date:action.date||'',text:action.text||'',yearMonth:action.yearMonth||''}]};
     case 'UPDATE_HIGHLIGHT':return{...state,monthlyHighlights:state.monthlyHighlights.map(h=>h.id===action.id?{...h,...action.updates}:h)};
-    case 'DELETE_HIGHLIGHT':return{...state,monthlyHighlights:state.monthlyHighlights.filter(h=>h.id!==action.id)};
+    case 'DELETE_HIGHLIGHT':return{...state,monthlyHighlights:state.monthlyHighlights.filter(h=>h.id!==action.id)};case 'TOGGLE_HIGHLIGHT':return{...state,monthlyHighlights:state.monthlyHighlights.map(h=>h.id===action.id?{...h,done:!h.done}:h)};
     case 'REORDER_PROJECTS':return{...state,projects:action.projects};
     case 'UPDATE_MEMOS':return{...state,projectMemos:{...state.projectMemos,[action.projectId]:action.lines}};
     case 'ADD_MEMO':{const newMemo={id:uid(),title:action.title||'메모',body:'',collapsed:false};return{...state,projectMemos:{...state.projectMemos,[action.projectId]:[...(getMemoList(state.projectMemos[action.projectId])||[]),newMemo]}};}
@@ -940,6 +940,11 @@ function StoreProvider({children}){
         localStorage.setItem('monoV5','1');
         dirtyRef.current=true;
       }
+      if(!localStorage.getItem('monoV6')){
+        rawDispatch({type:'UPDATE_PERSONAL_CAT',color:'#C05A3B'});
+        localStorage.setItem('monoV6','1');
+        dirtyRef.current=true;
+      }
       localStorage.setItem(CLOUD_STATUS,'ok');
     }).catch(()=>{
       localStorage.setItem(CLOUD_STATUS,'error');
@@ -1023,7 +1028,7 @@ const useToast=()=>useContext(ToastContext);
 const useDynCatStyle=()=>{
   const{state}=useStore();
   const wc=state.workColor||'#565651';
-  const pc=state.personalColor||'#4F6DA6';
+  const pc=state.personalColor||'#C05A3B';
   const oc=state.outlookColor||'#8C8C87';
   const base={
     work:{bg:lighten(wc,0.88),text:wc,border:lighten(wc,0.55),dot:wc},
@@ -1950,19 +1955,22 @@ function TopBar(){
 
 
 function HighlightItem({highlight,project}){
-  const{dispatch}=useStore();const[hovered,setHovered]=useState(false);const[pickerOpen,setPickerOpen]=useState(false);const barColor=project?project.color:'#E0E0E0';const textRef=useRef(null);
+  const{dispatch}=useStore();const[hovered,setHovered]=useState(false);const[pickerOpen,setPickerOpen]=useState(false);const barColor=project?project.color:'#D4D4CE';const textRef=useRef(null);const done=!!highlight.done;
   useEffect(()=>{if(!highlight.text&&!highlight.date)textRef.current?.focus();},[]);
   return(
-    <div style={{position:'relative',marginBottom:2}} onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
-      <div style={{display:'flex',alignItems:'stretch',borderRadius:4,overflow:'hidden',border:'0.5px solid #F0F0F0'}}>
-        <div style={{flexShrink:0}}>
-          <div onClick={()=>setPickerOpen(v=>!v)} style={{width:3,backgroundColor:barColor,minHeight:32,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.opacity='0.7'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}/>
+    <div style={{position:'relative',marginBottom:2,opacity:done?0.5:1,transition:'opacity 0.15s'}} onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
+      <div style={{display:'flex',alignItems:'center',borderRadius:4,overflow:'hidden',border:'0.5px solid #F0F0F0'}}>
+        <div style={{flexShrink:0,alignSelf:'stretch',display:'flex',alignItems:'center'}}>
+          <div onClick={()=>setPickerOpen(v=>!v)} style={{width:3,alignSelf:'stretch',backgroundColor:barColor,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.opacity='0.7'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}/>
         </div>
-        <div style={{flex:1,padding:'4px 7px',display:'flex',flexDirection:'column',gap:2}}>
+        <button onClick={()=>dispatch({type:'TOGGLE_HIGHLIGHT',id:highlight.id})} title={done?'미완료로 변경':'완료 표시'} style={{flexShrink:0,width:15,height:15,borderRadius:'50%',border:`1.5px solid ${done?barColor:'#D4D4CE'}`,backgroundColor:done?barColor:'transparent',margin:'0 8px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s',padding:0}}>
+          {done&&<span style={{fontSize:8,color:'#fff',lineHeight:1,fontWeight:700}}>✓</span>}
+        </button>
+        <div style={{flex:1,padding:'4px 6px 4px 0',display:'flex',flexDirection:'column',gap:2}}>
           {project&&<span style={{fontSize:10,color:barColor,fontWeight:600,lineHeight:1.3}}>{project.name}</span>}
           <div style={{display:'flex',alignItems:'center',gap:6}}>
-            <input value={highlight.date} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{date:e.target.value}})} placeholder="날짜" style={{width:48,fontSize:10,color:'#AAA',borderBottom:'0.5px solid #F0F0F0',flexShrink:0}}/>
-            <input ref={textRef} value={highlight.text} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{text:e.target.value}})} placeholder="내용" style={{flex:1,fontSize:11,color:'#333',minWidth:0}}/>
+            <input value={highlight.date} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{date:e.target.value}})} placeholder="날짜" style={{width:48,fontSize:10,color:'#AAA',borderBottom:'0.5px solid #F0F0F0',flexShrink:0,textDecoration:done?'line-through':'none'}}/>
+            <input ref={textRef} value={highlight.text} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{text:e.target.value}})} placeholder="내용" style={{flex:1,fontSize:11,color:done?'#ABABAB':'#333',minWidth:0,textDecoration:done?'line-through':'none'}}/>
           </div>
         </div>
       </div>
@@ -3166,7 +3174,7 @@ function LeftPanel(){
   },[leftWidth,setLeftWidth]);
   return(
     <aside style={{position:'fixed',top:56,left:0,width:leftCollapsed?0:leftWidth,height:'calc(100vh - 56px)',
-      borderRight:'0.5px solid #ECEBE8',backgroundColor:'#FBFBFA',zIndex:100,
+      borderRight:'0.5px solid #ECEBE8',backgroundColor:'#FFFFFF',zIndex:100,
       boxSizing:'border-box',display:'flex',flexDirection:'column',overflow:'hidden',
       transition:'width 0.2s ease'}}>
       {/* Tab bar */}
@@ -3742,7 +3750,7 @@ function WeeklyGrid({weekOffset,colH}){
 function WeeklyHeader({weekDates,collapsed,onPrev,onNext,onToday,onToggleCollapse}){
   const s=weekDates[0],e=weekDates[6];const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
   return(
-    <div style={{height:32,display:'flex',alignItems:'center',padding:'0 12px',gap:8,backgroundColor:'#FBFBFA'}}>
+    <div style={{height:32,display:'flex',alignItems:'center',padding:'0 12px',gap:8,backgroundColor:'#FBFBFA',borderBottom:'0.5px solid #EEEDEA'}}>
       <div style={{display:'flex',alignItems:'center',gap:2}}>
         <button onClick={onPrev} style={{fontSize:14,color:'#B4B4AE',padding:'2px 5px',borderRadius:4,background:'transparent',border:'none',cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>‹</button>
         <span style={{fontSize:12.5,color:'#37352F',fontWeight:600,minWidth:94,textAlign:'center',userSelect:'none',fontVariantNumeric:'tabular-nums'}}>{fmt(s)} — {fmt(e)}</span>
@@ -3766,8 +3774,8 @@ function WeeklySection(){
   },[weeklyHeight,setWeeklyHeight]);
   return(
     <section style={{backgroundColor:'#fff',flexShrink:0,position:'relative',borderRadius:12,border:'0.5px solid #E4E3E0',overflow:'hidden',boxShadow:'0 1px 3px rgba(20,20,40,0.05)'}}>
-      <WeeklyHeader weekDates={weekDates} collapsed={state.weeklyCollapsed} onPrev={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset-1})} onNext={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset+1})} onToday={()=>dispatch({type:'SET_WEEK_OFFSET',payload:0})} onToggleCollapse={()=>dispatch({type:'TOGGLE_WEEKLY_COLLAPSED'})}/>
-      <div style={{height:state.weeklyCollapsed?0:weeklyHeight,overflowY:'auto',overflowX:'hidden',scrollbarGutter:'stable',transition:state.weeklyCollapsed?'height 200ms ease':undefined}}><WeeklyGrid weekOffset={state.weekOffset} colH={weeklyHeight-34}/></div>
+      <HeaderBanner/><WeeklyHeader weekDates={weekDates} collapsed={state.weeklyCollapsed} onPrev={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset-1})} onNext={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset+1})} onToday={()=>dispatch({type:'SET_WEEK_OFFSET',payload:0})} onToggleCollapse={()=>dispatch({type:'TOGGLE_WEEKLY_COLLAPSED'})}/>
+      <div style={{height:state.weeklyCollapsed?0:weeklyHeight,overflowY:'auto',overflowX:'hidden',transition:state.weeklyCollapsed?'height 200ms ease':undefined}}><WeeklyGrid weekOffset={state.weekOffset} colH={weeklyHeight-34}/></div>
       {/* Resize handle */}
       {!state.weeklyCollapsed&&<div onMouseDown={onResizeMouseDown} style={{position:'absolute',bottom:0,left:0,right:0,height:5,cursor:'row-resize',zIndex:101}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='rgba(20,20,25,0.12)'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}/>}
     </section>
@@ -4275,7 +4283,7 @@ function CalendarSection(){
       </div>
       {yearView&&<YearView year={navYear} onSelectMonth={(yr,mo)=>{setNavYear(yr);setNavMonth(mo);scrollToYearMonth(yr,mo);setYearView(false);}}/>}
       {/* Scrollable weeks */}
-      <div ref={calendarScrollRef} style={{flex:1,overflowY:'auto',scrollbarGutter:'stable',position:'relative',display:yearView?'none':'block',borderLeft:'0.5px solid #EEEDEA'}}>
+      <div ref={calendarScrollRef} style={{flex:1,overflowY:'auto',position:'relative',display:yearView?'none':'block',borderLeft:'0.5px solid #EEEDEA'}}>
         {allWeeks.map((weekDates,i)=>(
           <CalendarWeekRow key={i}
             ref_={el=>weekRefs.current[i]=el}
@@ -4374,7 +4382,7 @@ function HeaderBanner(){
   const tdN=(state.todos||[]).filter(t=>wd.includes(t.date)&&!t.done).length;
   const todayEv=(state.weeklyEvents||[]).filter(e=>e.date===dk).length;
   return(
-    <div style={{background:'#FBFBFA',border:'0.5px solid #ECECEA',borderRadius:10,padding:'9px 16px',
+    <div style={{background:'#FBFBFA',borderBottom:'0.5px solid #EEEDEA',padding:'9px 16px',
       display:'flex',alignItems:'center',gap:14,flexShrink:0,flexWrap:'wrap'}}>
       <span style={{fontSize:14,fontWeight:600,color:'#1F1F1E',letterSpacing:'-0.3px'}}>{today.getMonth()+1}월 {today.getDate()}일 {days[today.getDay()]}요일</span>
       <span style={{fontSize:12,color:'#8C8C87'}}>오늘 일정 {todayEv}개 · 이번 주 {evN}개 · 회의 {mtN}건 · 남은 할 일 {tdN}개</span>
@@ -4386,7 +4394,6 @@ function MainArea(){
   const{leftWidth,leftCollapsed,rightDockOpen,dockW}=useLayout();
   return(
     <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-left 0.2s ease'}}>
-      <HeaderBanner/>
       <WeeklySection/>
       <CalendarSection/>
     </main>
