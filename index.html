@@ -4426,12 +4426,11 @@ function HeaderBanner(){
   const tdN=(state.todos||[]).filter(t=>wd.includes(t.date)&&!t.done).length;
   const todayEv=(state.weeklyEvents||[]).filter(e=>e.date===dk).length;
   return(
-    <div style={{background:'linear-gradient(105deg,#1F1F1E 0%,#B85385 100%)',borderRadius:10,padding:'7px 16px',
-      display:'flex',alignItems:'center',gap:14,flexShrink:0,flexWrap:'wrap',
-      boxShadow:'0 2px 10px rgba(20,20,25,0.28)'}}>
-      <span style={{fontSize:14,fontWeight:600,color:'#fff',letterSpacing:'-0.3px'}}>{today.getMonth()+1}월 {today.getDate()}일 {days[today.getDay()]}요일</span>
-      <span style={{fontSize:12,color:'#F2CFDE'}}>오늘 일정 {todayEv}개 · 이번 주 {evN}개 · 회의 {mtN}건 · 남은 할 일 {tdN}개</span>
-      <span style={{marginLeft:'auto',fontSize:11,color:'#F2CFDE',fontWeight:600,letterSpacing:'1px'}}>{today.getFullYear()}</span>
+    <div style={{background:'#FBFBFA',border:'0.5px solid #ECECEA',borderRadius:10,padding:'9px 16px',
+      display:'flex',alignItems:'center',gap:14,flexShrink:0,flexWrap:'wrap'}}>
+      <span style={{fontSize:14,fontWeight:600,color:'#1F1F1E',letterSpacing:'-0.3px'}}>{today.getMonth()+1}월 {today.getDate()}일 {days[today.getDay()]}요일</span>
+      <span style={{fontSize:12,color:'#8C8C87'}}>오늘 일정 {todayEv}개 · 이번 주 {evN}개 · 회의 {mtN}건 · 남은 할 일 {tdN}개</span>
+      <span style={{marginLeft:'auto',fontSize:11,color:'#B4B4AE',fontWeight:600,letterSpacing:'1px'}}>{today.getFullYear()}</span>
     </div>
   );
 }
