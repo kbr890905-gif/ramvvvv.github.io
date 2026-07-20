@@ -1799,9 +1799,12 @@ function LayerCtxMenu({menu,onClose,dispatch,workLabel,workColor,personalLabel,p
 function TopBar(){
   const{state,dispatch,undo,redo}=useStore();
   const{workVisible,personalVisible,outlookVisible,customLayers,layerOrder,workLabel,personalLabel,workColor,personalColor,titleText,topBarBg,topBarImg}=state;
-  const{freeLayerVisible,setFreeLayerVisible,stickerMode,setStickerMode,scrollToTodayRef}=useLayout();
+  const{freeLayerVisible,setFreeLayerVisible,stickerMode,setStickerMode,scrollToTodayRef,monthLabel,monthNavRef,addEventRef}=useLayout();
   const catStyle=useDynCatStyle();
   const[settingsOpen,setSettingsOpen]=useState(false);
+  const[moreOpen,setMoreOpen]=useState(false);
+  const navBtn={width:28,height:28,borderRadius:6,border:'none',background:'transparent',color:'#8C8C87',fontSize:17,cursor:'pointer',lineHeight:1};
+  const mItem={display:'flex',alignItems:'center',gap:9,fontSize:13,color:'#37352F',padding:'7px 9px',borderRadius:6,border:'none',background:'transparent',cursor:'pointer',textAlign:'left',width:'100%'};
   const showToast=useToast();
   const[olSyncing,setOlSyncing]=useState(false);
   const doQuickSync=async()=>{
@@ -1894,159 +1897,34 @@ function TopBar(){
         </div>
       )}
       <div style={{flex:1}}/>
-      {/* Layer chips row — unified, all draggable */}
-      <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:1,minWidth:0}}>
-      <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 8px',backgroundColor:'#F5F5F6',borderRadius:20,flexShrink:1,overflowX:'auto',border:'0.5px solid #EEEDEA'}}>
-        {(()=>{
-          // Build ordered layer list from layerOrder + catStyle
-          const orderedLayers=(layerOrder||['work','personal']).map(id=>{
-            if(id==='work')return{id:'work',label:workLabel||'업무',visible:workVisible,on:catStyle.work,type:'work'};
-            if(id==='personal')return{id:'personal',label:personalLabel||'개인',visible:personalVisible,on:catStyle.personal,type:'personal'};
-            const l=(customLayers||[]).find(c=>c.id===id);
-            return l?{id:l.id,label:l.name,visible:l.visible,on:catStyle[l.id]||{bg:lighten(l.color,0.88),text:l.color,border:lighten(l.color,0.55),dot:l.color},type:'custom'}:null;
-          }).filter(Boolean);
-          const dragIdx=orderedLayers.findIndex(l=>l.id===dragId);
-          const overIdx=orderedLayers.findIndex(l=>l.id===dragOverId);
-          const getShift=(idx)=>{
-            if(dragIdx<0||overIdx<0||dragIdx===overIdx)return 0;
-            if(dragIdx<overIdx&&idx>dragIdx&&idx<=overIdx)return -1;
-            if(dragIdx>overIdx&&idx>=overIdx&&idx<dragIdx)return 1;
-            return 0;
-          };
-          return orderedLayers.map((l,idx)=>(
-            <div key={l.id}
-              draggable
-              onDragStart={e=>{
-                e.dataTransfer.effectAllowed='move';
-                e.dataTransfer.setData('layerId',l.id);
-                // 커스텀 드래그 고스트: 칩 모양 그대로, 커서에 붙어서 따라다님
-                const g=document.createElement('div');
-                g.style.cssText=`display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
-                  border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;
-                  background:${l.on.bg};color:${l.on.text};
-                  border:1px solid ${l.on.border};
-                  box-shadow:0 6px 18px rgba(0,0,0,0.18);
-                  position:fixed;top:-200px;left:-200px;`;
-                g.textContent=l.label;
-                document.body.appendChild(g);
-                e.dataTransfer.setDragImage(g,g.offsetWidth/2,14);
-                requestAnimationFrame(()=>document.body.removeChild(g));
-                setDragId(l.id);setDragOverId(null);
-              }}
-              onDragEnd={()=>{setDragId(null);setDragOverId(null);}}
-              onDragOver={e=>{e.preventDefault();if(dragOverId!==l.id)setDragOverId(l.id);}}
-              onDrop={e=>{
-                e.preventDefault();
-                const fromId=e.dataTransfer.getData('layerId');
-                if(!fromId||fromId===l.id){setDragId(null);setDragOverId(null);return;}
-                const newOrder=orderedLayers.map(x=>x.id);
-                const fi=newOrder.indexOf(fromId),ti=newOrder.indexOf(l.id);
-                if(fi<0||ti<0){setDragId(null);setDragOverId(null);return;}
-                const[item]=newOrder.splice(fi,1);newOrder.splice(ti,0,item);
-                dispatch({type:'REORDER_LAYERS',order:newOrder});
-                const newCustom=newOrder.filter(id=>id!=='work'&&id!=='personal')
-                  .map(id=>(customLayers||[]).find(c=>c.id===id)).filter(Boolean);
-                if(newCustom.length)dispatch({type:'REORDER_CUSTOM_LAYERS',layers:newCustom});
-                setDragId(null);setDragOverId(null);
-              }}
-              onContextMenu={e=>l.type==='custom'?openCtx(e,'custom',l.id):openCtx(e,l.type)}
-              style={{
-                display:'flex',alignItems:'center',flexShrink:0,cursor:'grab',
-                transform:`translateX(${getShift(idx)*46}px)`,
-                transition:dragId?'transform 0.18s cubic-bezier(0.34,1.56,0.64,1)':'none',
-                opacity:dragId===l.id?0:1,
-                position:'relative',zIndex:dragId===l.id?10:1,
-              }}>
-              <button
-                onClick={()=>{
-                  if(l.type==='work')dispatch({type:'SET_WORK_VISIBLE',payload:!l.visible});
-                  else if(l.type==='personal')dispatch({type:'SET_PERSONAL_VISIBLE',payload:!l.visible});
-                  else dispatch({type:'TOGGLE_CUSTOM_LAYER',id:l.id});
-                }}
-                style={{display:'flex',alignItems:'center',gap:5,padding:'3px 11px',
-                  borderRadius:20,fontSize:12,fontWeight:l.visible?600:400,
-                  border:`0.5px solid ${l.visible?l.on.border:'#DEDEDE'}`,
-                  backgroundColor:l.visible?l.on.bg:'#F7F7F7',
-                  color:l.visible?l.on.text:'#9A9A9A',
-                  transition:'background-color 0.15s,color 0.15s,border-color 0.15s',
-                  userSelect:'none',pointerEvents:dragId?'none':'auto'}}>
-                <span style={{width:5,height:5,borderRadius:'50%',backgroundColor:l.visible?l.on.dot:'#C8C8C8',flexShrink:0}}/>
-                {l.label}
-              </button>
-            </div>
-          ));
-        })()}
-        {/* 아웃룩 — always last */}
-        <div style={{display:'flex',alignItems:'center',flexShrink:0}}
-          onContextMenu={e=>openCtx(e,'outlook')}>
-          <button onClick={()=>dispatch({type:'SET_OUTLOOK_VISIBLE',payload:!outlookVisible})}
-            style={{display:'flex',alignItems:'center',gap:4,padding:'3px 8px',
-              borderRadius:'20px 0 0 20px',fontSize:11,fontWeight:outlookVisible?500:400,
-              border:`0.5px solid ${outlookVisible?catStyle.outlook.border:'#DEDEDE'}`,
-              borderRight:'none',backgroundColor:outlookVisible?catStyle.outlook.bg:'#F7F7F7',
-              color:outlookVisible?catStyle.outlook.text:'#9A9A9A',transition:'all 0.15s',userSelect:'none'}}>
-            <span style={{width:4,height:4,borderRadius:'50%',backgroundColor:outlookVisible?catStyle.outlook.dot:'#C8C8C8',flexShrink:0}}/>
-            아웃룩
-          </button>
-          <button title={state.outlookUser?'아웃룩 지금 동기화':'아웃룩 연동 설정 열기'} onClick={doQuickSync}
-            style={{padding:'3px 7px',borderRadius:'0 20px 20px 0',fontSize:11,
-              color:outlookVisible?catStyle.outlook.text:'#ABABAB',
-              border:`0.5px solid ${outlookVisible?catStyle.outlook.border:'#DEDEDE'}`,
-              backgroundColor:outlookVisible?catStyle.outlook.bg:'#F7F7F7',lineHeight:1,cursor:olSyncing?'wait':'pointer'}}>
-            <span style={{display:'inline-block',animation:olSyncing?'_spin 0.8s linear infinite':'none'}}>↻</span>
-          </button>
-        </div>
-        {/* + 레이어 add */}
-        {addLayerOpen?(
-          <div style={{display:'flex',alignItems:'center',gap:4,backgroundColor:'#F8F8F8',border:'0.5px solid #E0E0E0',borderRadius:20,padding:'2px 8px',flexShrink:0}}>
-            <div style={{display:'flex',gap:3,alignItems:'center'}}>
-              {PROJECT_COLORS.map(c=>(
-                <div key={c} onClick={()=>setNewLayerColor(c)}
-                  style={{width:12,height:12,borderRadius:'50%',backgroundColor:c,cursor:'pointer',
-                    border:newLayerColor===c?'2px solid #333':'1.5px solid rgba(0,0,0,0.12)',
-                    flexShrink:0,transition:'border 0.1s'}}/>
-              ))}
-            </div>
-            <input autoFocus value={newLayerName} onChange={e=>setNewLayerName(e.target.value)}
-              placeholder="레이어 이름"
-              onKeyDown={e=>{
-                if(e.key==='Enter'&&newLayerName.trim()){dispatch({type:'ADD_CUSTOM_LAYER',name:newLayerName.trim(),color:newLayerColor});setNewLayerName('');setAddLayerOpen(false);}
-                if(e.key==='Escape')setAddLayerOpen(false);
-              }}
-              style={{fontSize:11,color:'#333',width:80,borderBottom:'0.5px solid #CCC'}}/>
-            <button onClick={()=>setAddLayerOpen(false)} style={{fontSize:12,color:'#CCC'}}>×</button>
-          </div>
-        ):(
-          <button onClick={()=>setAddLayerOpen(true)}
-            style={{fontSize:11,color:'#9A9A9A',padding:'2px 8px',borderRadius:20,
-              border:'0.5px dashed #DEDEDE',flexShrink:0}}
-            onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';}}
-            onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#DEDEDE';}}>
-            + 레이어
-          </button>
-        )}
+      {/* Center: month navigation (시안) */}
+      <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:2,pointerEvents:'auto'}}>
+        <button onClick={()=>monthNavRef&&monthNavRef.current&&monthNavRef.current.prev&&monthNavRef.current.prev()} style={navBtn} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C87'}>‹</button>
+        <span style={{fontSize:15,fontWeight:600,color:'#1F1F1E',minWidth:104,textAlign:'center',userSelect:'none',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.2px'}}>{monthLabel||''}</span>
+        <button onClick={()=>monthNavRef&&monthNavRef.current&&monthNavRef.current.next&&monthNavRef.current.next()} style={navBtn} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C87'}>›</button>
       </div>
-        <button title="되돌리기 (Ctrl+Z)" onClick={undo} style={{display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',fontSize:13,color:'#8C8C8C',border:'0.5px solid #ECEBE8',flexShrink:0,backgroundColor:'#FBFBFA'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C8C'}>↺</button>
-        <button title="다시 실행 (Ctrl+Shift+Z)" onClick={redo} style={{display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',fontSize:13,color:'#8C8C8C',border:'0.5px solid #ECEBE8',flexShrink:0,backgroundColor:'#FBFBFA'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C8C'}>↻</button>
-        <div style={{width:'0.5px',height:14,backgroundColor:'#ECEBE8',margin:'0 2px',flexShrink:0}}/>
-        <button onClick={()=>setSettingsOpen(true)}
-          style={{display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',
-            fontSize:14,color:'#8C8C8C',border:'0.5px solid #ECEBE8',flexShrink:0,backgroundColor:'#FBFBFA',transition:'all 0.15s'}}
-          title="설정 (아웃룩 연동 / 백업 관리)"
-          onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';e.currentTarget.style.backgroundColor='#F2F1EF';}}
-          onMouseLeave={e=>{e.currentTarget.style.color='#8C8C8C';e.currentTarget.style.borderColor='#ECEBE8';e.currentTarget.style.backgroundColor='#FBFBFA';}}>⚙</button>
-        <div style={{width:'0.5px',height:14,backgroundColor:'#ECEBE8',margin:'0 2px',flexShrink:0}}/>
-        <button onClick={()=>{const nv=!freeLayerVisible;setFreeLayerVisible(nv);if(!nv)setStickerMode(false);}}
-          style={{display:'flex',alignItems:'center',gap:5,padding:'3px 11px',borderRadius:20,fontSize:12,
-            fontWeight:freeLayerVisible?600:400,
-            border:`0.5px solid ${freeLayerVisible?'#E4E3E0':'#DEDEDE'}`,
-            backgroundColor:freeLayerVisible?'#F2F1EF':'#F7F7F7',
-            color:freeLayerVisible?'#1F1F1E':'#9A9A9A',
-            transition:'all 0.15s',userSelect:'none',flexShrink:0}}
-          title="포스트잇·스티커 레이어 켜기/끄기">
-          <span style={{width:5,height:5,borderRadius:1,backgroundColor:freeLayerVisible?'#1F1F1E':'#C8C8C8',flexShrink:0,transform:'rotate(45deg)'}}/>
-          노트·스티커
+      {/* Right: search + today + new + more (시안) */}
+      <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+        <button onClick={()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'k',ctrlKey:true,bubbles:true}))} title="검색 (⌘K)"
+          style={{display:'flex',alignItems:'center',gap:8,height:34,padding:'0 12px',backgroundColor:'#F5F5F4',border:'0.5px solid #ECEBE8',borderRadius:8,color:'#9A9A95',fontSize:13,cursor:'pointer',width:190}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor='#DEDDD8'} onMouseLeave={e=>e.currentTarget.style.borderColor='#ECEBE8'}>
+          <span style={{fontSize:14}}>⌕</span><span style={{flex:1,textAlign:'left'}}>일정·할일·회의록 검색</span><span style={{fontSize:11,color:'#B4B4AE',border:'0.5px solid #E4E3E0',borderRadius:4,padding:'1px 5px',backgroundColor:'#fff'}}>⌘K</span>
         </button>
+        <button onClick={()=>scrollToTodayRef&&scrollToTodayRef.current&&scrollToTodayRef.current()} style={{fontSize:13,fontWeight:500,color:'#1F1F1E',height:34,padding:'0 14px',backgroundColor:'#fff',border:'0.5px solid #E4E3E0',borderRadius:8,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#fff'}>오늘</button>
+        <button onClick={()=>addEventRef&&addEventRef.current&&addEventRef.current()} style={{fontSize:13,fontWeight:500,color:'#fff',height:34,padding:'0 14px',backgroundColor:'#1F1F1E',border:'none',borderRadius:8,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#37352F'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#1F1F1E'}>+ 새 일정</button>
+        <div style={{position:'relative',flexShrink:0}}>
+          <button onClick={()=>setMoreOpen(v=>!v)} title="더보기" style={{width:34,height:34,borderRadius:8,border:'0.5px solid #E4E3E0',backgroundColor:'#fff',color:'#6A6A67',fontSize:17,cursor:'pointer',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#fff'}>⋯</button>
+          {moreOpen&&(
+            <div onMouseLeave={()=>setMoreOpen(false)} style={{position:'absolute',top:40,right:0,minWidth:186,backgroundColor:'#fff',border:'0.5px solid #ECEBE8',borderRadius:10,boxShadow:'0 0 0 0.5px rgba(20,20,25,0.06), 0 8px 24px rgba(20,20,25,0.10)',padding:6,zIndex:3000,display:'flex',flexDirection:'column',gap:1}}>
+              <button onClick={()=>{doQuickSync();setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span style={{display:'inline-block',animation:olSyncing?'_spin 0.8s linear infinite':'none'}}>↻</span> 아웃룩 동기화</button>
+              <button onClick={()=>{const nv=!freeLayerVisible;setFreeLayerVisible(nv);if(!nv)setStickerMode(false);setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span style={{width:9,height:9,borderRadius:1,backgroundColor:freeLayerVisible?'#1F1F1E':'#C8C8C8',transform:'rotate(45deg)',display:'inline-block'}}/> 노트·스티커</button>
+              <button onClick={()=>{undo();setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span>↺</span> 되돌리기</button>
+              <button onClick={()=>{redo();setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span>↻</span> 다시 실행</button>
+              <div style={{height:'0.5px',backgroundColor:'#ECEBE8',margin:'4px 2px'}}/>
+              <button onClick={()=>{setSettingsOpen(true);setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span>⚙</span> 설정</button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
     {/* Layer context menu */}
@@ -3237,6 +3115,41 @@ function MeetingNoteList({onOpen}){
     </div>
   );
 }
+function LayerPanel(){
+  const{state,dispatch}=useStore();
+  const{workVisible,personalVisible,outlookVisible,customLayers,layerOrder,workLabel,personalLabel}=state;
+  const catStyle=useDynCatStyle();
+  const[addOpen,setAddOpen]=React.useState(false);const[nm,setNm]=React.useState('');
+  const ordered=(layerOrder||['work','personal']).map(id=>{
+    if(id==='work')return{id:'work',label:workLabel||'업무',visible:workVisible,cs:catStyle.work,t:'work'};
+    if(id==='personal')return{id:'personal',label:personalLabel||'개인',visible:personalVisible,cs:catStyle.personal,t:'personal'};
+    const l=(customLayers||[]).find(c2=>c2.id===id);
+    return l?{id:l.id,label:l.name,visible:l.visible,cs:catStyle[l.id]||catStyle.work,t:'custom'}:null;
+  }).filter(Boolean);
+  const toggle=(l)=>{if(l.t==='work')dispatch({type:'SET_WORK_VISIBLE',payload:!l.visible});else if(l.t==='personal')dispatch({type:'SET_PERSONAL_VISIBLE',payload:!l.visible});else dispatch({type:'TOGGLE_CUSTOM_LAYER',id:l.id});};
+  const row=(key,dot,label,visible,onClick)=>(
+    <div key={key} onClick={onClick} style={{display:'flex',alignItems:'center',gap:9,padding:'6px 8px',borderRadius:6,cursor:'pointer',opacity:visible?1:0.5}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F1F1EF'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}>
+      <span style={{width:8,height:8,borderRadius:3,flexShrink:0,backgroundColor:visible?dot:'#C8C8C8'}}/>
+      <span style={{fontSize:13,color:'#37352F',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{label}</span>
+      <span style={{fontSize:11,color:visible?'#8C8C87':'#C8C8C8',flexShrink:0}}>{visible?'●':'○'}</span>
+    </div>
+  );
+  return(
+    <section style={{marginBottom:16}}>
+      <div style={{fontSize:11,color:'#9A9A95',letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600,margin:'2px 8px 4px'}}>레이어</div>
+      {ordered.map(l=>row(l.id,l.cs.dot,l.label,l.visible,()=>toggle(l)))}
+      {row('outlook',catStyle.outlook.dot,'아웃룩',outlookVisible!==false,()=>dispatch({type:'SET_OUTLOOK_VISIBLE',payload:!(outlookVisible!==false)}))}
+      {addOpen?(
+        <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px'}} onClick={e=>e.stopPropagation()}>
+          <input autoFocus value={nm} onChange={e=>setNm(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&nm.trim()){dispatch({type:'ADD_CUSTOM_LAYER',name:nm.trim(),color:PROJECT_COLORS[0]});setNm('');setAddOpen(false);}if(e.key==='Escape')setAddOpen(false);}} placeholder="레이어 이름" style={{flex:1,fontSize:12,color:'#37352F',borderBottom:'0.5px solid #E4E3E0',minWidth:0}}/>
+          <button onClick={()=>setAddOpen(false)} style={{fontSize:13,color:'#C8C8C8'}}>×</button>
+        </div>
+      ):(
+        <button onClick={()=>setAddOpen(true)} style={{fontSize:12.5,color:'#9A9A95',padding:'6px 8px',width:'100%',textAlign:'left',background:'transparent',border:'none',cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color='#37352F'} onMouseLeave={e=>e.currentTarget.style.color='#9A9A95'}>+ 레이어 추가</button>
+      )}
+    </section>
+  );
+}
 function LeftPanel(){
   const{leftWidth,setLeftWidth,leftCollapsed}=useLayout();
   const[leftTab,setLeftTab]=React.useState('monthly'); // 'monthly' | 'meetings'
@@ -3254,6 +3167,7 @@ function LeftPanel(){
       borderRight:'0.5px solid #ECEBE8',backgroundColor:'#FCFCFD',zIndex:100,
       boxSizing:'border-box',display:'flex',flexDirection:'column',overflow:'hidden',
       transition:'width 0.2s ease'}}>
+      <div style={{padding:'12px 13px 2px',flexShrink:0}}><LayerPanel/></div>
       {/* Tab bar */}
       <div style={{display:'flex',borderBottom:'0.5px solid #EEEDEA',flexShrink:0,padding:'0 12px'}}>
         {[{id:'monthly',label:'먼슬리'},{id:'meetings',label:'회의록'}].map(t=>(
@@ -4199,7 +4113,7 @@ function YearView({year,onSelectMonth}){
 }
 function CalendarSection(){
   const{state,dispatch}=useStore();
-  const{freeLayerVisible,setFreeLayerVisible,setStickerMode,setRightDockOpen,calendarScrollRef,scrollToTodayRef}=useLayout();
+  const{freeLayerVisible,setFreeLayerVisible,setStickerMode,setRightDockOpen,calendarScrollRef,scrollToTodayRef,setMonthLabel,monthNavRef,addEventRef}=useLayout();
   const showToast=useToast();
   const today_=new Date();
   const[navLabel,setNavLabel]=useState('');
@@ -4279,6 +4193,8 @@ function CalendarSection(){
   },[scrollToYearMonth,updateNavFromScroll]);
   const goPrev=()=>{const nm=navMonth===0?11:navMonth-1;const ny=navMonth===0?navYear-1:navYear;setNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
   const goNext=()=>{const nm=navMonth===11?0:navMonth+1;const ny=navMonth===11?navYear+1:navYear;setNavYear(ny);setNavMonth(nm);scrollToYearMonth(ny,nm);};
+  useEffect(()=>{setMonthLabel&&setMonthLabel(navLabel||(navYear+'년 '+(navMonth+1)+'월'));});
+  useEffect(()=>{if(monthNavRef)monthNavRef.current={prev:goPrev,next:goNext};if(addEventRef)addEventRef.current=()=>{scrollToTodayRef&&scrollToTodayRef.current&&scrollToTodayRef.current();setEventPopoverDate(toDateKey(new Date()));};});
   const goToday=()=>{
     const todayDate=new Date();
     const todayKey=toDateKey(todayDate);
@@ -4823,9 +4739,12 @@ function App(){
   const[dockW,setDockW]=React.useState(()=>lsLoad('dockW',308));
   const calendarScrollRef=React.useRef(null);
   const scrollToTodayRef=React.useRef(null);
+  const[monthLabel,setMonthLabel]=React.useState('');
+  const monthNavRef=React.useRef(null);
+  const addEventRef=React.useRef(null);
   const isMobile=useIsMobile();
   return(
-    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId,rightDockOpen,setRightDockOpen,dockW,setDockW}}>
+    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId,rightDockOpen,setRightDockOpen,dockW,setDockW,monthLabel,setMonthLabel,monthNavRef,addEventRef}}>
       <StoreProvider>
         <ToastProvider>
           {isMobile?<MobileApp/>:<><TopBar/><LeftPanel/><PanelToggle/><MainArea/><RightDock/></>}
