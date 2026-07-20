@@ -1973,7 +1973,7 @@ function HighlightItem({highlight,project}){
 }
 function MonthlyHighlights(){
   const{state,dispatch}=useStore();const{monthlyHighlights,projects,hlYear,hlMonth}=state;
-  const[fold,setFold]=useState(()=>lsLoad('foldHl',false));
+  const[fold,setFold]=useState(()=>lsLoad('foldHl',true));
   const toggleFold=()=>setFold(f=>{lsSave('foldHl',!f);return !f;});
   const goPrevHl=()=>{if(hlMonth===0)dispatch({type:'SET_HL_MONTH',hlYear:hlYear-1,hlMonth:11});else dispatch({type:'SET_HL_MONTH',hlYear,hlMonth:hlMonth-1});};
   const goNextHl=()=>{if(hlMonth===11)dispatch({type:'SET_HL_MONTH',hlYear:hlYear+1,hlMonth:0});else dispatch({type:'SET_HL_MONTH',hlYear,hlMonth:hlMonth+1});};
@@ -3166,7 +3166,7 @@ function LeftPanel(){
   },[leftWidth,setLeftWidth]);
   return(
     <aside style={{position:'fixed',top:56,left:0,width:leftCollapsed?0:leftWidth,height:'calc(100vh - 56px)',
-      borderRight:'0.5px solid #ECEBE8',backgroundColor:'#FCFCFD',zIndex:100,
+      borderRight:'0.5px solid #ECEBE8',backgroundColor:'#FBFBFA',zIndex:100,
       boxSizing:'border-box',display:'flex',flexDirection:'column',overflow:'hidden',
       transition:'width 0.2s ease'}}>
       {/* Tab bar */}
@@ -3576,7 +3576,7 @@ function EventChip({event,onClick}){
   const catStyle=useDynCatStyle();const cs=catStyle[event.category]||catStyle.work;
   const{state}=useStore();const bdayPfx=getBdayPrefix(event.category,state);
   const isBday=bdayPfx!=='';
-  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F1F1EF'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 5px 2px 4px',backgroundColor:'transparent',borderRadius:5,marginBottom:1,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%',lineHeight:1.5}}>{!isBday&&<span style={{width:6,height:6,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}{event.time&&<span style={{flexShrink:0,fontSize:10,color:'#9A9A95',fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1,fontSize:11.5,color:'#37352F',fontWeight:500}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0,fontSize:10,opacity:0.45}}>🔗</span>}</div>;
+  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F1F1EF'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 5px 2px 4px',backgroundColor:'transparent',borderRadius:5,marginBottom:1,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%',lineHeight:1.5}}>{!isBday&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}{event.time&&<span style={{flexShrink:0,fontSize:10,color:'#9A9A95',fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1,fontSize:11.5,color:'#37352F',fontWeight:500}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0,fontSize:10,opacity:0.45}}>🔗</span>}</div>;
 }
 function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCol,cycleCat}){
   const[hovered,setHovered]=useState(false);
@@ -3742,15 +3742,14 @@ function WeeklyGrid({weekOffset,colH}){
 function WeeklyHeader({weekDates,collapsed,onPrev,onNext,onToday,onToggleCollapse}){
   const s=weekDates[0],e=weekDates[6];const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
   return(
-    <div style={{height:34,display:'flex',alignItems:'center',padding:'0 14px',gap:6,backgroundColor:'#fff',borderBottom:'0.5px solid #EEEDEA'}}>
-      <span style={{fontSize:12,fontWeight:600,color:'#1A1A1A',flexShrink:0,backgroundColor:'#F2F1EF',padding:'4px 13px',borderRadius:7}}>위클리</span>
-      <div style={{display:'flex',alignItems:'center',gap:1}}>
-        <button onClick={onPrev} style={{fontSize:14,color:'#C8C8C8',padding:'2px 6px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
-        <span style={{fontSize:13,color:'#222',fontWeight:600,minWidth:100,textAlign:'center',userSelect:'none',fontVariantNumeric:'tabular-nums'}}>{fmt(s)} — {fmt(e)}</span>
-        <button onClick={onNext} style={{fontSize:14,color:'#C8C8C8',padding:'2px 6px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>›</button>
+    <div style={{height:32,display:'flex',alignItems:'center',padding:'0 12px',gap:8,backgroundColor:'#FBFBFA'}}>
+      <div style={{display:'flex',alignItems:'center',gap:2}}>
+        <button onClick={onPrev} style={{fontSize:14,color:'#B4B4AE',padding:'2px 5px',borderRadius:4,background:'transparent',border:'none',cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>‹</button>
+        <span style={{fontSize:12.5,color:'#37352F',fontWeight:600,minWidth:94,textAlign:'center',userSelect:'none',fontVariantNumeric:'tabular-nums'}}>{fmt(s)} — {fmt(e)}</span>
+        <button onClick={onNext} style={{fontSize:14,color:'#B4B4AE',padding:'2px 5px',borderRadius:4,background:'transparent',border:'none',cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>›</button>
       </div>
       <div style={{flex:1}}/>
-      <button onClick={onToggleCollapse} style={{fontSize:12,color:'#9A9A9A',padding:'3px 8px',border:'0.5px solid #ECEBE8',borderRadius:5,flexShrink:0}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#ECEBE8';}}>{collapsed?'펼치기 ↓':'접기 ↑'}</button>
+      <button onClick={onToggleCollapse} style={{fontSize:11.5,color:'#9A9A95',padding:'3px 9px',borderRadius:6,background:'transparent',border:'none',cursor:'pointer'}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.backgroundColor='#F1F1EF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A95';e.currentTarget.style.backgroundColor='transparent';}}>{collapsed?'펼치기 ↓':'접기 ↑'}</button>
     </div>
   );
 }
@@ -3898,7 +3897,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
                   transform:(dragIdx!==null&&ci>=dragIdx)?'translateY(25px)':'translateY(0)',
                   transition:'transform 0.15s ease',
                   cursor:'pointer',flexShrink:0,lineHeight:1.5}}>
-                {!isBdayEv&&<span style={{width:6,height:6,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
+                {!isBdayEv&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
                 {ev.time&&<span style={{fontSize:10,color:'#9A9A95',flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
                 <span style={{fontSize:11.5,color:'#37352F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
                 {ev.isOutlook&&<span style={{fontSize:10,flexShrink:0,opacity:0.45}}>🔗</span>}
