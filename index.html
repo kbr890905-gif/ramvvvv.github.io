@@ -1803,6 +1803,7 @@ function TopBar(){
   const catStyle=useDynCatStyle();
   const[settingsOpen,setSettingsOpen]=useState(false);
   const[moreOpen,setMoreOpen]=useState(false);
+  const[layerMenuOpen,setLayerMenuOpen]=useState(false);
   const navBtn={width:28,height:28,borderRadius:6,border:'none',background:'transparent',color:'#8C8C87',fontSize:17,cursor:'pointer',lineHeight:1};
   const mItem={display:'flex',alignItems:'center',gap:9,fontSize:13,color:'#37352F',padding:'7px 9px',borderRadius:6,border:'none',background:'transparent',cursor:'pointer',textAlign:'left',width:'100%'};
   const showToast=useToast();
@@ -1897,12 +1898,6 @@ function TopBar(){
         </div>
       )}
       <div style={{flex:1}}/>
-      {/* Center: month navigation (시안) */}
-      <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:2,pointerEvents:'auto'}}>
-        <button onClick={()=>monthNavRef&&monthNavRef.current&&monthNavRef.current.prev&&monthNavRef.current.prev()} style={navBtn} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C87'}>‹</button>
-        <span style={{fontSize:15,fontWeight:600,color:'#1F1F1E',minWidth:104,textAlign:'center',userSelect:'none',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.2px'}}>{monthLabel||''}</span>
-        <button onClick={()=>monthNavRef&&monthNavRef.current&&monthNavRef.current.next&&monthNavRef.current.next()} style={navBtn} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#8C8C87'}>›</button>
-      </div>
       {/* Right: search + today + new + more (시안) */}
       <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
         <button onClick={()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'k',ctrlKey:true,bubbles:true}))} title="검색 (⌘K)"
@@ -1911,7 +1906,14 @@ function TopBar(){
           <span style={{fontSize:14}}>⌕</span><span style={{flex:1,textAlign:'left'}}>일정·할일·회의록 검색</span><span style={{fontSize:11,color:'#B4B4AE',border:'0.5px solid #E4E3E0',borderRadius:4,padding:'1px 5px',backgroundColor:'#fff'}}>⌘K</span>
         </button>
         <button onClick={()=>scrollToTodayRef&&scrollToTodayRef.current&&scrollToTodayRef.current()} style={{fontSize:13,fontWeight:500,color:'#1F1F1E',height:34,padding:'0 14px',backgroundColor:'#fff',border:'0.5px solid #E4E3E0',borderRadius:8,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#fff'}>오늘</button>
-        <button onClick={()=>addEventRef&&addEventRef.current&&addEventRef.current()} style={{fontSize:13,fontWeight:500,color:'#fff',height:34,padding:'0 14px',backgroundColor:'#1F1F1E',border:'none',borderRadius:8,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#37352F'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#1F1F1E'}>+ 새 일정</button>
+        <div style={{position:'relative',flexShrink:0}}>
+          <button onClick={()=>setLayerMenuOpen(v=>!v)} style={{fontSize:13,fontWeight:500,color:'#37352F',height:34,padding:'0 13px',backgroundColor:'#fff',border:'0.5px solid #E4E3E0',borderRadius:8,cursor:'pointer',display:'flex',alignItems:'center',gap:6}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#fff'}>레이어 <span style={{fontSize:9,color:'#9A9A95'}}>▾</span></button>
+          {layerMenuOpen&&(
+            <div onMouseLeave={()=>setLayerMenuOpen(false)} style={{position:'absolute',top:40,right:0,minWidth:212,backgroundColor:'#fff',border:'0.5px solid #ECEBE8',borderRadius:10,boxShadow:'0 0 0 0.5px rgba(20,20,25,0.06), 0 8px 24px rgba(20,20,25,0.10)',padding:'8px 10px',zIndex:3000}}>
+              <LayerPanel/>
+            </div>
+          )}
+        </div>
         <div style={{position:'relative',flexShrink:0}}>
           <button onClick={()=>setMoreOpen(v=>!v)} title="더보기" style={{width:34,height:34,borderRadius:8,border:'0.5px solid #E4E3E0',backgroundColor:'#fff',color:'#6A6A67',fontSize:17,cursor:'pointer',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F5F5F4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#fff'}>⋯</button>
           {moreOpen&&(
@@ -3167,7 +3169,6 @@ function LeftPanel(){
       borderRight:'0.5px solid #ECEBE8',backgroundColor:'#FCFCFD',zIndex:100,
       boxSizing:'border-box',display:'flex',flexDirection:'column',overflow:'hidden',
       transition:'width 0.2s ease'}}>
-      <div style={{padding:'12px 13px 2px',flexShrink:0}}><LayerPanel/></div>
       {/* Tab bar */}
       <div style={{display:'flex',borderBottom:'0.5px solid #EEEDEA',flexShrink:0,padding:'0 12px'}}>
         {[{id:'monthly',label:'먼슬리'},{id:'meetings',label:'회의록'}].map(t=>(
@@ -3247,7 +3248,7 @@ function EventPopover({date,onClose}){
   };
   return(
     <div onClick={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.06)',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',animation:'fadeIn 0.15s ease'}}>
-      <div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:12,boxShadow:'0 0 0 0.5px rgba(20,20,25,0.06), 0 4px 12px rgba(20,20,25,0.07), 0 12px 32px rgba(20,20,25,0.09)',padding:'18px 20px',minWidth:280,maxWidth:340,maxHeight:'88vh',overflowY:'auto',animation:'popIn 0.16s ease'}}>
+      <div style={{backgroundColor:'#fff',border:'0.5px solid #E0E0E0',borderRadius:12,boxShadow:'0 0 0 0.5px rgba(20,20,25,0.06), 0 4px 12px rgba(20,20,25,0.07), 0 12px 32px rgba(20,20,25,0.09)',padding:'18px 20px',minWidth:300,maxWidth:360,maxHeight:'88vh',overflowY:'auto',animation:'popIn 0.16s ease'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
           <div><span style={{fontSize:15,fontWeight:600,letterSpacing:'-0.3px'}}>일정 추가</span><span style={{fontSize:13,color:'#ABABAB',marginLeft:6}}>— {dateLabel}</span></div>
           <button onClick={onClose} style={{fontSize:16,color:'#CCC',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#999'} onMouseLeave={e=>e.currentTarget.style.color='#CCC'}>×</button>
@@ -3267,7 +3268,7 @@ function EventPopover({date,onClose}){
             <button onClick={()=>setForm(f=>({...f,recurring:true,recurType:'yearly'}))} style={{flex:1,padding:'4px',borderRadius:5,fontSize:11,border:`0.5px solid ${form.recurring&&form.recurType==='yearly'?'#1F1F1E':'#EEEDEA'}`,backgroundColor:form.recurring&&form.recurType==='yearly'?'#F2F1EF':'#F8F8F8',color:form.recurring&&form.recurType==='yearly'?'#1F1F1E':'#ABABAB'}}>매해반복</button>
           </div>
           {form.recurring&&form.recurType==='weekly'&&(
-            <div style={{padding:'8px',backgroundColor:'#FAFAFE',borderRadius:6,border:'0.5px solid #F2F1EF',display:'flex',flexDirection:'column',gap:6}}>
+            <div style={{padding:'8px',backgroundColor:'#F7F7F5',borderRadius:6,border:'0.5px solid #F2F1EF',display:'flex',flexDirection:'column',gap:6}}>
               <div style={{display:'flex',gap:4}}>
                 {['월','화','수','목','금','토','일'].map((d,i)=>(
                   <button key={i} onClick={()=>setForm(f=>({...f,recurDay:i}))}
@@ -3289,12 +3290,12 @@ function EventPopover({date,onClose}){
             </div>
           )}
           {form.recurring&&form.recurType==='yearly'&&(
-            <div style={{padding:'8px',backgroundColor:'#FAFAFE',borderRadius:6,border:'0.5px solid #F2F1EF',fontSize:12,color:'#1F1F1E'}}>
+            <div style={{padding:'8px',backgroundColor:'#F7F7F5',borderRadius:6,border:'0.5px solid #F2F1EF',fontSize:12,color:'#1F1F1E'}}>
               매년 {dateObj.getMonth()+1}월 {dateObj.getDate()}일에 5년간 반복됩니다
             </div>
           )}
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:14,padding:'8px 10px',backgroundColor:'#F8F8FF',borderRadius:6,border:'0.5px solid #E8E8F8'}}>
+        <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:14,padding:'8px 10px',backgroundColor:'#F7F7F5',borderRadius:6,border:'0.5px solid #ECEBE8'}}>
           <input type="checkbox" id="hl_check" checked={form.isHighlight} onChange={e=>setForm(f=>({...f,isHighlight:e.target.checked}))} style={{width:13,height:13,accentColor:'#1F1F1E',cursor:'pointer',flexShrink:0}}/>
           <label htmlFor="hl_check" style={{fontSize:12,color:form.isHighlight?'#1F1F1E':'#888',cursor:'pointer',userSelect:'none',fontWeight:form.isHighlight?500:400}}>좌측 주요일정에 등록</label>
           {form.isHighlight&&<span style={{fontSize:11,color:'#E4E3E0',marginLeft:'auto'}}>✓ 좌측 패널에 추가됩니다</span>}
@@ -3575,8 +3576,7 @@ function EventChip({event,onClick}){
   const catStyle=useDynCatStyle();const cs=catStyle[event.category]||catStyle.work;
   const{state}=useStore();const bdayPfx=getBdayPrefix(event.category,state);
   const isBday=bdayPfx!=='';
-  const chipStyle=isBday?{backgroundColor:'transparent',borderRadius:6,marginBottom:2,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'}:{backgroundColor:cs.bg,boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text),borderRadius:6,marginBottom:2,fontSize:11,fontWeight:500,color:cs.text,lineHeight:1.4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%'};
-  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:3,padding:'3px 6px 3px 9px',...chipStyle}}>{event.time&&<span style={{opacity:0.7,flexShrink:0,fontSize:9.5,fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0}}>🔗</span>}</div>;
+  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F1F1EF'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 5px 2px 4px',backgroundColor:'transparent',borderRadius:5,marginBottom:1,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%',lineHeight:1.5}}>{!isBday&&<span style={{width:6,height:6,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}{event.time&&<span style={{flexShrink:0,fontSize:10,color:'#9A9A95',fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1,fontSize:11.5,color:'#37352F',fontWeight:500}}>{bdayPfx}{event.title}</span>{event.isOutlook&&<span style={{flexShrink:0,fontSize:10,opacity:0.45}}>🔗</span>}</div>;
 }
 function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCol,cycleCat}){
   const[hovered,setHovered]=useState(false);
@@ -3688,7 +3688,6 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
         {todoActive&&<div style={{display:'flex',alignItems:'center',gap:3,marginTop:todos.length?2:0}} onClick={e=>e.stopPropagation()}><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoCat(c=>cycleCat(c))} title="레이어 전환" style={{fontSize:7,padding:'1px 4px',borderRadius:3,flexShrink:0,border:`0.5px solid ${catCol(todoCat).border}`,backgroundColor:catCol(todoCat).bg,color:catCol(todoCat).text,maxWidth:34,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{catLabel(todoCat).slice(0,3)}</button><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoRepeat(v=>!v)} title="매주 반복 (12주)" style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:'0.5px solid '+(todoRepeat?'#E4E3E0':'#E4E3E0'),backgroundColor:todoRepeat?'#F2F1EF':'#FBFBFA',color:todoRepeat?'#1F1F1E':'#ABABAB'}}>매주</button><input ref={todoRef} value={todoVal} onChange={e=>setTodoVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitTodo();if(e.key==='Escape'){setTodoVal('');setTodoActive(false);}}} onBlur={()=>setTimeout(submitTodo,120)} placeholder="할 일" style={{flex:1,fontSize:11,color:'#333',minWidth:0,borderBottom:'0.5px solid #ECEBE8'}}/></div>}
         {!todoActive&&todos.length===0&&<div style={{fontSize:11,color:'#CFCFD7',paddingTop:2}}>+ 할 일</div>}
       </div>
-      <div style={{flex:1.2,padding:'3px 5px',borderBottom:'0.5px solid #EEEDEA',minHeight:0,overflow:'hidden'}}><MemoEditor memoKey={dk} value={memo} onUpdate={html=>dispatch({type:'SET_WEEK_MEMO',date:dk,text:html})}/></div>
       <div style={{height:18,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
         <button onClick={()=>onAddEvent(dk)} style={{fontSize:11,color:'#BFBFC8',width:'100%',textAlign:'center'}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.backgroundColor='#F3F3F3';}} onMouseLeave={e=>{e.currentTarget.style.color='#BFBFC8';e.currentTarget.style.backgroundColor='transparent';}}>+ 일정</button>
       </div>
@@ -3721,7 +3720,7 @@ function WeeklyGrid({weekOffset,colH}){
   })),[weekDates,state.weeklyEvents,state.workVisible,state.personalVisible,state.outlookVisible]);
   const evtH=Math.max(26,maxEvtCount*25+6);
   return(
-    <div style={{position:'relative',backgroundColor:'#ECEBE8',height:'100%'}}>
+    <div style={{position:'relative',backgroundColor:'transparent',height:'100%'}}>
       {laneN>0&&(
         <div style={{position:'absolute',top:30,left:0,right:0,height:laneN*20+2,zIndex:15,pointerEvents:'none'}}>
           {wkBlocks.map(b=>{const pos=getBlockWeekPos(b,weekDates);const cs=catStyle[b.category]||catStyle.work;return(
@@ -3734,7 +3733,7 @@ function WeeklyGrid({weekOffset,colH}){
             </div>);})}
         </div>
       )}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'1px',alignItems:'stretch',height:'100%'}}>{weekDates.map(date=><DayColumn key={toDateKey(date)} date={date} onAddEvent={dk=>setPopoverDate(dk)} colH={colH} evtH={evtH} laneH={laneN?laneN*20+6:0}/>)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:0,alignItems:'stretch',height:'100%'}}>{weekDates.map(date=><DayColumn key={toDateKey(date)} date={date} onAddEvent={dk=>setPopoverDate(dk)} colH={colH} evtH={evtH} laneH={laneN?laneN*20+6:0}/>)}</div>
       {popoverDate&&<EventPopover date={popoverDate} onClose={()=>setPopoverDate(null)}/>}
       {wkEditBlock&&<MultiDayBlockPopover editBlock={wkEditBlock} onClose={()=>setWkEditBlock(null)}/>}
     </div>
@@ -3751,7 +3750,6 @@ function WeeklyHeader({weekDates,collapsed,onPrev,onNext,onToday,onToggleCollaps
         <button onClick={onNext} style={{fontSize:14,color:'#C8C8C8',padding:'2px 6px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>›</button>
       </div>
       <div style={{flex:1}}/>
-      <button onClick={onToday} style={{fontSize:12,color:'#fff',padding:'4px 12px',backgroundColor:'#1F1F1E',borderRadius:6,fontWeight:600,flexShrink:0,boxShadow:'none'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#37352F'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#1F1F1E'}>오늘로</button>
       <button onClick={onToggleCollapse} style={{fontSize:12,color:'#9A9A9A',padding:'3px 8px',border:'0.5px solid #ECEBE8',borderRadius:5,flexShrink:0}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#ECEBE8';}}>{collapsed?'펼치기 ↓':'접기 ↑'}</button>
     </div>
   );
@@ -3770,7 +3768,7 @@ function WeeklySection(){
   return(
     <section style={{backgroundColor:'#fff',flexShrink:0,position:'relative',borderRadius:12,border:'0.5px solid #E4E3E0',overflow:'hidden',boxShadow:'0 1px 3px rgba(20,20,40,0.05)'}}>
       <WeeklyHeader weekDates={weekDates} collapsed={state.weeklyCollapsed} onPrev={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset-1})} onNext={()=>dispatch({type:'SET_WEEK_OFFSET',payload:state.weekOffset+1})} onToday={()=>dispatch({type:'SET_WEEK_OFFSET',payload:0})} onToggleCollapse={()=>dispatch({type:'TOGGLE_WEEKLY_COLLAPSED'})}/>
-      <div style={{height:state.weeklyCollapsed?0:weeklyHeight,overflow:'hidden',transition:state.weeklyCollapsed?'height 200ms ease':undefined}}><WeeklyGrid weekOffset={state.weekOffset} colH={weeklyHeight-34}/></div>
+      <div style={{height:state.weeklyCollapsed?0:weeklyHeight,overflowY:'auto',overflowX:'hidden',scrollbarGutter:'stable',transition:state.weeklyCollapsed?'height 200ms ease':undefined}}><WeeklyGrid weekOffset={state.weekOffset} colH={weeklyHeight-34}/></div>
       {/* Resize handle */}
       {!state.weeklyCollapsed&&<div onMouseDown={onResizeMouseDown} style={{position:'absolute',bottom:0,left:0,right:0,height:5,cursor:'row-resize',zIndex:101}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='rgba(20,20,25,0.12)'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}/>}
     </section>
@@ -3823,7 +3821,7 @@ function MultiDayBlockPopover({initialStart,initialEnd,editBlock,onClose}){
         {/* Project */}
         {state.projects.filter(p=>!p.layer||p.layer===form.category).length>0&&<div style={{marginBottom:14}}><label style={{fontSize:11,color:'#8C8C8C',display:'block',marginBottom:5,letterSpacing:'0.3px'}}>프로젝트</label><div style={{display:'flex',gap:4,flexWrap:'wrap'}}><button onClick={()=>setForm(f=>({...f,projectId:null}))} style={{fontSize:11,padding:'2px 7px',borderRadius:10,border:`0.5px solid ${!form.projectId?'#DDD':'#EEEDEA'}`,backgroundColor:!form.projectId?'#F5F5F5':'transparent',color:!form.projectId?'#666':'#CCC'}}>없음</button>{state.projects.filter(p=>!p.layer||p.layer===form.category).map(p=><button key={p.id} onClick={()=>setForm(f=>({...f,projectId:p.id}))} style={{fontSize:11,padding:'2px 8px',borderRadius:10,border:`0.5px solid ${form.projectId===p.id?p.color:'#EEEDEA'}`,backgroundColor:form.projectId===p.id?lighten(p.color):'transparent',color:form.projectId===p.id?p.color:'#ABABAB',display:'flex',alignItems:'center',gap:4}}><span style={{width:5,height:5,borderRadius:'50%',backgroundColor:p.color,display:'inline-block',flexShrink:0}}/>{p.name}</button>)}</div></div>}
         {/* isHighlight */}
-        {!editBlock&&<div style={{display:'flex',alignItems:'center',gap:6,marginBottom:14,padding:'6px 8px',backgroundColor:'#F8F8FF',borderRadius:5,border:'0.5px solid #E8E8F8'}}>
+        {!editBlock&&<div style={{display:'flex',alignItems:'center',gap:6,marginBottom:14,padding:'6px 8px',backgroundColor:'#F7F7F5',borderRadius:5,border:'0.5px solid #ECEBE8'}}>
           <input type="checkbox" id="hl_blk" checked={form.isHighlight} onChange={e=>setForm(f=>({...f,isHighlight:e.target.checked}))} style={{width:12,height:12,accentColor:'#1F1F1E',cursor:'pointer'}}/>
           <label htmlFor="hl_blk" style={{fontSize:11,color:form.isHighlight?'#1F1F1E':'#888',cursor:'pointer',userSelect:'none'}}>주요일정으로 등록</label>
         </div>}
@@ -3852,7 +3850,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
   const numColor=todayCell?'#1F1F1E':isRed?'#E24B4A':isBlue?'#4A7BC4':isFirstOfMonth?'#1F1F1E':'#37352F';
   const isRedDay=(isSat(date)||isSun(date)||!!holiday)&&!todayCell;
   const cellBg=isInDragRange?'#F2F1EF':todayCell?'#F2F1EF':isRedDay?'#FBFBFA':'#fff';
-  const cellBorder=isInDragRange?'0.5px solid #E4E3E0':todayCell?'0.5px solid #E4E3E0':'0.5px solid #F0F0F0';
+  const cellBorder=isInDragRange?'0.5px solid #E4E3E0':todayCell?'0.5px solid #E4E3E0':'0.5px solid #EEEDEA';
   const dateLabel=isFirstOfMonth?`${date.getMonth()+1}/1`:`${date.getDate()}`;
   return(
     <div className="cal-cell" onMouseDown={onMouseDown} onMouseEnter={onMouseEnter} onMouseUp={onMouseUp}
@@ -4187,7 +4185,7 @@ function CalendarSection(){
   },[allWeeks,calendarScrollRef]);
 
   useEffect(()=>{
-    scrollToTodayRef.current=()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();};
+    scrollToTodayRef.current=()=>{dispatch({type:'SET_WEEK_OFFSET',payload:0});scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();};
     const _go=()=>{scrollToYearMonth(today_.getFullYear(),today_.getMonth());updateNavFromScroll();};
     setTimeout(_go,250);setTimeout(_go,900);setTimeout(_go,2000);
   },[scrollToYearMonth,updateNavFromScroll]);
@@ -4270,7 +4268,6 @@ function CalendarSection(){
           <div style={{flex:1}}/>
           {freeLayerVisible&&<span style={{fontSize:11,color:'#1F1F1E',opacity:0.7,marginRight:4}}>더블클릭 → 포스트잇</span>}
           {!freeLayerVisible&&<span style={{fontSize:11,color:'#8C8C8C',marginRight:4}}>더블클릭 → 일정 | 드래그 → 기간</span>}
-          <button onClick={goToday} style={{fontSize:12,color:'#fff',padding:'4px 12px',backgroundColor:'#1F1F1E',borderRadius:6,fontWeight:600,flexShrink:0,boxShadow:'none'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#37352F'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#1F1F1E'}>오늘로</button>
         </div>
         {/* Day names row (sticky) — hidden in year view */}
         {!yearView&&<div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',backgroundColor:'#FBFBFA',borderTop:'0.5px solid #EEEDEA'}}>
@@ -4279,7 +4276,7 @@ function CalendarSection(){
       </div>
       {yearView&&<YearView year={navYear} onSelectMonth={(yr,mo)=>{setNavYear(yr);setNavMonth(mo);scrollToYearMonth(yr,mo);setYearView(false);}}/>}
       {/* Scrollable weeks */}
-      <div ref={calendarScrollRef} style={{flex:1,overflowY:'auto',position:'relative',display:yearView?'none':'block',borderLeft:'0.5px solid #EEEDEA'}}>
+      <div ref={calendarScrollRef} style={{flex:1,overflowY:'auto',scrollbarGutter:'stable',position:'relative',display:yearView?'none':'block',borderLeft:'0.5px solid #EEEDEA'}}>
         {allWeeks.map((weekDates,i)=>(
           <CalendarWeekRow key={i}
             ref_={el=>weekRefs.current[i]=el}
