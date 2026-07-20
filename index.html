@@ -898,6 +898,14 @@ function StoreProvider({children}){
     cloudLoad(apiKey,binId).then(s=>{
       if(s&&!dirtyRef.current){rawDispatch({type:'RESTORE_FULL',state:s});doMigrate(s.customLayers);}
       else{doMigrate(stateRef.current.customLayers);}
+      // 모노스킨 1회 강제: 클라우드 복원 후 내장 레이어색을 음소색으로 리셋하고 클라우드에도 반영
+      if(!localStorage.getItem('monoSkinV2')){
+        rawDispatch({type:'UPDATE_WORK_CAT',color:'#6E6E68'});
+        rawDispatch({type:'UPDATE_PERSONAL_CAT',color:'#566274'});
+        rawDispatch({type:'SET_OUTLOOK_COLOR',color:'#8A7A57'});
+        localStorage.setItem('monoSkinV2','1');
+        dirtyRef.current=true;
+      }
       localStorage.setItem(CLOUD_STATUS,'ok');
     }).catch(()=>{
       localStorage.setItem(CLOUD_STATUS,'error');
