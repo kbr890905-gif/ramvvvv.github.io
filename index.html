@@ -235,10 +235,11 @@ function reducer(state,action){
     case 'SET_WEEKLY_EVENTS':return{...state,weeklyEvents:action.events};
     case 'FORCE_LAYER_VISIBLE':{const ct=action.cat;if(ct==='work')return state.workVisible?state:{...state,workVisible:true};if(ct==='personal')return state.personalVisible?state:{...state,personalVisible:true};return{...state,customLayers:(state.customLayers||[]).map(l=>l.id===ct&&l.visible===false?{...l,visible:true}:l)};}
     case 'ENSURE_CUSTOM_LAYER':{if((state.customLayers||[]).some(l=>l.id===action.layer.id))return state;const cl=[...(state.customLayers||[]),action.layer];const lo=(state.layerOrder||[]).includes(action.layer.id)?state.layerOrder:[...(state.layerOrder||[]),action.layer.id];return{...state,customLayers:cl,layerOrder:lo};}
-    case 'ADD_TODO':return{...state,todos:[...state.todos,{id:uid(),date:action.date,text:action.text,done:false,category:action.category||'work'}]};
-    case 'UPDATE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,...action.updates}:t)};
-    case 'TOGGLE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,done:!t.done}:t)};
-    case 'DELETE_TODO':return{...state,todos:state.todos.filter(t=>t.id!==action.id)};
+    case 'ADD_TODO':return{...state,todos:[...state.todos,{id:uid(),date:action.date,text:action.text,done:false,category:action.category||'work',updatedAt:Date.now()}]};
+    case 'UPDATE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,...action.updates,updatedAt:Date.now()}:t)};
+    case 'TOGGLE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,done:!t.done,updatedAt:Date.now()}:t)};
+    case 'DELETE_TODO':return{...state,todos:state.todos.filter(t=>t.id!==action.id),eventTombstones:{...(state.eventTombstones||{}),[action.id]:Date.now()}};
+    case 'SET_TODOS':return{...state,todos:action.todos};
     case 'BULK_MOVE_TODOS':return{...state,todos:state.todos.map(t=>(!t.done&&action.fromDates.includes(t.date))?{...t,date:action.toDate}:t)};
     case 'MIGRATE_LAYER_NAME':return{...state,customLayers:(state.customLayers||[]).map(l=>l.name===action.from?{...l,name:action.to}:l)};
     case 'SET_WEEK_MEMO':return{...state,weekMemos:{...state.weekMemos,[action.date]:action.text}};
@@ -796,7 +797,20 @@ function StoreProvider({children}){
       const sig=JSON.stringify(sharedEv.map(e=>[e.id,e.date,e.time,e.title,e.category,e.updatedAt]).sort());
       const curSig=JSON.stringify((st.weeklyEvents||[]).filter(e=>shared.has(e.category)&&!e.isOutlook).map(e=>[e.id,e.date,e.time||undefined,e.title,e.category,e.updatedAt||0]).sort());
       if(sig!==curSig)rawDispatch({type:'SET_WEEKLY_EVENTS',events:[...keep,...sharedEv]});
-      await famSave(apiKey,binId,{v:1,_mod:Date.now(),items:merged,layers:outLayers,shareLayers:shareList}).catch(()=>{});
+      // 할일 병합
+      const ltodos={};(st.todos||[]).forEach(t=>{if(shared.has(t.category))ltodos[t.id]={id:t.id,date:t.date,text:t.text,category:t.category,done:!!t.done,updatedAt:t.updatedAt||0};});
+      const rTodos=(remote&&remote.titems)||{};
+      const tmerged={};const tids=new Set([...Object.keys(rTodos),...Object.keys(ltodos)]);
+      tids.forEach(id=>{const r=rTodos[id],l=ltodos[id];const rt=r?(r.updatedAt||0):-1,lt=l?(l.updatedAt||0):-1,tt=tomb[id]||0;
+        if(tt>0&&tt>rt&&tt>=lt){tmerged[id]={deleted:true,updatedAt:tt};return;}
+        if(r&&r.deleted&&(r.updatedAt||0)>0&&(r.updatedAt||0)>=lt){tmerged[id]={deleted:true,updatedAt:r.updatedAt};return;}
+        const pick=rt>=lt?r:l;if(pick)tmerged[id]=pick.deleted?{deleted:true,updatedAt:pick.updatedAt}:{id,date:pick.date,text:pick.text,category:pick.category,done:!!pick.done,updatedAt:pick.updatedAt||0};});
+      const keepT=(st.todos||[]).filter(t=>!shared.has(t.category));
+      const sharedT=Object.values(tmerged).filter(m=>!m.deleted).map(m=>({id:m.id,date:m.date,text:m.text,category:m.category,done:m.done,updatedAt:m.updatedAt}));
+      const tsig=JSON.stringify(sharedT.map(t=>[t.id,t.date,t.text,t.category,t.done,t.updatedAt]).sort());
+      const curTsig=JSON.stringify((st.todos||[]).filter(t=>shared.has(t.category)).map(t=>[t.id,t.date,t.text,t.category,!!t.done,t.updatedAt||0]).sort());
+      if(tsig!==curTsig)rawDispatch({type:'SET_TODOS',todos:[...keepT,...sharedT]});
+      await famSave(apiKey,binId,{v:1,_mod:Date.now(),items:merged,layers:outLayers,shareLayers:shareList,titems:tmerged}).catch(()=>{});
     }finally{famBusyRef.current=false;}
   },[rawDispatch]);
   useEffect(()=>{window.__familySync=familySync;},[familySync]);
