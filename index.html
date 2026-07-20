@@ -74,8 +74,8 @@ const {useState,useEffect,useContext,createContext,useRef,useCallback,useReducer
 // One-time mono-skin migration: reset built-in layer colors to muted palette
 if(!localStorage.getItem('monoSkinV1')){
   try{
-    localStorage.setItem('workColor',JSON.stringify('#6E6E68'));
-    localStorage.setItem('personalColor',JSON.stringify('#566274'));
+    localStorage.setItem('workColor',JSON.stringify('#565651'));
+    localStorage.setItem('personalColor',JSON.stringify('#4F6DA6'));
     localStorage.setItem('outlookColor',JSON.stringify('#8A7A57'));
     if(localStorage.getItem('topBarBg')&&JSON.parse(localStorage.getItem('topBarBg'))==='#1F1F1E')localStorage.setItem('topBarBg',JSON.stringify('#ffffff'));
   }catch(e){}
@@ -104,8 +104,8 @@ const PROJECT_COLORS = [
 ];
 const DAY_NAMES = ['월','화','수','목','금','토','일'];
 const CAT_STYLE = {
-  work:     {bg:'#F1F1EE',text:'#6E6E68',border:'#DBDAD5',dot:'#6E6E68'},
-  personal: {bg:'#ECEEF2',text:'#566274',border:'#C9CED8',dot:'#566274'},
+  work:     {bg:'#F0F0EE',text:'#565651',border:'#D9D9D4',dot:'#565651'},
+  personal: {bg:'#EAEEF4',text:'#4F6DA6',border:'#C3CEDE',dot:'#4F6DA6'},
   outlook:  {bg:'#F1F1EF',text:'#6E6E6A',border:'#E0E0DD',dot:'#8C8C87'},
 };
 
@@ -192,7 +192,7 @@ const initProjects=[{id:uid(),name:'업무 프로젝트',color:'#7F77DD',layer:'
 const initialState={
   workVisible:lsLoad('workVisible',true),personalVisible:lsLoad('personalVisible',true),
   workLabel:lsLoad('workLabel','업무'),personalLabel:lsLoad('personalLabel','개인'),
-  workColor:lsLoad('workColor','#6E6E68'),personalColor:lsLoad('personalColor','#566274'),
+  workColor:lsLoad('workColor','#565651'),personalColor:lsLoad('personalColor','#4F6DA6'),
   titleText:lsLoad('titleText','보람 스케줄러'),topBarBg:lsLoad('topBarBg','#ffffff'),topBarImg:lsLoad('topBarImg',''),
   outlookVisible:lsLoad('outlookVisible',true),outlookColor:lsLoad('outlookColor','#8C8C87'),
   customLayers:lsLoad('customLayers',[]),
@@ -901,8 +901,8 @@ function StoreProvider({children}){
       else{doMigrate(stateRef.current.customLayers);}
       // 모노스킨 1회 강제: 클라우드 복원 후 내장 레이어색을 음소색으로 리셋하고 클라우드에도 반영
       if(!localStorage.getItem('monoSkinV2')){
-        rawDispatch({type:'UPDATE_WORK_CAT',color:'#6E6E68'});
-        rawDispatch({type:'UPDATE_PERSONAL_CAT',color:'#566274'});
+        rawDispatch({type:'UPDATE_WORK_CAT',color:'#565651'});
+        rawDispatch({type:'UPDATE_PERSONAL_CAT',color:'#4F6DA6'});
         rawDispatch({type:'SET_OUTLOOK_COLOR',color:'#8A7A57'});
         localStorage.setItem('monoSkinV2','1');
         dirtyRef.current=true;
@@ -919,6 +919,12 @@ function StoreProvider({children}){
           if(ch)rawDispatch({type:'RESTORE_FULL',state:{projectMemos:npm}});
         }catch(e){}
         localStorage.setItem('monoV3','1');
+        dirtyRef.current=true;
+      }
+      if(!localStorage.getItem('monoV4')){
+        rawDispatch({type:'UPDATE_WORK_CAT',color:'#565651'});
+        rawDispatch({type:'UPDATE_PERSONAL_CAT',color:'#4F6DA6'});
+        localStorage.setItem('monoV4','1');
         dirtyRef.current=true;
       }
       localStorage.setItem(CLOUD_STATUS,'ok');
@@ -1003,8 +1009,8 @@ const useToast=()=>useContext(ToastContext);
 // Dynamic CAT style based on customizable category colors
 const useDynCatStyle=()=>{
   const{state}=useStore();
-  const wc=state.workColor||'#6E6E68';
-  const pc=state.personalColor||'#566274';
+  const wc=state.workColor||'#565651';
+  const pc=state.personalColor||'#4F6DA6';
   const oc=state.outlookColor||'#8C8C87';
   const base={
     work:{bg:lighten(wc,0.88),text:wc,border:lighten(wc,0.55),dot:wc},
@@ -3916,7 +3922,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
   const isFirstOfMonth=date.getDate()===1;
   const isRed=(holiday||isSun(date))&&!todayCell;
   const isBlue=isSat(date)&&!todayCell&&!holiday;
-  const numColor=todayCell?'#1F1F1E':isRed?'#E24B4A':isBlue?'#4A7BC4':isFirstOfMonth?'#0EA5E9':'#2F2F2F';
+  const numColor=todayCell?'#1F1F1E':isRed?'#E24B4A':isBlue?'#4A7BC4':isFirstOfMonth?'#1F1F1E':'#37352F';
   const isRedDay=(isSat(date)||isSun(date)||!!holiday)&&!todayCell;
   const cellBg=isInDragRange?'#F2F1EF':todayCell?'#F2F1EF':isRedDay?'#FAFAFA':'#fff';
   const cellBorder=isInDragRange?'0.5px solid #E4E3E0':todayCell?'0.5px solid #E4E3E0':'0.5px solid #F0F0F0';
@@ -3943,7 +3949,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
           minWidth:todayCell?21:0,height:todayCell?21:'auto',
           display:'inline-flex',alignItems:'center',justifyContent:'center',
           borderRadius:todayCell?'50%':0,padding:todayCell?'0 3px':0,
-          boxShadow:todayCell?'0 1px 3px rgba(20,20,25,0.35)':'none',
+          boxShadow:'none',
           fontVariantNumeric:'tabular-nums'}}>{dateLabel}</span>
         {holiday&&<span style={{fontSize:11,color:'#E24B4A',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',flex:1}}>{holiday}</span>}
       </div>
@@ -3960,15 +3966,17 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
                 draggable
                 onMouseDown={e=>e.stopPropagation()}
                 onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',ev.id);e.dataTransfer.effectAllowed='move';}}
-                style={{display:'flex',alignItems:'center',gap:3,padding:'3px 6px 3px 9px',
-                  backgroundColor:isBdayEv?'transparent':cs.bg,borderRadius:6,overflow:'hidden',
-                  boxShadow:isBdayEv?'none':'inset 2.5px 0 0 '+(cs.dot||cs.text),
+                onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F1F1EF'}
+                onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}
+                style={{display:'flex',alignItems:'center',gap:5,padding:'2px 5px 2px 4px',
+                  backgroundColor:'transparent',borderRadius:5,overflow:'hidden',
                   transform:(dragIdx!==null&&ci>=dragIdx)?'translateY(25px)':'translateY(0)',
                   transition:'transform 0.15s ease',
-                  cursor:'pointer',flexShrink:0,lineHeight:1.4}}>
-                {ev.time&&<span style={{fontSize:9.5,color:cs.text,opacity:0.75,flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
-                <span style={{fontSize:11,color:cs.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
-                {ev.isOutlook&&<span style={{fontSize:10,flexShrink:0}}>🔗</span>}
+                  cursor:'pointer',flexShrink:0,lineHeight:1.5}}>
+                {!isBdayEv&&<span style={{width:6,height:6,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
+                {ev.time&&<span style={{fontSize:10,color:'#9A9A95',flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
+                <span style={{fontSize:11.5,color:'#37352F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
+                {ev.isOutlook&&<span style={{fontSize:10,flexShrink:0,opacity:0.45}}>🔗</span>}
               </div>
             );
           })}
