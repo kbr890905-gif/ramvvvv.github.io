@@ -254,7 +254,7 @@ function reducer(state,action){
     case 'DELETE_TODO':return{...state,todos:state.todos.filter(t=>t.id!==action.id),eventTombstones:{...(state.eventTombstones||{}),[action.id]:Date.now()}};
     case 'SET_TODOS':return{...state,todos:action.todos};
     case 'SET_MULTIDAY_BLOCKS':return{...state,multiDayBlocks:action.blocks};
-    case 'BULK_MOVE_TODOS':return{...state,todos:state.todos.map(t=>(!t.done&&action.fromDates.includes(t.date))?{...t,date:action.toDate}:t)};
+    case 'BULK_MOVE_TODOS':return{...state,todos:state.todos.map(t=>(!t.done&&action.fromDates.includes(t.date))?{...t,date:action.toDate,updatedAt:Date.now()}:t)};
     case 'MIGRATE_LAYER_NAME':return{...state,customLayers:(state.customLayers||[]).map(l=>l.name===action.from?{...l,name:action.to}:l)};
     case 'SET_WEEK_MEMO':return{...state,weekMemos:{...state.weekMemos,[action.date]:action.text}};
     case 'SET_WEEK_OFFSET':return{...state,weekOffset:action.payload};
@@ -3738,20 +3738,24 @@ function WeeklyGrid({weekOffset,colH}){
   const[wkResize,setWkResize]=useState(null);
   const blockContRef=useRef(null);
   const{dispatch:wkDispatch}=useStore();
+  const wkResizeRef=useRef(null);
+  const wkStateRef=useRef(state);
+  useEffect(()=>{wkResizeRef.current=wkResize;},[wkResize]);
+  useEffect(()=>{wkStateRef.current=state;},[state]);
   useEffect(()=>{
-    if(!wkResize)return;
-    const onMove=(e)=>{if(!blockContRef.current)return;const r=blockContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));setWkResize(rv=>({...rv,col}));};
+    const onMove=(e)=>{if(!wkResizeRef.current||!blockContRef.current)return;const r=blockContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));setWkResize(rv=>rv?{...rv,col}:rv);};
     const onUp=(e)=>{
-      if(!blockContRef.current){setWkResize(null);return;}
+      const rv=wkResizeRef.current;if(!rv)return;
+      if(!blockContRef.current){setWkResize(null);wkResizeRef.current=null;return;}
       const r=blockContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));
       const date=toDateKey(weekDates[col]);
-      const blk=(state.multiDayBlocks||[]).find(mb=>mb.id===wkResize.id);
-      if(blk){if(wkResize.side==='start'&&date<=blk.endDate)wkDispatch({type:'UPDATE_MULTIDAY_BLOCK',id:wkResize.id,updates:{startDate:date}});else if(wkResize.side==='end'&&date>=blk.startDate)wkDispatch({type:'UPDATE_MULTIDAY_BLOCK',id:wkResize.id,updates:{endDate:date}});}
-      setWkResize(null);
+      const blk=(wkStateRef.current.multiDayBlocks||[]).find(mb=>mb.id===rv.id);
+      if(blk){if(rv.side==='start'&&date<=blk.endDate)wkDispatch({type:'UPDATE_MULTIDAY_BLOCK',id:rv.id,updates:{startDate:date}});else if(rv.side==='end'&&date>=blk.startDate)wkDispatch({type:'UPDATE_MULTIDAY_BLOCK',id:rv.id,updates:{endDate:date}});}
+      setWkResize(null);wkResizeRef.current=null;
     };
     window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
     return()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
-  },[wkResize,weekDates,state.multiDayBlocks,wkDispatch]);
+  },[weekDates,wkDispatch]);
   const wsk=toDateKey(weekDates[0]),wek=toDateKey(weekDates[6]);
   const wkBlocks=assignLanes((state.multiDayBlocks||[]).filter(b=>{
     if(!state.workVisible&&b.category==='work')return false;
@@ -4035,20 +4039,24 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
   const blockAreaH=numLanes>0?numLanes*LANE_H+4:0;
   const[calResize,setCalResize]=useState(null);
   const calContRef=useRef(null);
+  const calResizeRef=useRef(null);
+  const calStateRef=useRef(state);
+  useEffect(()=>{calResizeRef.current=calResize;},[calResize]);
+  useEffect(()=>{calStateRef.current=state;},[state]);
   useEffect(()=>{
-    if(!calResize)return;
-    const onMove=(e)=>{if(!calContRef.current)return;const r=calContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));setCalResize(rv=>({...rv,col}));};
+    const onMove=(e)=>{if(!calResizeRef.current||!calContRef.current)return;const r=calContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));setCalResize(rv=>rv?{...rv,col}:rv);};
     const onUp=(e)=>{
-      if(!calContRef.current){setCalResize(null);return;}
+      const rv=calResizeRef.current;if(!rv)return;
+      if(!calContRef.current){setCalResize(null);calResizeRef.current=null;return;}
       const r=calContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));
       const date=toDateKey(weekDates[col]);
-      const blk=(state.multiDayBlocks||[]).find(mb=>mb.id===calResize.id);
-      if(blk){if(calResize.side==='start'&&date<=blk.endDate)dispatch({type:'UPDATE_MULTIDAY_BLOCK',id:calResize.id,updates:{startDate:date}});else if(calResize.side==='end'&&date>=blk.startDate)dispatch({type:'UPDATE_MULTIDAY_BLOCK',id:calResize.id,updates:{endDate:date}});}
-      setCalResize(null);
+      const blk=(calStateRef.current.multiDayBlocks||[]).find(mb=>mb.id===rv.id);
+      if(blk){if(rv.side==='start'&&date<=blk.endDate)dispatch({type:'UPDATE_MULTIDAY_BLOCK',id:rv.id,updates:{startDate:date}});else if(rv.side==='end'&&date>=blk.startDate)dispatch({type:'UPDATE_MULTIDAY_BLOCK',id:rv.id,updates:{endDate:date}});}
+      setCalResize(null);calResizeRef.current=null;
     };
     window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
     return()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
-  },[calResize,weekDates,state.multiDayBlocks,dispatch]);
+  },[weekDates,dispatch]);
   const dragSorted=drag?[drag.start,drag.current].sort():null;
   return(
     <div ref={ref_} style={{position:'relative'}}>
@@ -4574,6 +4582,8 @@ function MobileApp(){
   const[todoVal,setTodoVal]=React.useState('');
   const weekAddRef=React.useRef(null);
   const[editTodoId,setEditTodoId]=React.useState(null);const[editTodoVal,setEditTodoVal]=React.useState('');
+  const editCancelRef=React.useRef(false);
+  const[weekTodoAdd,setWeekTodoAdd]=React.useState(null);const[weekTodoVal,setWeekTodoVal]=React.useState('');
 
   const layerLabel=(cat)=>cat==='work'?(state.workLabel||'업무'):cat==='personal'?(state.personalLabel||'개인'):cat==='outlook'?'아웃룩':((state.customLayers||[]).find(l=>l.id===cat)||{}).name||'기타';
   const[mTodoCat,setMTodoCat]=React.useState('personal');
@@ -4614,7 +4624,7 @@ function MobileApp(){
   const weekLabel=`${weekDates[0].getMonth()+1}/${weekDates[0].getDate()} – ${weekDates[6].getMonth()+1}/${weekDates[6].getDate()}`;
 
   const HDR=52,TAB=58;
-  const C={bg:'#F6F4EE',card:'#FFFFFF',line:'#EAE7DE',t1:'#2B2926',t2:'#9A968C',t3:'#C4BFB4',brand:'#1F1F1E'};
+  const C={bg:'#F2F2F7',card:'#FFFFFF',line:'#E5E5EA',t1:'#1A1A1A',t2:'#8E8E93',t3:'#C7C7CC',brand:'#1C1C1E'};
 
   const EventRow=({ev})=>{
     const cs=catStyle[ev.category]||catStyle.work;
@@ -4729,7 +4739,7 @@ function MobileApp(){
             {selTodos.map(t=>(
               <div key={t.id} style={{display:'flex',alignItems:'center',gap:9,padding:'7px 2px'}}>
                 <button onClick={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} style={{width:18,height:18,borderRadius:5,flexShrink:0,border:`1.5px solid ${t.done?'#D0D0D0':C.brand}`,backgroundColor:t.done?'#F0F0F0':'transparent',color:C.brand,fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>{t.done?'✓':''}</button>
-                {editTodoId===t.id?(<input autoFocus value={editTodoVal} onChange={e=>setEditTodoVal(e.target.value)} onBlur={()=>{const v=editTodoVal.trim();if(v&&v!==t.text)dispatch({type:'UPDATE_TODO',id:t.id,updates:{text:v}});setEditTodoId(null);}} onKeyDown={e=>{if(e.key==='Enter'){const v=editTodoVal.trim();if(v&&v!==t.text)dispatch({type:'UPDATE_TODO',id:t.id,updates:{text:v}});setEditTodoId(null);}if(e.key==='Escape')setEditTodoId(null);}} style={{flex:1,fontSize:14,padding:'4px 6px',border:`0.5px solid ${C.brand}`,borderRadius:6}}/>):(<span onClick={()=>{if(!t.done){setEditTodoId(t.id);setEditTodoVal(t.text);}}} style={{fontSize:14,flex:1,color:t.done?'#C8C8C8':C.t1,textDecoration:t.done?'line-through':'none'}}>{t.text}</span>)}
+                {editTodoId===t.id?(<input autoFocus value={editTodoVal} onChange={e=>setEditTodoVal(e.target.value)} onBlur={()=>{const v=editTodoVal.trim();if(!editCancelRef.current&&v&&v!==t.text)dispatch({type:'UPDATE_TODO',id:t.id,updates:{text:v}});editCancelRef.current=false;setEditTodoId(null);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){editCancelRef.current=true;e.currentTarget.blur();}}} style={{flex:1,fontSize:14,padding:'4px 6px',border:`0.5px solid ${C.brand}`,borderRadius:6}}/>):(<span onClick={()=>{if(!t.done){editCancelRef.current=false;setEditTodoId(t.id);setEditTodoVal(t.text);}}} style={{fontSize:14,flex:1,color:t.done?'#C8C8C8':C.t1,textDecoration:t.done?'line-through':'none'}}>{t.text}</span>)}
                 <button onClick={()=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{category:mCycle(t.category)}})} title="레이어 변경" style={{fontSize:9,padding:'2px 6px',borderRadius:4,flexShrink:0,border:'0.5px solid '+(mCatCol(t.category).border||'#E0E0E8'),backgroundColor:mCatCol(t.category).bg,color:mCatCol(t.category).text,fontWeight:600}}>{layerLabel(t.category).slice(0,3)}</button>
                 <button onClick={()=>dispatch({type:'DELETE_TODO',id:t.id})} style={{fontSize:15,color:'#D8D8D8'}}>×</button>
               </div>))}
@@ -4738,7 +4748,7 @@ function MobileApp(){
                 <button onMouseDown={e=>e.preventDefault()} onClick={()=>setMTodoCat(x=>mCycle(x))} title="레이어 선택" style={{fontSize:10,padding:'7px 8px',borderRadius:6,flexShrink:0,border:'0.5px solid '+(mCatCol(mTodoCat).border||'#E0E0E8'),backgroundColor:mCatCol(mTodoCat).bg,color:mCatCol(mTodoCat).text,fontWeight:600}}>{layerLabel(mTodoCat).slice(0,3)}</button>
                 <input autoFocus value={todoVal} onChange={e=>setTodoVal(e.target.value)}
                   onBlur={()=>{const v=todoVal.trim();if(v)dispatch({type:'ADD_TODO',date:selDate,text:v,category:mTodoCat});setTodoVal('');setTodoAdd(false);}}
-                  onKeyDown={e=>{if(e.key==='Enter'){const v=todoVal.trim();if(v)dispatch({type:'ADD_TODO',date:selDate,text:v,category:mTodoCat});setTodoVal('');setTodoAdd(false);}}}
+                  onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}
                   placeholder="할 일 입력" style={{flex:1,fontSize:14,padding:'8px 10px',border:`0.5px solid ${C.brand}`,borderRadius:8}}/>
               </div>
             ):(
@@ -4777,6 +4787,7 @@ function MobileApp(){
                         <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</div>
                         <div style={{fontSize:17,fontWeight:600,color:C.t1,marginTop:2,fontVariantNumeric:'tabular-nums'}}>{ev.time||'종일'}</div>
                       </div>);})}
+                    {(()=>{const dayTodos=(state.todos||[]).filter(t=>t.date===dk);if(dayTodos.length===0&&weekTodoAdd!==dk)return null;return(<div style={{borderTop:`0.5px solid ${C.line}`,marginTop:4,paddingTop:6,display:'flex',flexDirection:'column',gap:2}}>{dayTodos.map(t=>(<div key={t.id} style={{display:'flex',alignItems:'center',gap:7,padding:'3px 0'}}><button onClick={e=>{e.stopPropagation();dispatch({type:'TOGGLE_TODO',id:t.id});}} style={{width:17,height:17,borderRadius:4,flexShrink:0,border:`1.5px solid ${t.done?'#D0D0D0':C.brand}`,backgroundColor:t.done?'#F0F0F0':'transparent',color:C.brand,fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>{t.done?'✓':''}</button>{editTodoId===t.id?(<input autoFocus value={editTodoVal} onChange={e=>setEditTodoVal(e.target.value)} onBlur={()=>{const v=editTodoVal.trim();if(!editCancelRef.current&&v&&v!==t.text)dispatch({type:'UPDATE_TODO',id:t.id,updates:{text:v}});editCancelRef.current=false;setEditTodoId(null);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){editCancelRef.current=true;e.currentTarget.blur();}}} style={{flex:1,fontSize:13,padding:'2px 5px',border:`0.5px solid ${C.brand}`,borderRadius:5}}/>):(<span onClick={()=>{if(!t.done){editCancelRef.current=false;setEditTodoId(t.id);setEditTodoVal(t.text);}}} style={{flex:1,fontSize:13,color:t.done?C.t3:C.t1,textDecoration:t.done?'line-through':'none',cursor:t.done?'default':'pointer'}}>{t.text}</span>)}<button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_TODO',id:t.id});}} style={{fontSize:14,color:C.t3,padding:'0 3px',lineHeight:1}}>×</button></div>))}{weekTodoAdd===dk?(<div style={{display:'flex',alignItems:'center',gap:7,padding:'3px 0'}}><div style={{width:17,height:17,borderRadius:4,flexShrink:0,border:`1.5px solid ${C.t3}`,backgroundColor:'transparent'}}/><input autoFocus value={weekTodoVal} onChange={e=>setWeekTodoVal(e.target.value)} onBlur={()=>{const v=weekTodoVal.trim();if(v)dispatch({type:'ADD_TODO',date:dk,text:v,category:mTodoCat});setWeekTodoVal('');setWeekTodoAdd(null);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){setWeekTodoVal('');setWeekTodoAdd(null);}}} placeholder="할 일 입력" style={{flex:1,fontSize:13,padding:'2px 5px',border:`0.5px solid ${C.brand}`,borderRadius:5,backgroundColor:'#fff'}}/></div>):(<button onClick={e=>{e.stopPropagation();setWeekTodoAdd(dk);}} style={{fontSize:12,color:C.t2,padding:'3px 0',textAlign:'left',lineHeight:1.2}}>+ 할 일</button>)}</div>);})()} 
                   </div>
                   <button onClick={()=>setEventPop(dk)} style={{width:28,height:28,borderRadius:'50%',flexShrink:0,alignSelf:'flex-start',backgroundColor:'#E0E0E8',color:C.brand,fontSize:17,marginTop:2}}>+</button>
                 </div>
@@ -4786,7 +4797,7 @@ function MobileApp(){
       )}
 
       {/* Bottom tabs */}
-      <div style={{height:TAB,flexShrink:0,backgroundColor:'#fff',borderTop:`0.5px solid ${C.line}`,display:'flex',paddingBottom:'env(safe-area-inset-bottom)'}}>
+      <div style={{height:TAB,flexShrink:0,backgroundColor:C.card,borderTop:`0.5px solid ${C.line}`,display:'flex',paddingBottom:'env(safe-area-inset-bottom)'}}>
         {[{id:'month',label:'먼슬리'},{id:'week',label:'위클리'}].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,color:tab===t.id?C.brand:'#B7B2A6',background:'none',border:'none'}}>
             <IcCal s={21}/>
