@@ -69,7 +69,7 @@
 <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>
 <script>
 // 노트북 연결 링크 자동 설정: ?k=base64(apiKey)&b=base64(binId)
-(function(){try{var p=new URLSearchParams(window.location.search),k=p.get('k'),b=p.get('b');if(k&&b){localStorage.setItem('cloudApiKey',atob(decodeURIComponent(k)));localStorage.setItem('cloudBinId',atob(decodeURIComponent(b)));localStorage.setItem('cloudStatus','ok');}var fa=p.get('fam'),fbb=p.get('fb'),fll=p.get('fl');if(fa&&fbb){localStorage.setItem('famApiKey',atob(decodeURIComponent(fa)));localStorage.setItem('famBinId',atob(decodeURIComponent(fbb)));if(fll)localStorage.setItem('familyLayers',atob(decodeURIComponent(fll)));localStorage.setItem('famGuest','1');}if(k||fa){window.history.replaceState({},'',window.location.pathname);}}catch(e){}}());
+(function(){try{var p=new URLSearchParams(window.location.search),k=p.get('k'),b=p.get('b');if(k&&b){localStorage.setItem('cloudApiKey',atob(decodeURIComponent(k)));localStorage.setItem('cloudBinId',atob(decodeURIComponent(b)));localStorage.setItem('cloudStatus','ok');}var fa=p.get('fam'),fbb=p.get('fb'),fll=p.get('fl');if(fa&&fbb){localStorage.setItem('famApiKey',atob(decodeURIComponent(fa)));localStorage.setItem('famBinId',atob(decodeURIComponent(fbb)));if(fll)localStorage.setItem('familyLayers',atob(decodeURIComponent(fll)));localStorage.setItem('famGuest','1');try{const _fl2=fll?JSON.parse(atob(decodeURIComponent(fll))):['personal'];_fl2.forEach(cat=>{if(cat==='personal')localStorage.setItem('personalVisible',JSON.stringify(true));else if(cat==='work')localStorage.setItem('workVisible',JSON.stringify(true));});}catch(e){}  }if(k||fa){window.history.replaceState({},'',window.location.pathname);}}catch(e){}}());
 </script>
 <script type="text/babel" data-presets="react">
 const {useState,useEffect,useContext,createContext,useRef,useCallback,useReducer,useMemo} = React;
@@ -253,14 +253,15 @@ function reducer(state,action){
     case 'TOGGLE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,done:!t.done,updatedAt:Date.now()}:t)};
     case 'DELETE_TODO':return{...state,todos:state.todos.filter(t=>t.id!==action.id),eventTombstones:{...(state.eventTombstones||{}),[action.id]:Date.now()}};
     case 'SET_TODOS':return{...state,todos:action.todos};
+    case 'SET_MULTIDAY_BLOCKS':return{...state,multiDayBlocks:action.blocks};
     case 'BULK_MOVE_TODOS':return{...state,todos:state.todos.map(t=>(!t.done&&action.fromDates.includes(t.date))?{...t,date:action.toDate}:t)};
     case 'MIGRATE_LAYER_NAME':return{...state,customLayers:(state.customLayers||[]).map(l=>l.name===action.from?{...l,name:action.to}:l)};
     case 'SET_WEEK_MEMO':return{...state,weekMemos:{...state.weekMemos,[action.date]:action.text}};
     case 'SET_WEEK_OFFSET':return{...state,weekOffset:action.payload};
     case 'TOGGLE_WEEKLY_COLLAPSED':return{...state,weeklyCollapsed:!state.weeklyCollapsed};
-    case 'ADD_MULTIDAY_BLOCK':return{...state,multiDayBlocks:[...state.multiDayBlocks,{id:uid(),...action.block}]};
-    case 'UPDATE_MULTIDAY_BLOCK':return{...state,multiDayBlocks:state.multiDayBlocks.map(b=>b.id===action.id?{...b,...action.updates}:b)};
-    case 'DELETE_MULTIDAY_BLOCK':return{...state,multiDayBlocks:state.multiDayBlocks.filter(b=>b.id!==action.id)};
+    case 'ADD_MULTIDAY_BLOCK':return{...state,multiDayBlocks:[...state.multiDayBlocks,{id:uid(),updatedAt:Date.now(),...action.block}]};
+    case 'UPDATE_MULTIDAY_BLOCK':return{...state,multiDayBlocks:state.multiDayBlocks.map(b=>b.id===action.id?{...b,...action.updates,updatedAt:Date.now()}:b)};
+    case 'DELETE_MULTIDAY_BLOCK':return{...state,multiDayBlocks:state.multiDayBlocks.filter(b=>b.id!==action.id),eventTombstones:{...(state.eventTombstones||{}),[action.id]:Date.now()}};
     case 'SET_OUTLOOK_VISIBLE':return{...state,outlookVisible:action.payload};
     case 'SET_OUTLOOK_COLOR':return{...state,outlookColor:action.color};
     case 'ADD_CUSTOM_LAYER':{const _id=uid();return{...state,customLayers:[...state.customLayers,{id:_id,name:action.name,color:action.color,visible:true}],layerOrder:[...(state.layerOrder||['work','personal']),_id]};}
@@ -823,7 +824,24 @@ function StoreProvider({children}){
       const tsig=JSON.stringify(sharedT.map(t=>[t.id,t.date,t.text,t.category,t.done,t.updatedAt]).sort());
       const curTsig=JSON.stringify((st.todos||[]).filter(t=>shared.has(t.category)).map(t=>[t.id,t.date,t.text,t.category,!!t.done,t.updatedAt||0]).sort());
       if(tsig!==curTsig)rawDispatch({type:'SET_TODOS',todos:[...keepT,...sharedT]});
-      await famSave(apiKey,binId,{v:1,_mod:Date.now(),items:merged,layers:outLayers,shareLayers:shareList,titems:tmerged}).catch(()=>{});
+      // ── multiDayBlocks 병합 ──
+      const lmblocks={};(st.multiDayBlocks||[]).forEach(b=>{if(shared.has(b.category))lmblocks[b.id]={id:b.id,startDate:b.startDate,endDate:b.endDate,title:b.title,category:b.category,updatedAt:b.updatedAt||0};});
+      const rMblocks=(remote&&remote.mblocks)||{};
+      const mbmerged={};const mbids=new Set([...Object.keys(rMblocks),...Object.keys(lmblocks)]);
+      mbids.forEach(id=>{
+        const r=rMblocks[id],l=lmblocks[id];
+        const rt=r?(r.updatedAt||0):-1,lt=l?(l.updatedAt||0):-1,tt=tomb[id]||0;
+        if(tt>0&&tt>rt&&tt>=lt){mbmerged[id]={deleted:true,updatedAt:tt};return;}
+        if(r&&r.deleted&&(r.updatedAt||0)>0&&(r.updatedAt||0)>=lt){mbmerged[id]={deleted:true,updatedAt:r.updatedAt};return;}
+        const pick=rt>=lt?r:l;
+        if(pick)mbmerged[id]=pick.deleted?{deleted:true,updatedAt:pick.updatedAt}:{id,startDate:pick.startDate,endDate:pick.endDate,title:pick.title,category:pick.category,updatedAt:pick.updatedAt||0};
+      });
+      const keepMB=(st.multiDayBlocks||[]).filter(b=>!shared.has(b.category));
+      const sharedMB=Object.values(mbmerged).filter(m=>!m.deleted).map(m=>({id:m.id,startDate:m.startDate,endDate:m.endDate,title:m.title,category:m.category,updatedAt:m.updatedAt}));
+      const mbsig=JSON.stringify(sharedMB.map(b=>[b.id,b.startDate,b.endDate,b.title,b.category,b.updatedAt]).sort());
+      const curMBsig=JSON.stringify((st.multiDayBlocks||[]).filter(b=>shared.has(b.category)).map(b=>[b.id,b.startDate,b.endDate,b.title,b.category,b.updatedAt||0]).sort());
+      if(mbsig!==curMBsig)rawDispatch({type:'SET_MULTIDAY_BLOCKS',blocks:[...keepMB,...sharedMB]});
+      await famSave(apiKey,binId,{v:1,_mod:Date.now(),items:merged,layers:outLayers,shareLayers:shareList,titems:tmerged,mblocks:mbmerged}).catch(()=>{});
     }finally{famBusyRef.current=false;}
   },[rawDispatch]);
   useEffect(()=>{window.__familySync=familySync;},[familySync]);
@@ -3238,7 +3256,7 @@ function LeftPanel(){
 // ─── EVENT POPOVER ───────────────────────────
 
 function EventPopover({date,onClose}){
-  const{state,dispatch}=useStore();const catStyle=useDynCatStyle();const showToast=useToast();const[form,setForm]=useState({time:'',title:'',category:'work',projectId:null,isHighlight:false,recurring:false,recurType:'weekly',recurDay:0,recurWeeks:12});const titleRef=useRef(null);
+  const{state,dispatch}=useStore();const catStyle=useDynCatStyle();const showToast=useToast();const _guestCat=(()=>{try{if(localStorage.getItem('famGuest')!=='1')return'work';const _l=JSON.parse(localStorage.getItem('familyLayers')||'[]');return _l[0]||'work';}catch(e){return'work';}})();const[form,setForm]=useState({time:'',title:'',category:_guestCat,projectId:null,isHighlight:false,recurring:false,recurType:'weekly',recurDay:0,recurWeeks:12});const titleRef=useRef(null);
   useEffect(()=>{setTimeout(()=>titleRef.current?.focus(),60);},[]);
   useEffect(()=>{const h=(e)=>{if(e.key==='Escape')onClose();};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[]);
   const dateObj=new Date(date+'T00:00:00');
@@ -4688,34 +4706,39 @@ function MobileApp(){
         </div>
       )}
 
-      {/* WEEK (agenda) */}
+      {/* WEEK (agenda) — 연속 스크롤 12주 */}
       {tab==='week'&&(
-        <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:`8px 12px ${TAB+16}px`}}>
-          {weekDates.map(d=>{
-            const dk=toDateKey(d);const evs=evByDate[dk]||[];const isTd=dk===toDateKey(today);
+        <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:`8px 12px ${TAB+16}px`}}
+          ref={el=>{if(el){const t=el.querySelector('[data-today="1"]');if(t)setTimeout(()=>t.scrollIntoView({block:'start',behavior:'auto'}),40);}}}>
+          {(()=>{const _base=new Date(today.getFullYear(),today.getMonth(),today.getDate());const _days=[];for(let i=-28;i<63;i++){const d=new Date(_base);d.setDate(_base.getDate()+i);_days.push(d);}return _days;})().map((d,di)=>{
+            const dk=toDateKey(d);const evs=evByDate[dk]||[];const isTd=isToday(d);
             const hol=getHoliday(dk);const isRed=(d.getDay()===0||hol)&&!isTd;const isBlue=d.getDay()===6&&!isTd&&!hol;
+            const isMonday=d.getDay()===1;
             return(
-              <div key={dk} style={{display:'flex',gap:12,padding:'10px 0',borderBottom:`0.5px solid ${C.line}`}}>
-                <div style={{width:44,flexShrink:0,textAlign:'center',paddingTop:2}}>
-                  <div style={{fontSize:11,fontWeight:600,color:isRed?'#E24B4A':isBlue?'#4A7BC4':C.t2}}>{DAY_NAMES[(d.getDay()+6)%7]}</div>
-                  <div style={{width:34,height:34,margin:'2px auto 0',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontSize:19,fontWeight:600,fontVariantNumeric:'tabular-nums'}}>{d.getDate()}</div>
+              <React.Fragment key={dk}>
+                {(isMonday||di===0)&&<div style={{padding:'10px 0 2px',fontSize:10.5,fontWeight:700,color:C.t3,letterSpacing:'0.6px',textTransform:'uppercase'}}>{d.getMonth()+1}월 {d.getDate()}일 주</div>}
+                <div data-today={isTd?'1':undefined} style={{display:'flex',gap:12,padding:'10px 0',borderBottom:`0.5px solid ${C.line}`,backgroundColor:isTd?'rgba(31,31,30,0.025)':'transparent'}}>
+                  <div style={{width:44,flexShrink:0,textAlign:'center',paddingTop:2}}>
+                    <div style={{fontSize:11,fontWeight:600,color:isRed?'#E24B4A':isBlue?'#4A7BC4':C.t2}}>{DAY_NAMES[(d.getDay()+6)%7]}</div>
+                    <div style={{width:34,height:34,margin:'2px auto 0',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontSize:19,fontWeight:600,fontVariantNumeric:'tabular-nums'}}>{d.getDate()}</div>
+                  </div>
+                  <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:6}}>
+                    {evs.length===0&&blocksOn(dk).length===0&&<button onClick={()=>setEventPop(dk)} style={{fontSize:12.5,color:C.t3,textAlign:'left',padding:'8px 0'}}>+ 일정</button>}
+                    {blocksOn(dk).map(b=>{const cs=catStyle[b.category]||catStyle.work;return(
+                      <div key={b.id} onClick={()=>setMdEdit(b)} style={{backgroundColor:C.card,borderRadius:12,padding:'9px 13px',boxShadow:`inset 3px 0 0 ${cs.dot||cs.text}, 0 1px 3px rgba(20,20,40,0.05)`,cursor:'pointer'}}>
+                        <div style={{fontSize:11.5,color:cs.text,fontWeight:600,marginBottom:1}}>기간 · {layerLabel(b.category)}</div>
+                        <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.title}</div>
+                      </div>);})}
+                    {evs.map(ev=>{const cs=catStyle[ev.category]||catStyle.work;return(
+                      <div key={ev.id} onClick={()=>setDetailEv(ev)} style={{backgroundColor:C.card,borderRadius:12,padding:'9px 13px',boxShadow:`inset 3px 0 0 ${cs.dot||cs.text}, 0 1px 3px rgba(20,20,40,0.05)`,cursor:'pointer'}}>
+                        <div style={{fontSize:11.5,color:cs.text,fontWeight:600,marginBottom:1}}>{layerLabel(ev.category)}{ev.meetingNoteId?' · 📋':''}</div>
+                        <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</div>
+                        <div style={{fontSize:17,fontWeight:600,color:C.t1,marginTop:2,fontVariantNumeric:'tabular-nums'}}>{ev.time||'종일'}</div>
+                      </div>);})}
+                  </div>
+                  <button onClick={()=>setEventPop(dk)} style={{width:28,height:28,borderRadius:'50%',flexShrink:0,alignSelf:'flex-start',backgroundColor:'#E0E0E8',color:C.brand,fontSize:17,marginTop:2}}>+</button>
                 </div>
-                <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:6}}>
-                  {evs.length===0&&blocksOn(dk).length===0&&<button onClick={()=>setEventPop(dk)} style={{fontSize:12.5,color:C.t3,textAlign:'left',padding:'8px 0'}}>+ 일정</button>}
-                  {blocksOn(dk).map(b=>{const cs=catStyle[b.category]||catStyle.work;return(
-                    <div key={b.id} onClick={()=>setMdEdit(b)} style={{backgroundColor:C.card,borderRadius:12,padding:'9px 13px',boxShadow:`inset 3px 0 0 ${cs.dot||cs.text}, 0 1px 3px rgba(20,20,40,0.05)`,cursor:'pointer'}}>
-                      <div style={{fontSize:11.5,color:cs.text,fontWeight:600,marginBottom:1}}>기간 · {layerLabel(b.category)}</div>
-                      <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.title}</div>
-                    </div>);})}
-                  {evs.map(ev=>{const cs=catStyle[ev.category]||catStyle.work;return(
-                    <div key={ev.id} onClick={()=>setDetailEv(ev)} style={{backgroundColor:C.card,borderRadius:12,padding:'9px 13px',boxShadow:`inset 3px 0 0 ${cs.dot||cs.text}, 0 1px 3px rgba(20,20,40,0.05)`,cursor:'pointer'}}>
-                      <div style={{fontSize:11.5,color:cs.text,fontWeight:600,marginBottom:1}}>{layerLabel(ev.category)}{ev.meetingNoteId?' · 📋':''}</div>
-                      <div style={{fontSize:15,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</div>
-                      <div style={{fontSize:17,fontWeight:600,color:C.t1,marginTop:2,fontVariantNumeric:'tabular-nums'}}>{ev.time||'종일'}</div>
-                    </div>);})}
-                </div>
-                <button onClick={()=>setEventPop(dk)} style={{width:28,height:28,borderRadius:'50%',flexShrink:0,alignSelf:'flex-start',backgroundColor:'#EFEBE2',color:C.brand,fontSize:17,marginTop:2}}>+</button>
-              </div>);
+              </React.Fragment>);
           })}
         </div>
       )}
