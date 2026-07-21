@@ -99,12 +99,12 @@ if(!localStorage.getItem('olTitleNFC')){
 
 // ─── CONSTANTS ───────────────────────────────
 const PROJECT_COLORS = [
-  '#5A5A56','#6E6E68','#7C7C76','#8C8C87','#9B9B95','#A6A6A0',
-  '#4B4B48','#666660','#767670','#88887F','#98988F','#B0B0A9',
-  '#5F5F5A','#727268','#848478','#9A9A8E','#AEAEA2','#C0C0BA',
-  '#D1D1CB','#9CA39C','#6B706B','#4B534B','#374137','#2C2C2A',
+  '#E24B4A','#F97316','#EAB308','#22C55E','#3B82F6','#8B5CF6',
+  '#EC4899','#14B8A6','#F43F5E','#FB923C','#84CC16','#06B6D4',
+  '#A855F7','#D946EF','#10B981','#6366F1','#0EA5E9','#F59E0B',
+  '#DC2626','#7C3AED','#059669','#2563EB','#DB2777','#0891B2',
 ];
-const DAY_NAMES = ['월','화','수','목','금','토','일'];
+const DAY_NAMES = ['일','월','화','수','목','금','토'];
 const CAT_STYLE = {
   work:     {bg:'#F0F0EE',text:'#565651',border:'#D9D9D4',dot:'#565651'},
   personal: {bg:'#FCEEE9',text:'#C05A3B',border:'#EFC4B5',dot:'#C05A3B'},
@@ -144,7 +144,7 @@ const lighten = (hex,a=0.88)=>{if(!hex)return'#F5F5F5';const r=parseInt(hex.slic
 
 // ─── DATE UTILS ──────────────────────────────
 const toDateKey = (d)=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return`${y}-${m}-${day}`;};
-const getWeekStart=(off=0)=>{const t=new Date();t.setHours(0,0,0,0);const dow=t.getDay(),toMon=dow===0?-6:1-dow,m=new Date(t);m.setDate(t.getDate()+toMon+off*7);return m;};
+const getWeekStart=(off=0)=>{const t=new Date();t.setHours(0,0,0,0);const dow=t.getDay(),m=new Date(t);m.setDate(t.getDate()-dow+off*7);return m;};
 const getWeekDates=(off=0)=>{const mon=getWeekStart(off);return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});};
 const isToday=(date)=>toDateKey(date)===toDateKey(new Date());
 const isSat=(d)=>d.getDay()===6;
@@ -901,7 +901,7 @@ function StoreProvider({children}){
       if(toToday.length>0)rawDispatch({type:'BULK_MOVE_TODOS',fromDates:toToday,toDate:today});
       Object.entries(toMonday).forEach(([mk,dates])=>rawDispatch({type:'BULK_MOVE_TODOS',fromDates:dates,toDate:mk}));
       localStorage.setItem('lastTodoAutoMove',today);
-    },1500);// cloud 로드 완료 후 실행
+    },5000);// cloud 로드 완료 후 실행
   },[]);
   // Cloud sync: load on mount (+ 생일→기념일 마이그레이션)
   useEffect(()=>{
@@ -3159,9 +3159,10 @@ function MeetingNoteList({onOpen}){
 }
 function LayerPanel(){
   const{state,dispatch}=useStore();
-  const{workVisible,personalVisible,outlookVisible,customLayers,layerOrder,workLabel,personalLabel}=state;
+  const{workVisible,personalVisible,outlookVisible,customLayers,layerOrder,workLabel,personalLabel,workColor,personalColor,outlookColor}=state;
   const catStyle=useDynCatStyle();
-  const[addOpen,setAddOpen]=React.useState(false);const[nm,setNm]=React.useState('');
+  const[addOpen,setAddOpen]=React.useState(false);const[nm,setNm]=React.useState('');const[lpCtx,setLpCtx]=React.useState(null);
+  const openLpCtx=(e,type,id=null)=>{e.preventDefault();e.stopPropagation();setLpCtx({x:e.clientX,y:e.clientY,type,id});};
   const ordered=(layerOrder||['work','personal']).map(id=>{
     if(id==='work')return{id:'work',label:workLabel||'업무',visible:workVisible,cs:catStyle.work,t:'work'};
     if(id==='personal')return{id:'personal',label:personalLabel||'개인',visible:personalVisible,cs:catStyle.personal,t:'personal'};
@@ -3169,18 +3170,19 @@ function LayerPanel(){
     return l?{id:l.id,label:l.name,visible:l.visible,cs:catStyle[l.id]||catStyle.work,t:'custom'}:null;
   }).filter(Boolean);
   const toggle=(l)=>{if(l.t==='work')dispatch({type:'SET_WORK_VISIBLE',payload:!l.visible});else if(l.t==='personal')dispatch({type:'SET_PERSONAL_VISIBLE',payload:!l.visible});else dispatch({type:'TOGGLE_CUSTOM_LAYER',id:l.id});};
-  const row=(key,dot,label,visible,onClick)=>(
-    <div key={key} onClick={onClick} style={{display:'flex',alignItems:'center',gap:9,padding:'6px 8px',borderRadius:6,cursor:'pointer',opacity:visible?1:0.5}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#EDECF4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}>
+  const row=(key,dot,label,visible,onClick,ctxType,ctxId=null)=>(
+    <div key={key} onClick={onClick} onContextMenu={e=>openLpCtx(e,ctxType,ctxId)} style={{display:'flex',alignItems:'center',gap:9,padding:'6px 8px',borderRadius:6,cursor:'pointer',opacity:visible?1:0.5}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#EDECF4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}>
       <span style={{width:8,height:8,borderRadius:3,flexShrink:0,backgroundColor:visible?dot:'#C8C8C8'}}/>
       <span style={{fontSize:13,color:'#37352F',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{label}</span>
       <span style={{fontSize:11,color:visible?'#8C8C87':'#C8C8C8',flexShrink:0}}>{visible?'●':'○'}</span>
     </div>
   );
   return(
+    <>
     <section style={{marginBottom:16}}>
       <div style={{fontSize:11,color:'#9A9A95',letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600,margin:'2px 8px 4px'}}>레이어</div>
-      {ordered.map(l=>row(l.id,l.cs.dot,l.label,l.visible,()=>toggle(l)))}
-      {row('outlook',catStyle.outlook.dot,'아웃룩',outlookVisible!==false,()=>dispatch({type:'SET_OUTLOOK_VISIBLE',payload:!(outlookVisible!==false)}))}
+      {ordered.map(l=>row(l.id,l.cs.dot,l.label,l.visible,()=>toggle(l),l.t==='custom'?'custom':l.t,l.t==='custom'?l.id:null))}
+      {row('outlook',catStyle.outlook.dot,'아웃룩',outlookVisible!==false,()=>dispatch({type:'SET_OUTLOOK_VISIBLE',payload:!(outlookVisible!==false)}),'outlook')}
       {addOpen?(
         <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px'}} onClick={e=>e.stopPropagation()}>
           <input autoFocus value={nm} onChange={e=>setNm(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&nm.trim()){dispatch({type:'ADD_CUSTOM_LAYER',name:nm.trim(),color:PROJECT_COLORS[0]});setNm('');setAddOpen(false);}if(e.key==='Escape')setAddOpen(false);}} placeholder="레이어 이름" style={{flex:1,fontSize:12,color:'#37352F',borderBottom:'0.5px solid #E0E0E8',minWidth:0}}/>
@@ -3190,6 +3192,8 @@ function LayerPanel(){
         <button onClick={()=>setAddOpen(true)} style={{fontSize:12.5,color:'#9A9A95',padding:'6px 8px',width:'100%',textAlign:'left',background:'transparent',border:'none',cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.color='#37352F'} onMouseLeave={e=>e.currentTarget.style.color='#9A9A95'}>+ 레이어 추가</button>
       )}
     </section>
+    {lpCtx&&<LayerCtxMenu menu={lpCtx} onClose={()=>setLpCtx(null)} dispatch={dispatch} workLabel={workLabel||'업무'} workColor={workColor} personalLabel={personalLabel||'개인'} personalColor={personalColor} outlookColor={outlookColor} customLayers={customLayers}/>}
+    </>
   );
 }
 function LeftPanel(){
@@ -3634,7 +3638,7 @@ function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCo
           onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setVal(todo.text);setEditing(false);}}}
           style={{flex:1,fontSize:13,color:'#2F2F2F',minWidth:0,borderBottom:'0.5px solid #E0E0E8',background:'transparent'}}/>
       ):(
-        <span onDoubleClick={()=>{setVal(todo.text);setEditing(true);}} title="더블클릭 → 수정"
+        <span onDoubleClick={e=>{e.stopPropagation();setVal(todo.text);setEditing(true);}} title="더블클릭 → 수정"
           style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:todo.done?'#C8C8C8':'#444444',textDecoration:todo.done?'line-through':'none',cursor:'text'}}>{todo.text}</span>
       )}
       {hovered&&!editing&&<button onClick={onDelete} style={{fontSize:11,color:'#E0E0E0',flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'} onMouseLeave={e=>e.currentTarget.style.color='#E0E0E0'}>×</button>}
@@ -3677,7 +3681,7 @@ function MemoEditor({memoKey,value,onUpdate}){
 }
 function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
   const{state,dispatch}=useStore();
-  const[evtDragIdx,setEvtDragIdx]=useState(null);const[todoDragIdx,setTodoDragIdx]=useState(null);const catStyle=useDynCatStyle();const dk=toDateKey(date);const dow=(date.getDay()+6)%7;const todayDate=isToday(date);const weekend=isSat(date)||isSun(date);
+  const[evtDragIdx,setEvtDragIdx]=useState(null);const[todoDragIdx,setTodoDragIdx]=useState(null);const catStyle=useDynCatStyle();const dk=toDateKey(date);const dow=date.getDay();const todayDate=isToday(date);const weekend=isSat(date)||isSun(date);
   const events=(state.weeklyEvents||[]).filter(e=>{if(e.date!==dk)return false;if(e.category==='work')return state.workVisible;if(e.category==='personal')return state.personalVisible;if(e.isOutlook)return state.outlookVisible!==false;const cl=(state.customLayers||[]).find(l=>l.id===e.category);if(cl)return cl.visible!==false;return true;}).sort((a,b)=>((a.time||'99:99').localeCompare(b.time||'99:99')));
   const todos=(state.todos||[]).filter(t=>{if(t.date!==dk)return false;if(t.category==='work')return state.workVisible;if(t.category==='personal')return state.personalVisible;return true;});
   const memo=state.weekMemos[dk]||'';
@@ -3741,6 +3745,23 @@ function WeeklyGrid({weekOffset,colH}){
   const{state}=useStore();
   const catStyle=useDynCatStyle();
   const[wkEditBlock,setWkEditBlock]=useState(null);
+  const[wkResize,setWkResize]=useState(null);
+  const blockContRef=useRef(null);
+  const{dispatch:wkDispatch}=useStore();
+  useEffect(()=>{
+    if(!wkResize)return;
+    const onMove=(e)=>{if(!blockContRef.current)return;const r=blockContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));setWkResize(rv=>({...rv,col}));};
+    const onUp=(e)=>{
+      if(!blockContRef.current){setWkResize(null);return;}
+      const r=blockContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));
+      const date=toDateKey(weekDates[col]);
+      const blk=(state.multiDayBlocks||[]).find(mb=>mb.id===wkResize.id);
+      if(blk){if(wkResize.side==='start'&&date<=blk.endDate)wkDispatch({type:'UPDATE_MULTIDAY_BLOCK',id:wkResize.id,updates:{startDate:date}});else if(wkResize.side==='end'&&date>=blk.startDate)wkDispatch({type:'UPDATE_MULTIDAY_BLOCK',id:wkResize.id,updates:{endDate:date}});}
+      setWkResize(null);
+    };
+    window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
+    return()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
+  },[wkResize,weekDates,state.multiDayBlocks,wkDispatch]);
   const wsk=toDateKey(weekDates[0]),wek=toDateKey(weekDates[6]);
   const wkBlocks=assignLanes((state.multiDayBlocks||[]).filter(b=>{
     if(!state.workVisible&&b.category==='work')return false;
@@ -3762,14 +3783,24 @@ function WeeklyGrid({weekOffset,colH}){
   return(
     <div style={{position:'relative',backgroundColor:'transparent',height:'100%'}}>
       {laneN>0&&(
-        <div style={{position:'absolute',top:30,left:0,right:0,height:laneN*20+2,zIndex:15,pointerEvents:'none'}}>
-          {wkBlocks.map(b=>{const pos=getBlockWeekPos(b,weekDates);const cs=catStyle[b.category]||catStyle.work;return(
-            <div key={b.id} onClick={()=>setWkEditBlock(b)} title={b.title}
-              style={{position:'absolute',top:2+b.lane*20,left:`calc(${pos.startCol}/7*100% + 3px)`,width:`calc(${(pos.endCol-pos.startCol+1)}/7*100% - 6px)`,height:17,
-                backgroundColor:cs.bg,color:cs.text,fontSize:11,fontWeight:500,padding:'1px 8px 1px 9px',
-                borderRadius:6,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',cursor:'pointer',pointerEvents:'auto',
+        <div ref={blockContRef} style={{position:'absolute',top:30,left:0,right:0,height:laneN*20+2,zIndex:15,pointerEvents:'none'}}>
+          {wkBlocks.map(b=>{const pos=getBlockWeekPos(b,weekDates);const cs=catStyle[b.category]||catStyle.work;
+            const isRz=wkResize&&wkResize.id===b.id;
+            const sc=isRz&&wkResize.side==='start'?Math.min(wkResize.col,pos.endCol):pos.startCol;
+            const ec=isRz&&wkResize.side==='end'?Math.max(wkResize.col,pos.startCol):pos.endCol;
+            return(
+            <div key={b.id} onClick={e=>{if(!isRz)setWkEditBlock(b);}} title={b.title}
+              style={{position:'absolute',top:2+b.lane*20,left:`calc(${sc}/7*100% + 3px)`,width:`calc(${(ec-sc+1)}/7*100% - 6px)`,height:17,pointerEvents:'auto',cursor:'pointer'}}>
+              <div style={{position:'relative',height:'100%',
+                backgroundColor:cs.bg,color:cs.text,fontSize:11,fontWeight:500,padding:'1px 14px',
+                borderRadius:6,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',
                 boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text)}}>
-              {b.title}
+                {b.title}
+                <div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setWkResize({id:b.id,side:'start',col:sc});}}
+                  style={{position:'absolute',left:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>
+                <div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setWkResize({id:b.id,side:'end',col:ec});}}
+                  style={{position:'absolute',right:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>
+              </div>
             </div>);})}
         </div>
       )}
@@ -3913,7 +3944,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
   const numColor=todayCell?'#1F1F1E':isRed?'#E24B4A':isBlue?'#4A7BC4':isFirstOfMonth?'#1F1F1E':'#37352F';
   const isRedDay=(isSat(date)||isSun(date)||!!holiday)&&!todayCell;
   const cellBg=isInDragRange?'#EEEEF4':todayCell?'#F5F5FA':isRedDay?'#F8F8FB':'#fff';
-  const cellBorder=isInDragRange?'0.5px solid #E0E0E8':todayCell?'1px solid #1F1F1E':'0.5px solid #E8E8EE';
+  const cellBorder=isInDragRange?'0.5px solid #E0E0E8':'0.5px solid #E8E8EE';const todayOutline=todayCell?'1px solid #1F1F1E':'none';
   const dateLabel=isFirstOfMonth?`${date.getMonth()+1}/1`:`${date.getDate()}`;
   return(
     <div className="cal-cell" onMouseDown={onMouseDown} onMouseEnter={onMouseEnter} onMouseUp={onMouseUp}
@@ -3926,7 +3957,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
       onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragIdx(null);}}
       onDrop={e=>{setDragIdx(null);const id=e.dataTransfer.getData('text/evtid');if(!id)return;e.preventDefault();const dk2=toDateKey(date);const ev=(state.weeklyEvents||[]).find(x=>x.id===id);if(!ev||ev.date===dk2)return;dispatch({type:'UPDATE_EVENT',id,updates:{date:dk2}});if(ev.meetingNoteId)dispatch({type:'UPDATE_MEETING_NOTE',id:ev.meetingNoteId,updates:{date:dk2,updatedAt:new Date().toISOString()}});}}
       style={{minHeight:148,padding:'4px 6px 4px',position:'relative',backgroundColor:cellBg,
-        borderRight:cellBorder,borderBottom:cellBorder,cursor:'pointer',userSelect:'none',
+        borderRight:cellBorder,borderBottom:cellBorder,outline:todayOutline,outlineOffset:'-0.5px',cursor:'pointer',userSelect:'none',
         display:'flex',flexDirection:'column',gap:1}}>
       {/* Date number */}
       <div style={{display:'flex',alignItems:'center',gap:3,flexShrink:0}}>
@@ -3998,7 +4029,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
 
 // CalendarWeekRow: multi-day blocks overlaid on top of date cells
 function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouseDown,onCellMouseEnter,onCellMouseUp,onDblClickCell,onBlockClick,onEventClick,projects,ref_}){
-  const{state}=useStore();
+  const{state,dispatch}=useStore();
   const catStyle=useDynCatStyle();const wsk=toDateKey(weekDates[0]),wek=toDateKey(weekDates[6]);
   const weekBlocks=multiDayBlocks.filter(b=>{
     if(b.startDate>wek||b.endDate<wsk)return false;
@@ -4012,6 +4043,22 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
   const numLanes=blocksWithLanes.length>0?Math.max(...blocksWithLanes.map(b=>b.lane))+1:0;
   const LANE_H=19;
   const blockAreaH=numLanes>0?numLanes*LANE_H+4:0;
+  const[calResize,setCalResize]=useState(null);
+  const calContRef=useRef(null);
+  useEffect(()=>{
+    if(!calResize)return;
+    const onMove=(e)=>{if(!calContRef.current)return;const r=calContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));setCalResize(rv=>({...rv,col}));};
+    const onUp=(e)=>{
+      if(!calContRef.current){setCalResize(null);return;}
+      const r=calContRef.current.getBoundingClientRect();const col=Math.min(6,Math.max(0,Math.floor((e.clientX-r.left)/r.width*7)));
+      const date=toDateKey(weekDates[col]);
+      const blk=(state.multiDayBlocks||[]).find(mb=>mb.id===calResize.id);
+      if(blk){if(calResize.side==='start'&&date<=blk.endDate)dispatch({type:'UPDATE_MULTIDAY_BLOCK',id:calResize.id,updates:{startDate:date}});else if(calResize.side==='end'&&date>=blk.startDate)dispatch({type:'UPDATE_MULTIDAY_BLOCK',id:calResize.id,updates:{endDate:date}});}
+      setCalResize(null);
+    };
+    window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
+    return()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
+  },[calResize,weekDates,state.multiDayBlocks,dispatch]);
   const dragSorted=drag?[drag.start,drag.current].sort():null;
   return(
     <div ref={ref_} style={{position:'relative'}}>
@@ -4036,24 +4083,32 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
       {/* Multi-day blocks: absolute overlay at bottom */}
       {numLanes>0&&(
         <div style={{position:'absolute',bottom:0,left:0,right:0,height:blockAreaH,zIndex:3,pointerEvents:'none'}}>
-          <div style={{position:'relative',height:'100%'}}>
+          <div ref={calContRef} style={{position:'relative',height:'100%'}}>
             {blocksWithLanes.map(b=>{
               const pos=getBlockWeekPos(b,weekDates);
+              const isRz=calResize&&calResize.id===b.id;
+              const sc=isRz&&calResize.side==='start'?Math.min(calResize.col,pos.endCol):pos.startCol;
+              const ec=isRz&&calResize.side==='end'?Math.max(calResize.col,pos.startCol):pos.endCol;
               const proj=projects.find(p=>p.id===b.projectId);
               const cs=catStyle[b.category]||catStyle.work;
               const color=proj?proj.color:cs.dot;
               const bg=proj?lighten(proj.color,0.82):cs.bg;
               return(
-                <div key={b.id} onClick={e=>{e.stopPropagation();onBlockClick(b);}}
+                <div key={b.id} onClick={e=>{e.stopPropagation();if(!isRz)onBlockClick(b);}}
                   style={{position:'absolute',top:b.lane*LANE_H+2,
-                    left:`${(pos.startCol/7)*100}%`,width:`${((pos.endCol-pos.startCol+1)/7)*100}%`,
-                    height:LANE_H-3,backgroundColor:bg,
+                    left:`${(sc/7)*100}%`,width:`${((ec-sc+1)/7)*100}%`,
+                    height:LANE_H-3,cursor:'pointer',pointerEvents:'all'}}>
+                  <div style={{position:'relative',height:'100%',backgroundColor:bg,
                     boxShadow:pos.isStart?`inset 2.5px 0 0 ${color}`:'none',
                     borderRadius:pos.isStart&&pos.isEnd?6:pos.isStart?'6px 0 0 6px':pos.isEnd?'0 6px 6px 0':0,
-                    padding:pos.isStart?'0 6px 0 9px':'0 6px',overflow:'hidden',whiteSpace:'nowrap',
-                    fontSize:11,fontWeight:500,color,display:'flex',alignItems:'center',
-                    cursor:'pointer',boxSizing:'border-box',pointerEvents:'all'}}>
-                  {pos.isStart&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{getBdayPrefix(b.category,state)}{b.title}</span>}
+                    padding:pos.isStart?'0 14px 0 9px':'0 14px',overflow:'hidden',whiteSpace:'nowrap',
+                    fontSize:11,fontWeight:500,color,display:'flex',alignItems:'center',boxSizing:'border-box'}}>
+                    {pos.isStart&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{getBdayPrefix(b.category,state)}{b.title}</span>}
+                    {pos.isStart&&<div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setCalResize({id:b.id,side:'start',col:sc});}}
+                      style={{position:'absolute',left:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>}
+                    {pos.isEnd&&<div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setCalResize({id:b.id,side:'end',col:ec});}}
+                      style={{position:'absolute',right:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>}
+                  </div>
                 </div>
               );
             })}
@@ -4196,8 +4251,8 @@ function CalendarSection(){
   const allWeeks=useMemo(()=>{
     const weeks=[];
     const start=new Date(today_.getFullYear()-2,0,1);
-    // Align to Monday
-    const dow=(start.getDay()+6)%7;
+    // Align to Sunday
+    const dow=start.getDay();
     start.setDate(start.getDate()-dow);
     const end=new Date(today_.getFullYear()+5,11,31);
     const cur=new Date(start);
@@ -4334,7 +4389,7 @@ function CalendarSection(){
         </div>
         {/* Day names row (sticky) — hidden in year view */}
         {!yearView&&<div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',backgroundColor:'#F8F8FB',borderTop:'0.5px solid #E8E8EE'}}>
-          {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',padding:'5px 0',fontSize:11,color:i===6?'#E24B4A':i===5?'#4A7BC4':'#A3A3A3',fontWeight:600,letterSpacing:'0.5px'}}>{d}</div>)}
+          {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',padding:'5px 0',fontSize:11,color:i===0?'#E24B4A':i===6?'#4A7BC4':'#A3A3A3',fontWeight:600,letterSpacing:'0.5px'}}>{d}</div>)}
         </div>}
       </div>
       {yearView&&<YearView year={navYear} onSelectMonth={(yr,mo)=>{setNavYear(yr);setNavMonth(mo);scrollToYearMonth(yr,mo);setYearView(false);}}/>}
