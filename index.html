@@ -722,6 +722,7 @@ function SettingsModal({onClose}){
               )}
             </div>
           )}
+          {tab==='layers'&&(<div style={{display:'flex',flexDirection:'column',gap:16}}><div><label style={{fontSize:11,color:'#A3A3A3',display:'block',marginBottom:4}}>업무 레이어 이름</label><input value={workName} onChange={e=>setWorkName(e.target.value)} style={{width:'100%',fontSize:14,color:'#2F2F2F',border:'0.5px solid #E0E0E8',borderRadius:6,padding:'8px 10px',backgroundColor:'#F9F9FB'}}/></div><div><label style={{fontSize:11,color:'#A3A3A3',display:'block',marginBottom:4}}>개인 레이어 이름</label><input value={personalName} onChange={e=>setPersonalName(e.target.value)} style={{width:'100%',fontSize:14,color:'#2F2F2F',border:'0.5px solid #E0E0E8',borderRadius:6,padding:'8px 10px',backgroundColor:'#F9F9FB'}}/></div><button onClick={()=>{if(workName.trim())dispatch({type:'UPDATE_WORK_CAT',label:workName.trim()});if(personalName.trim())dispatch({type:'UPDATE_PERSONAL_CAT',label:personalName.trim()});showToast('레이어 이름 저장됨','success');}} style={{...btnBase,backgroundColor:'#1F1F1E',color:'#fff',padding:'8px 14px'}}>저장</button></div>)}
         </div>
       </div>
     </div>
@@ -4581,6 +4582,8 @@ function MobileApp(){
   const[todoAdd,setTodoAdd]=React.useState(false);
   const[todoVal,setTodoVal]=React.useState('');
   const weekAddRef=React.useRef(null);
+  const weekScrollRef=React.useRef(null);
+  const mTouchRef=React.useRef(null);
   const[editTodoId,setEditTodoId]=React.useState(null);const[editTodoVal,setEditTodoVal]=React.useState('');
   const editCancelRef=React.useRef(false);
   const[weekTodoAdd,setWeekTodoAdd]=React.useState(null);const[weekTodoVal,setWeekTodoVal]=React.useState('');
@@ -4607,7 +4610,7 @@ function MobileApp(){
 
   const goPrev=()=>{if(tab==='month'){const mm=navM===0?11:navM-1,yy=navM===0?navY-1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w-1);};
   const goNext=()=>{if(tab==='month'){const mm=navM===11?0:navM+1,yy=navM===11?navY+1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w+1);};
-  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());setWeekOff(0);setSelDate(toDateKey(today));};
+  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());setWeekOff(0);setSelDate(toDateKey(today));setTimeout(()=>{if(weekScrollRef.current){const el=weekScrollRef.current.querySelector('[data-today="1"]');if(el)el.scrollIntoView({block:'start',behavior:'smooth'});}},80);};
 
   // month grid cells
   const first=new Date(navY,navM,1);
@@ -4661,7 +4664,9 @@ function MobileApp(){
 
       {/* MONTH */}
       {tab==='month'&&(
-        <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',display:'flex',flexDirection:'column',paddingBottom:TAB+8}}>
+        <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',display:'flex',flexDirection:'column',paddingBottom:TAB+8}}
+          onTouchStart={e=>{mTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}}
+          onTouchEnd={e=>{if(!mTouchRef.current)return;const dx=e.changedTouches[0].clientX-mTouchRef.current.x,dy=e.changedTouches[0].clientY-mTouchRef.current.y;mTouchRef.current=null;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.4){if(dx<0)goNext();else goPrev();}}}>
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',padding:'6px 6px 2px',flexShrink:0}}>
             {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:i===0?'#E24B4A':i===6?'#4A7BC4':C.t2}}>{d}</div>)}
           </div>
@@ -4761,7 +4766,7 @@ function MobileApp(){
       {/* WEEK (agenda) — 연속 스크롤 12주 */}
       {tab==='week'&&(
         <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:`8px 12px ${TAB+16}px`}}
-          ref={el=>{if(el){const t=el.querySelector('[data-today="1"]');if(t)setTimeout(()=>t.scrollIntoView({block:'start',behavior:'auto'}),40);}}}>
+          ref={el=>{weekScrollRef.current=el;if(el){const t=el.querySelector('[data-today="1"]');if(t)setTimeout(()=>t.scrollIntoView({block:'start',behavior:'auto'}),40);}}}>
           {(()=>{const _base=new Date(today.getFullYear(),today.getMonth(),today.getDate());const _days=[];for(let i=-28;i<63;i++){const d=new Date(_base);d.setDate(_base.getDate()+i);_days.push(d);}return _days;})().map((d,di)=>{
             const dk=toDateKey(d);const evs=evByDate[dk]||[];const isTd=isToday(d);
             const hol=getHoliday(dk);const isRed=(d.getDay()===0||hol)&&!isTd;const isBlue=d.getDay()===6&&!isTd&&!hol;
