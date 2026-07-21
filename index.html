@@ -3673,8 +3673,8 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
   const submitTodo=()=>{const t=todoVal.trim();if(t){if(todoRepeat){const d0=new Date(dk+'T00:00:00');for(let i=0;i<12;i++){const d=new Date(d0);d.setDate(d0.getDate()+i*7);dispatch({type:'ADD_TODO',date:toDateKey(d),text:t,category:todoCat});}}else{dispatch({type:'ADD_TODO',date:dk,text:t,category:todoCat});}}setTodoVal('');setTodoActive(false);setTodoRepeat(false);};
   const isRedDay=(isSun(date)||!!getHoliday(dk))&&!todayDate;
   const isBlueDay=isSat(date)&&!todayDate&&!getHoliday(dk);
-  const hdrBg=todayDate?'#4A6423':'#F8F8FB';const dateColor=todayDate?'#fff':isRedDay?'#E24B4A':isBlueDay?'#4A7BC4':'#2F2F2F';const dayColor=todayDate?'rgba(255,255,255,0.7)':isRedDay?'#E88B8A':isBlueDay?'#8FAEDB':'#C4C4C4';
-  const colBg=todayDate?'#F3F8E8':(isRedDay||isBlueDay)?'#F8F8FB':'#fff';
+  const hdrBg=todayDate?'#1F1F1E':'#F8F8FB';const dateColor=todayDate?'#fff':isRedDay?'#E24B4A':isBlueDay?'#4A7BC4':'#2F2F2F';const dayColor=todayDate?'rgba(255,255,255,0.7)':isRedDay?'#E88B8A':isBlueDay?'#8FAEDB':'#C4C4C4';
+  const colBg=todayDate?'#F9F9FC':(isRedDay||isBlueDay)?'#F8F8FB':'#fff';
   const CHIP_H=25;
   const visibleEvt=Math.max(1,Math.floor((evtH-6)/CHIP_H));
   const hiddenEvt=Math.max(0,events.length-visibleEvt);
@@ -3894,8 +3894,8 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
   const isBlue=isSat(date)&&!todayCell&&!holiday;
   const numColor=todayCell?'#1F1F1E':isRed?'#E24B4A':isBlue?'#4A7BC4':isFirstOfMonth?'#1F1F1E':'#37352F';
   const isRedDay=(isSat(date)||isSun(date)||!!holiday)&&!todayCell;
-  const cellBg=isInDragRange?'#EEEEF4':todayCell?'#EEF5DC':isRedDay?'#F8F8FB':'#fff';
-  const cellBorder=isInDragRange?'0.5px solid #E0E0E8':todayCell?'0.5px solid #BDD68A':'0.5px solid #E8E8EE';
+  const cellBg=isInDragRange?'#EEEEF4':todayCell?'#F5F5FA':isRedDay?'#F8F8FB':'#fff';
+  const cellBorder=isInDragRange?'0.5px solid #E0E0E8':todayCell?'1px solid #1F1F1E':'0.5px solid #E8E8EE';
   const dateLabel=isFirstOfMonth?`${date.getMonth()+1}/1`:`${date.getDate()}`;
   return(
     <div className="cal-cell" onMouseDown={onMouseDown} onMouseEnter={onMouseEnter} onMouseUp={onMouseUp}
@@ -3914,7 +3914,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
       <div style={{display:'flex',alignItems:'center',gap:3,flexShrink:0}}>
         <span style={{fontSize:isFirstOfMonth?11:13,
           fontWeight:todayCell?700:(isFirstOfMonth?700:500),lineHeight:1,
-          backgroundColor:todayCell?'#4A6423':'transparent',
+          backgroundColor:todayCell?'#1F1F1E':'transparent',
           color:todayCell?'#fff':numColor,
           minWidth:todayCell?21:0,height:todayCell?21:'auto',
           display:'inline-flex',alignItems:'center',justifyContent:'center',
