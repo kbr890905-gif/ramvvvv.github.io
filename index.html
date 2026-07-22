@@ -69,7 +69,7 @@
 <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>
 <script>
 // 노트북 연결 링크 자동 설정: ?k=base64(apiKey)&b=base64(binId)
-(function(){try{var p=new URLSearchParams(window.location.search),k=p.get('k'),b=p.get('b');if(k&&b){localStorage.setItem('cloudApiKey',atob(decodeURIComponent(k)));localStorage.setItem('cloudBinId',atob(decodeURIComponent(b)));localStorage.setItem('cloudStatus','ok');}var fa=p.get('fam'),fbb=p.get('fb'),fll=p.get('fl');if(fa&&fbb){localStorage.setItem('famApiKey',atob(decodeURIComponent(fa)));localStorage.setItem('famBinId',atob(decodeURIComponent(fbb)));if(fll)localStorage.setItem('familyLayers',atob(decodeURIComponent(fll)));localStorage.setItem('famGuest','1');try{const _fl2=fll?JSON.parse(atob(decodeURIComponent(fll))):['personal'];_fl2.forEach(cat=>{if(cat==='personal')localStorage.setItem('personalVisible',JSON.stringify(true));else if(cat==='work')localStorage.setItem('workVisible',JSON.stringify(true));});}catch(e){}  }if(k||fa){window.history.replaceState({},'',window.location.pathname);}}catch(e){}}());
+(function(){try{var p=new URLSearchParams(window.location.search),k=p.get('k'),b=p.get('b');if(k&&b){localStorage.setItem('cloudApiKey',atob(decodeURIComponent(k)));localStorage.setItem('cloudBinId',atob(decodeURIComponent(b)));localStorage.setItem('cloudStatus','ok');}var fa=p.get('fam'),fbb=p.get('fb'),fll=p.get('fl');if(fa&&fbb){localStorage.setItem('famApiKey',atob(decodeURIComponent(fa)));localStorage.setItem('famBinId',atob(decodeURIComponent(fbb)));if(fll)localStorage.setItem('familyLayers',atob(decodeURIComponent(fll)));localStorage.setItem('famGuest','1');try{const _fl2=fll?JSON.parse(atob(decodeURIComponent(fll))):['personal'];_fl2.forEach(cat=>{if(cat==='personal')localStorage.setItem('personalVisible',JSON.stringify(true));else if(cat==='work')localStorage.setItem('workVisible',JSON.stringify(true));});}catch(e){}  }if(k){const sp=new URLSearchParams(window.location.search);sp.delete('k');sp.delete('b');const qs=sp.toString();window.history.replaceState({},'',window.location.pathname+(qs?'?'+qs:''));}}catch(e){}}());
 </script>
 <script type="text/babel" data-presets="react">
 const {useState,useEffect,useContext,createContext,useRef,useCallback,useReducer,useMemo} = React;
@@ -852,10 +852,17 @@ function StoreProvider({children}){
   useEffect(()=>{window.__familySync=familySync;},[familySync]);
   useEffect(()=>{
     const{apiKey,binId}=famGetCreds();if(!apiKey||!binId)return;
+    // 게스트: 초기 로드 시 공유 레이어 즉시 표시 (famSync 2.5초 대기 전에)
+    if(localStorage.getItem('famGuest')==='1'){
+      try{
+        const layers=JSON.parse(localStorage.getItem('familyLayers')||'["personal"]');
+        layers.forEach(cat=>rawDispatch({type:'FORCE_LAYER_VISIBLE',cat}));
+      }catch(e){}
+    }
     const t0=setTimeout(familySync,2500);
     const iv=setInterval(familySync,30000);
     return()=>{clearTimeout(t0);clearInterval(iv);};
-  },[familySync]);
+  },[familySync,rawDispatch]);
   const stateRef=useRef(state);
   // cloudLoadedRef: cloudLoad 완료 전에는 cloudSave 차단 (race condition 방지)
   const cloudLoadedRef=useRef(false);
