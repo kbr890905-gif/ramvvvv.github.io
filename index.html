@@ -4623,7 +4623,7 @@ function MobileApp(){
 
   // month grid cells
   const first=new Date(navY,navM,1);
-  const startDow=(first.getDay()+6)%7;
+  const startDow=first.getDay();// 일요일 시작(헤더 일~토와 정렬)
   const daysIn=new Date(navY,navM+1,0).getDate();
   const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=daysIn;d++)cells.push(d);
   while(cells.length%7)cells.push(null);
