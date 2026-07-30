@@ -429,7 +429,11 @@ function SettingsModal({onClose}){
   const[formApiKey,setFormApiKey]=useState('');
   const[formBinId,setFormBinId]=useState('');
   const[cloudSyncing,setCloudSyncing]=useState(false);
+  const[cloudStatusTick,setCloudStatusTick]=useState(0);
+  useEffect(()=>{const iv=setInterval(()=>setCloudStatusTick(t=>t+1),2000);return()=>clearInterval(iv);},[]);
   const cloudStatus=localStorage.getItem(CLOUD_STATUS);
+  const cloudLastSyncAt=Number(localStorage.getItem('cloudLastSyncAt')||0);
+  const cloudLastSyncLabel=(()=>{if(!cloudLastSyncAt)return'아직 없음';const diff=Math.max(0,Date.now()-cloudLastSyncAt);if(diff<10000)return'방금 전';if(diff<60000)return Math.floor(diff/1000)+'초 전';if(diff<3600000)return Math.floor(diff/60000)+'분 전';return Math.floor(diff/3600000)+'시간 전';})();
   const[snaps,setSnaps]=useState(()=>{try{return JSON.parse(localStorage.getItem('snapshots')||'[]');}catch{return[];}});
   const[workName,setWorkName]=useState(state.workLabel||'업무');
   const[personalName,setPersonalName]=useState(state.personalLabel||'개인');
@@ -663,16 +667,20 @@ function SettingsModal({onClose}){
               <FamilyShareCard showToast={showToast}/>
               {cloudConnected?(
                 <>
-                  <div style={{backgroundColor:'#EAF3DE',borderRadius:8,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                    <span style={{fontSize:13,color:'#3B6D11',fontWeight:500}}>✓ 클라우드 동기화 활성화됨</span>
-                    <span style={{fontSize:10,color:'#639922',fontFamily:'monospace'}}>{cloudBinId.slice(0,8)}...</span>
+                  <div style={{backgroundColor:cloudStatus==='error'?'#FDECEC':'#EAF3DE',borderRadius:8,padding:'10px 14px'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <span style={{fontSize:13,color:cloudStatus==='error'?'#B3261E':'#3B6D11',fontWeight:500}}>{cloudStatus==='error'?'✕ 마지막 동기화 실패':'✓ 클라우드 동기화 활성화됨'}</span>
+                      <span style={{fontSize:10,color:cloudStatus==='error'?'#C0453D':'#639922',fontFamily:'monospace'}}>Bin: {cloudBinId.slice(0,8)}...</span>
+                    </div>
+                    <div style={{fontSize:11,color:cloudStatus==='error'?'#B3261E':'#5C8A2E',marginTop:4}}>마지막 동기화: {cloudLastSyncLabel}{cloudStatus==='error'?' · 네트워크 또는 API Key/Bin ID를 확인하세요':''}</div>
+                    <div style={{fontSize:10.5,color:'#9A9A9A',marginTop:4}}>다른 기기와 동기화가 안 된다면, 그 기기의 이 화면에서 Bin ID 앞자리가 위와 똑같은지 확인하세요. 다르면 서로 다른 저장소라 절대 동기화되지 않습니다.</div>
                   </div>
                   <div style={{backgroundColor:'#EEEEF4',borderRadius:8,padding:'12px 14px',fontSize:11,color:'#1F1F1E',lineHeight:1.7}}>
                     <b style={{fontWeight:600}}>노트북/다른 컴퓨터에서 연결하는 방법</b><br/>
                     아래 <b style={{fontWeight:600}}>연결 링크 복사</b> 버튼을 누르고, 노트북 브라우저에서 그 링크를 열면 자동으로 데이터가 연결됩니다.
                   </div>
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                    <button disabled={cloudSyncing} onClick={async()=>{setCloudSyncing(true);try{await cloudSave(cloudApiKey,cloudBinId,state);localStorage.setItem(CLOUD_STATUS,'ok');showToast('클라우드 저장 완료','success');}catch(e){showToast('저장 실패: '+e.message,'error');}setCloudSyncing(false);}} style={{...btnBase,backgroundColor:'#1F1F1E',color:'#fff',opacity:cloudSyncing?0.6:1}}>
+                    <button disabled={cloudSyncing} onClick={async()=>{setCloudSyncing(true);try{await cloudSave(cloudApiKey,cloudBinId,state);localStorage.setItem(CLOUD_STATUS,'ok');localStorage.setItem('cloudLastSyncAt',String(Date.now()));setCloudStatusTick(t=>t+1);showToast('클라우드 저장 완료','success');}catch(e){localStorage.setItem(CLOUD_STATUS,'error');setCloudStatusTick(t=>t+1);showToast('저장 실패: '+e.message,'error');}setCloudSyncing(false);}} style={{...btnBase,backgroundColor:'#1F1F1E',color:'#fff',opacity:cloudSyncing?0.6:1}}>
                       {cloudSyncing?'저장 중...':'☁ 지금 저장'}
                     </button>
                     <button onClick={handleCopyConnectLink} style={{...btnBase,backgroundColor:'#EEEEF4',color:'#1F1F1E'}}>🔗 노트북 연결 링크 복사</button>
@@ -967,8 +975,10 @@ function StoreProvider({children}){
         dirtyRef.current=true;
       }
       localStorage.setItem(CLOUD_STATUS,'ok');
+      localStorage.setItem('cloudLastSyncAt',String(Date.now()));
     }).catch(()=>{
       localStorage.setItem(CLOUD_STATUS,'error');
+      localStorage.setItem('cloudLastSyncAt',String(Date.now()));
       doMigrate(stateRef.current.customLayers);
     }).finally(()=>{
       // 로드 성공/실패 모두 완료 후 저장 허용
@@ -981,7 +991,7 @@ function StoreProvider({children}){
     if(!_k||!_b)return;
     const pull=()=>{
       if(document.visibilityState==='visible'&&cloudLoadedRef.current&&!dirtyRef.current){
-        cloudLoad(_k,_b).then(s=>{if(s){rawDispatch({type:'RESTORE_FULL',state:s});}}).catch(()=>{});
+        cloudLoad(_k,_b).then(s=>{if(s){rawDispatch({type:'RESTORE_FULL',state:s});localStorage.setItem('cloudLastSyncAt',String(Date.now()));localStorage.setItem(CLOUD_STATUS,'ok');}}).catch(()=>localStorage.setItem(CLOUD_STATUS,'error'));
       }
     };
     document.addEventListener('visibilitychange',pull);
@@ -1015,8 +1025,8 @@ function StoreProvider({children}){
       const{apiKey,binId}=cloudGetCreds();
       if(apiKey&&binId&&cloudLoadedRef.current){
         cloudSave(apiKey,binId,{...state,_mod:_now})
-          .then(()=>{dirtyRef.current=false;localStorage.setItem(CLOUD_STATUS,'ok');})
-          .catch(()=>localStorage.setItem(CLOUD_STATUS,'error'));
+          .then(()=>{dirtyRef.current=false;localStorage.setItem(CLOUD_STATUS,'ok');localStorage.setItem('cloudLastSyncAt',String(Date.now()));})
+          .catch(()=>{localStorage.setItem(CLOUD_STATUS,'error');localStorage.setItem('cloudLastSyncAt',String(Date.now()));});
       }
     },300);
     return()=>{if(lsTimerRef.current)clearTimeout(lsTimerRef.current);};
