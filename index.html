@@ -975,17 +975,18 @@ function StoreProvider({children}){
       cloudLoadedRef.current=true;
     });
   },[]);
-  // 탭 전환 시 자동 재동기화 (모바일→데스크탑)
+  // 탭 전환 시 + 주기적(20초) 자동 재동기화 (모바일→데스크탑, 탭을 계속 열어둔 경우 포함)
   useEffect(()=>{
     const{apiKey:_k,binId:_b}=cloudGetCreds();
     if(!_k||!_b)return;
-    const onVisible=()=>{
+    const pull=()=>{
       if(document.visibilityState==='visible'&&cloudLoadedRef.current&&!dirtyRef.current){
         cloudLoad(_k,_b).then(s=>{if(s){rawDispatch({type:'RESTORE_FULL',state:s});}}).catch(()=>{});
       }
     };
-    document.addEventListener('visibilitychange',onVisible);
-    return()=>document.removeEventListener('visibilitychange',onVisible);
+    document.addEventListener('visibilitychange',pull);
+    const iv=setInterval(pull,20000);
+    return()=>{document.removeEventListener('visibilitychange',pull);clearInterval(iv);};
   },[]);
   useEffect(()=>{
     const onKey=(e)=>{
