@@ -375,24 +375,20 @@ function FamilyShareCard({showToast}){
   const isGuest=localStorage.getItem('famGuest')==='1';
   const[on,setOn]=React.useState(!!localStorage.getItem('famBinId'));
   if(isGuest){
-    let names=[];try{const ids=JSON.parse(localStorage.getItem('familyLayers')||'[]');names=ids.map(id=>id==='work'?(state.workLabel||'업무'):id==='personal'?(state.personalLabel||'개인'):((state.customLayers||[]).find(l=>l.id===id)||{}).name||id);}catch(e){}
     const leave=()=>{if(!confirm('가족 공유에서 나갈까요? (공유 일정 연결이 해제됩니다)'))return;localStorage.removeItem('famApiKey');localStorage.removeItem('famBinId');localStorage.removeItem('famGuest');showToast('가족 공유에서 나감','info');};
     return(<div style={{border:'0.5px solid #E0E0E8',borderRadius:10,padding:'14px 16px',backgroundColor:'#FDF7FA'}}>
       <div style={{fontSize:13,fontWeight:600,color:'#1F1F1E',marginBottom:6}}>👪 가족 공유에 참여 중</div>
-      <div style={{fontSize:11.5,color:'#8C6076',lineHeight:1.6,marginBottom:10}}>공유 중인 레이어: <b>{names.join(', ')||'개인'}</b>. 이 레이어의 일정은 가족과 양방향으로 계속 동기화됩니다. (공유 레이어는 초대한 사람이 정합니다)</div>
+      <div style={{fontSize:11.5,color:'#8C6076',lineHeight:1.6,marginBottom:10}}>모든 일정·할일이 가족과 양방향으로 계속 동기화됩니다.</div>
       <button onClick={leave} style={{fontSize:12.5,color:'#1F1F1E',padding:'8px 14px',border:'0.5px solid #E0E0E8',borderRadius:8,backgroundColor:'#fff'}}>공유 나가기</button>
     </div>);
   }
   const[busy,setBusy]=React.useState(false);
-  const[sel,setSel]=React.useState(()=>{try{return JSON.parse(localStorage.getItem('familyLayers')||'null')||(function(){const a=['personal'];(state.customLayers||[]).forEach(l=>{if((l.name||'').includes('기념일')||(l.name||'').includes('생일'))a.push(l.id);});return a;})();}catch(e){return['personal'];}});
-  const allLayers=[{id:'work',name:state.workLabel||'업무'},{id:'personal',name:state.personalLabel||'개인'},...((state.customLayers||[]).filter(l=>(state.layerOrder||[]).includes(l.id)))];
-  const persist=(arr)=>{setSel(arr);localStorage.setItem('familyLayers',JSON.stringify(arr));};
-  const toggle=(id)=>{const nx=sel.includes(id)?sel.filter(x=>x!==id):[...sel,id];persist(nx);if(on&&window.__familySync)setTimeout(()=>window.__familySync(),100);};
+  const allCatIds=['work','personal',...((state.customLayers||[]).map(l=>l.id))];
   const start=async()=>{
     const apiKey=localStorage.getItem('cloudApiKey');
     if(!apiKey){showToast('먼저 아래 클라우드 동기화를 연결해 주세요','error');return;}
     setBusy(true);
-    try{const binId=await famCreate(apiKey);localStorage.setItem('famApiKey',apiKey);localStorage.setItem('famBinId',binId);localStorage.setItem('familyLayers',JSON.stringify(sel));setOn(true);showToast('가족 공유 시작됨! 초대 링크를 복사해 전달하세요','success');}
+    try{const binId=await famCreate(apiKey);localStorage.setItem('famApiKey',apiKey);localStorage.setItem('famBinId',binId);localStorage.setItem('familyLayers',JSON.stringify(allCatIds));setOn(true);showToast('가족 공유 시작됨! 초대 링크를 복사해 전달하세요','success');}
     catch(e){showToast('시작 실패: '+e.message,'error');}
     setBusy(false);
   };
@@ -400,7 +396,7 @@ function FamilyShareCard({showToast}){
   const copyLink=()=>{
     const k=encodeURIComponent(btoa(localStorage.getItem('famApiKey')||''));
     const b=encodeURIComponent(btoa(localStorage.getItem('famBinId')||''));
-    const l=encodeURIComponent(btoa(JSON.stringify(sel)));
+    const l=encodeURIComponent(btoa(JSON.stringify(allCatIds)));
     const url=location.origin+location.pathname+'?fam='+k+'&fb='+b+'&fl='+l;
     if(navigator.clipboard)navigator.clipboard.writeText(url).then(()=>showToast('가족 초대 링크 복사됨! 카톡 등으로 전달하세요','success'));
     else prompt('가족에게 이 링크를 전달하세요',url);
@@ -408,11 +404,7 @@ function FamilyShareCard({showToast}){
   return(
     <div style={{border:'0.5px solid #E0E0E8',borderRadius:10,padding:'14px 16px',backgroundColor:'#FDF7FA'}}>
       <div style={{fontSize:13,fontWeight:600,color:'#1F1F1E',marginBottom:8}}>👪 가족 공유 {on?'· 켜짐':''}</div>
-      <div style={{fontSize:11.5,color:'#8C6076',lineHeight:1.6,marginBottom:10}}>선택한 레이어의 일정만 가족과 양방향으로 공유됩니다. 30초마다 자동 동기화되고, 서로 추가·수정한 일정이 계속 반영돼요. (업무·회의록 등 나머지는 비공개)</div>
-      <div style={{fontSize:11,color:'#9A9A9A',marginBottom:5}}>공유할 레이어</div>
-      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
-        {allLayers.map(l=>{const a=sel.includes(l.id);return(<button key={l.id} onClick={()=>toggle(l.id)} style={{fontSize:11.5,padding:'4px 11px',borderRadius:16,border:`0.5px solid ${a?'#1F1F1E':'#E0DAD0'}`,backgroundColor:a?'#EEEEF4':'#fff',color:a?'#1F1F1E':'#ADA69C',fontWeight:a?600:400}}>{l.name}</button>);})}
-      </div>
+      <div style={{fontSize:11.5,color:'#8C6076',lineHeight:1.6,marginBottom:12}}>모든 일정·할일이 가족과 양방향으로 공유됩니다. 30초마다 자동 동기화되고, 서로 추가·수정한 내용이 계속 반영돼요.</div>
       {!on?(
         <button disabled={busy} onClick={start} style={{fontSize:12.5,color:'#fff',padding:'8px 16px',backgroundColor:'#1F1F1E',borderRadius:8,fontWeight:600,opacity:busy?0.6:1}}>{busy?'준비 중...':'가족 공유 시작'}</button>
       ):(
@@ -790,12 +782,19 @@ function StoreProvider({children}){
       const remote=await famLoad(apiKey,binId).catch(()=>null);
       const rItems=(remote&&remote.items)||{};
       const rLayers=(remote&&remote.layers)||{};
-      // 공유 레이어 권위: 소유자=내 선택, 게스트=저장소 값
-      const shareList=isGuest?((remote&&remote.shareLayers)||famLayers()):famLayers();
-      if(isGuest)localStorage.setItem('familyLayers',JSON.stringify(shareList));
+      // 항상 전체 레이어(업무·개인·커스텀) 공유: 웹·폰·가족이 완전히 동일하게 보이도록
+      const shareList=['work','personal',...((st.customLayers||[]).map(l=>l.id))];
+      localStorage.setItem('familyLayers',JSON.stringify(shareList));
       const shared=new Set(shareList);
-      // 게스트: 공유 레이어 자동 표시
-      if(isGuest)shareList.forEach(cat=>{const vis=cat==='work'?st.workVisible:cat==='personal'?st.personalVisible:((st.customLayers||[]).find(l=>l.id===cat)||{}).visible!==false;if(!vis)rawDispatch({type:'FORCE_LAYER_VISIBLE',cat});});
+      // 공유 레이어 자동 표시(오너·게스트 공통)
+      shareList.forEach(cat=>{const vis=cat==='work'?st.workVisible:cat==='personal'?st.personalVisible:((st.customLayers||[]).find(l=>l.id===cat)||{}).visible!==false;if(!vis)rawDispatch({type:'FORCE_LAYER_VISIBLE',cat});});
+      // 레이어 이름 동기화: 오너 값이 기준, 게스트는 오너 이름을 받아 표시
+      const rWorkLabel=remote&&remote.workLabel;
+      const rPersonalLabel=remote&&remote.personalLabel;
+      if(isGuest){
+        if(rWorkLabel&&rWorkLabel!==st.workLabel)rawDispatch({type:'UPDATE_WORK_CAT',label:rWorkLabel});
+        if(rPersonalLabel&&rPersonalLabel!==st.personalLabel)rawDispatch({type:'UPDATE_PERSONAL_CAT',label:rPersonalLabel});
+      }
       const local={};
       (st.weeklyEvents||[]).forEach(e=>{if(shared.has(e.category)&&!e.isOutlook)local[e.id]={id:e.id,date:e.date,time:e.time||'',title:e.title,category:e.category,updatedAt:e.updatedAt||0};});
       const merged={};const ids=new Set([...Object.keys(rItems),...Object.keys(local)]);
@@ -847,7 +846,7 @@ function StoreProvider({children}){
       const mbsig=JSON.stringify(sharedMB.map(b=>[b.id,b.startDate,b.endDate,b.title,b.category,b.updatedAt]).sort());
       const curMBsig=JSON.stringify((st.multiDayBlocks||[]).filter(b=>shared.has(b.category)).map(b=>[b.id,b.startDate,b.endDate,b.title,b.category,b.updatedAt||0]).sort());
       if(mbsig!==curMBsig)rawDispatch({type:'SET_MULTIDAY_BLOCKS',blocks:[...keepMB,...sharedMB]});
-      await famSave(apiKey,binId,{v:1,_mod:Date.now(),items:merged,layers:outLayers,shareLayers:shareList,titems:tmerged,mblocks:mbmerged}).catch(()=>{});
+      await famSave(apiKey,binId,{v:1,_mod:Date.now(),items:merged,layers:outLayers,shareLayers:shareList,titems:tmerged,mblocks:mbmerged,workLabel:isGuest?(rWorkLabel||st.workLabel):st.workLabel,personalLabel:isGuest?(rPersonalLabel||st.personalLabel):st.personalLabel}).catch(()=>{});
     }finally{famBusyRef.current=false;}
   },[rawDispatch]);
   useEffect(()=>{window.__familySync=familySync;},[familySync]);
