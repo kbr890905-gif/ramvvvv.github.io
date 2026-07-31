@@ -872,8 +872,10 @@ function StoreProvider({children}){
       }catch(e){}
     }
     const t0=setTimeout(familySync,2500);
-    const iv=setInterval(familySync,90000);// 평생 요청 쿼터 보호를 위해 90초 간격으로 완화
-    return()=>{clearTimeout(t0);clearInterval(iv);};
+    // 쿼터 절약: 시간 기반 폴링 제거. 대신 탭/앱을 다시 열 때만 재동기화
+    const onVis=()=>{if(document.visibilityState==='visible')familySync();};
+    document.addEventListener('visibilitychange',onVis);
+    return()=>{clearTimeout(t0);document.removeEventListener('visibilitychange',onVis);};
   },[familySync,rawDispatch]);
   const stateRef=useRef(state);
   // cloudLoadedRef: cloudLoad 완료 전에는 cloudSave 차단 (race condition 방지)
@@ -999,8 +1001,8 @@ function StoreProvider({children}){
       }
     };
     document.addEventListener('visibilitychange',pull);
-    const iv=setInterval(pull,180000);// 평생 요청 쿼터 보호를 위해 3분 간격으로 완화
-    return()=>{document.removeEventListener('visibilitychange',pull);clearInterval(iv);};
+    // 쿼터 절약: 시간 기반 폴링 제거. 탭/앱을 다시 열 때만 재동기화
+    return()=>{document.removeEventListener('visibilitychange',pull);};
   },[]);
   useEffect(()=>{
     const onKey=(e)=>{
