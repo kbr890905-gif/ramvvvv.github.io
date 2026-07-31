@@ -434,6 +434,7 @@ function SettingsModal({onClose}){
   const cloudStatus=localStorage.getItem(CLOUD_STATUS);
   const cloudLastSyncAt=Number(localStorage.getItem('cloudLastSyncAt')||0);
   const cloudLastSyncLabel=(()=>{if(!cloudLastSyncAt)return'아직 없음';const diff=Math.max(0,Date.now()-cloudLastSyncAt);if(diff<10000)return'방금 전';if(diff<60000)return Math.floor(diff/1000)+'초 전';if(diff<3600000)return Math.floor(diff/60000)+'분 전';return Math.floor(diff/3600000)+'시간 전';})();
+  const[cloudErr,setCloudErr]=useState('');
   const[snaps,setSnaps]=useState(()=>{try{return JSON.parse(localStorage.getItem('snapshots')||'[]');}catch{return[];}});
   const[workName,setWorkName]=useState(state.workLabel||'업무');
   const[personalName,setPersonalName]=useState(state.personalLabel||'개인');
@@ -446,7 +447,7 @@ function SettingsModal({onClose}){
 
   const handleCloudConnect=async()=>{
     if(!formApiKey.trim()){showToast('API Key를 입력해 주세요','error');return;}
-    setCloudSyncing(true);
+    setCloudSyncing(true);setCloudErr('');
     try{
       const binId=await cloudCreate(formApiKey.trim(),state);
       localStorage.setItem(CLOUD_KEY,formApiKey.trim());
@@ -454,12 +455,12 @@ function SettingsModal({onClose}){
       localStorage.setItem(CLOUD_STATUS,'ok');
       setCloudApiKey(formApiKey.trim());setCloudBinIdState(binId);setCloudConnected(true);
       showToast('클라우드 연결 완료! 이제 어디서든 자동 동기화됩니다','success');
-    }catch(e){showToast('연결 실패: '+e.message,'error');}
+    }catch(e){setCloudErr(String(e&&e.message||e));showToast('연결 실패: '+e.message,'error');}
     setCloudSyncing(false);
   };
   const handleCloudExisting=async()=>{
     if(!formApiKey.trim()||!formBinId.trim()){showToast('API Key와 Bin ID를 모두 입력해 주세요','error');return;}
-    setCloudSyncing(true);
+    setCloudSyncing(true);setCloudErr('');
     try{
       const s=await cloudLoad(formApiKey.trim(),formBinId.trim());
       if(s){
@@ -470,8 +471,10 @@ function SettingsModal({onClose}){
         dispatch({type:'RESTORE_FULL',state:s});
         showToast('데이터 불러오기 완료','success');
         onClose();
+      }else{
+        setCloudErr('해당 Bin ID에서 데이터를 찾을 수 없습니다. API Key/Bin ID를 다시 확인하세요.');
       }
-    }catch(e){showToast('불러오기 실패: '+e.message,'error');}
+    }catch(e){setCloudErr(String(e&&e.message||e));showToast('불러오기 실패: '+e.message,'error');}
     setCloudSyncing(false);
   };
   const handleCloudDisconnect=()=>{
@@ -701,13 +704,13 @@ function SettingsModal({onClose}){
                   </div>
                   <div>
                     <div style={{fontSize:12,color:'#555',marginBottom:6,fontWeight:500}}>API Key (Master Key)</div>
-                    <input value={formApiKey} onChange={e=>setFormApiKey(e.target.value)}
+                    <input value={formApiKey} onChange={e=>{setFormApiKey(e.target.value);setCloudErr('');}}
                       placeholder="$2a$10$..."
                       style={{width:'100%',fontSize:12,padding:'8px 10px',borderRadius:6,border:'1px solid #E0E0E0',backgroundColor:'#F8F8FB',fontFamily:'monospace'}}/>
                   </div>
                   <div>
                     <div style={{fontSize:12,color:'#555',marginBottom:4,fontWeight:500}}>Bin ID <span style={{color:'#AAA',fontWeight:400}}>(처음이면 비워두세요 — 이미 사용 중인 기기가 있다면 입력)</span></div>
-                    <input value={formBinId} onChange={e=>setFormBinId(e.target.value)}
+                    <input value={formBinId} onChange={e=>{setFormBinId(e.target.value);setCloudErr('');}}
                       placeholder="비워두면 자동 생성"
                       style={{width:'100%',fontSize:12,padding:'8px 10px',borderRadius:6,border:'1px solid #E0E0E0',backgroundColor:'#F8F8FB',fontFamily:'monospace'}}/>
                   </div>
@@ -722,6 +725,7 @@ function SettingsModal({onClose}){
                       </button>
                     )}
                   </div>
+                  {cloudErr&&<div style={{backgroundColor:'#FDECEC',border:'0.5px solid #F3C1C0',borderRadius:8,padding:'9px 12px',fontSize:11.5,color:'#B3261E',lineHeight:1.6}}>⚠ {cloudErr}</div>}
                 </>
               )}
             </div>
