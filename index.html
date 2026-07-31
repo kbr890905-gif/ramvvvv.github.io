@@ -872,7 +872,7 @@ function StoreProvider({children}){
       }catch(e){}
     }
     const t0=setTimeout(familySync,2500);
-    const iv=setInterval(familySync,30000);
+    const iv=setInterval(familySync,90000);// 평생 요청 쿼터 보호를 위해 90초 간격으로 완화
     return()=>{clearTimeout(t0);clearInterval(iv);};
   },[familySync,rawDispatch]);
   const stateRef=useRef(state);
@@ -999,7 +999,7 @@ function StoreProvider({children}){
       }
     };
     document.addEventListener('visibilitychange',pull);
-    const iv=setInterval(pull,20000);
+    const iv=setInterval(pull,180000);// 평생 요청 쿼터 보호를 위해 3분 간격으로 완화
     return()=>{document.removeEventListener('visibilitychange',pull);clearInterval(iv);};
   },[]);
   useEffect(()=>{
