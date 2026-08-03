@@ -741,6 +741,20 @@ function SettingsModal({onClose}){
 // ─── CLOUD SYNC (JSONBin.io) ─────────────────
 const CLOUD_KEY='cloudApiKey',CLOUD_BIN='cloudBinId',CLOUD_STATUS='cloudStatus';
 function cloudGetCreds(){return{apiKey:localStorage.getItem(CLOUD_KEY)||'',binId:localStorage.getItem(CLOUD_BIN)||''};}
+function useSyncErrorDot(){
+  const[on,setOn]=useState(false);
+  useEffect(()=>{
+    const check=()=>{
+      const{apiKey,binId}=cloudGetCreds();
+      const hasCloud=!!(apiKey&&binId);
+      setOn(hasCloud&&localStorage.getItem(CLOUD_STATUS)==='error');
+    };
+    check();
+    const iv=setInterval(check,3000);
+    return()=>clearInterval(iv);
+  },[]);
+  return on;
+}
 async function cloudCreate(apiKey,state){
   const r=await fetch('https://api.jsonbin.io/v3/b',{
     method:'POST',
@@ -872,10 +886,11 @@ function StoreProvider({children}){
       }catch(e){}
     }
     const t0=setTimeout(familySync,2500);
-    // 쿼터 절약: 시간 기반 폴링 제거. 대신 탭/앱을 다시 열 때만 재동기화
+    // 탭/앱을 다시 열 때 + 10분 안전망으로 재동기화 (쿼터 절약과 자동 동기화 체감의 균형)
     const onVis=()=>{if(document.visibilityState==='visible')familySync();};
     document.addEventListener('visibilitychange',onVis);
-    return()=>{clearTimeout(t0);document.removeEventListener('visibilitychange',onVis);};
+    const iv=setInterval(()=>{if(document.visibilityState==='visible')familySync();},600000);
+    return()=>{clearTimeout(t0);document.removeEventListener('visibilitychange',onVis);clearInterval(iv);};
   },[familySync,rawDispatch]);
   const stateRef=useRef(state);
   // cloudLoadedRef: cloudLoad 완료 전에는 cloudSave 차단 (race condition 방지)
@@ -991,18 +1006,25 @@ function StoreProvider({children}){
       cloudLoadedRef.current=true;
     });
   },[]);
-  // 탭 전환 시 + 주기적(20초) 자동 재동기화 (모바일→데스크탑, 탭을 계속 열어둔 경우 포함)
+  // 탭 전환 시 + 10분 안전망 자동 재동기화 (모바일→데스크탑, 탭을 계속 열어둔 경우 포함)
   useEffect(()=>{
     const{apiKey:_k,binId:_b}=cloudGetCreds();
     if(!_k||!_b)return;
     const pull=()=>{
-      if(document.visibilityState==='visible'&&cloudLoadedRef.current&&!dirtyRef.current){
-        cloudLoad(_k,_b).then(s=>{if(s){rawDispatch({type:'RESTORE_FULL',state:s});localStorage.setItem('cloudLastSyncAt',String(Date.now()));localStorage.setItem(CLOUD_STATUS,'ok');}}).catch(()=>localStorage.setItem(CLOUD_STATUS,'error'));
+      if(document.visibilityState!=='visible'||!cloudLoadedRef.current)return;
+      if(dirtyRef.current){
+        // 직전 저장이 실패해 dirtyRef가 고착됐을 수 있으므로 재전송 시도 (막히는 것 방지)
+        cloudSave(_k,_b,{...stateRef.current,_mod:Date.now()})
+          .then(()=>{dirtyRef.current=false;localStorage.setItem(CLOUD_STATUS,'ok');localStorage.setItem('cloudLastSyncAt',String(Date.now()));})
+          .catch(()=>localStorage.setItem(CLOUD_STATUS,'error'));
+        return;
       }
+      cloudLoad(_k,_b).then(s=>{if(s){rawDispatch({type:'RESTORE_FULL',state:s});localStorage.setItem('cloudLastSyncAt',String(Date.now()));localStorage.setItem(CLOUD_STATUS,'ok');}}).catch(()=>localStorage.setItem(CLOUD_STATUS,'error'));
     };
     document.addEventListener('visibilitychange',pull);
-    // 쿼터 절약: 시간 기반 폴링 제거. 탭/앱을 다시 열 때만 재동기화
-    return()=>{document.removeEventListener('visibilitychange',pull);};
+    // 쿼터 절약: 10분 간격의 가벼운 안전망만 유지 (탭을 계속 열어둔 채 방치해도 자동 반영되도록)
+    const iv=setInterval(pull,600000);
+    return()=>{document.removeEventListener('visibilitychange',pull);clearInterval(iv);};
   },[]);
   useEffect(()=>{
     const onKey=(e)=>{
@@ -1859,6 +1881,7 @@ function TopBar(){
   const[settingsOpen,setSettingsOpen]=useState(false);
   const[moreOpen,setMoreOpen]=useState(false);
   const[layerMenuOpen,setLayerMenuOpen]=useState(false);
+  const syncErr=useSyncErrorDot();
   const navBtn={width:28,height:28,borderRadius:6,border:'none',background:'transparent',color:'#8C8C87',fontSize:17,cursor:'pointer',lineHeight:1};
   const mItem={display:'flex',alignItems:'center',gap:9,fontSize:13,color:'#37352F',padding:'7px 9px',borderRadius:6,border:'none',background:'transparent',cursor:'pointer',textAlign:'left',width:'100%'};
   const showToast=useToast();
@@ -1970,7 +1993,7 @@ function TopBar(){
           )}
         </div>
         <div style={{position:'relative',flexShrink:0}}>
-          <button onClick={()=>setMoreOpen(v=>!v)} title="더보기" style={{width:34,height:34,borderRadius:8,border:'0.5px solid #E0E0E8',backgroundColor:'#fff',color:'#6A6A67',fontSize:17,cursor:'pointer',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F7'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#fff'}>⋯</button>
+          <button onClick={()=>setMoreOpen(v=>!v)} title="더보기" style={{width:34,height:34,borderRadius:8,border:'0.5px solid #E0E0E8',backgroundColor:'#fff',color:'#6A6A67',fontSize:17,cursor:'pointer',lineHeight:1,position:'relative'}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F7'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='#fff'}>⋯{syncErr&&<span title="클라우드 동기화 실패 — 설정에서 확인하세요" style={{position:'absolute',top:4,right:4,width:8,height:8,borderRadius:'50%',backgroundColor:'#E24B4A',boxShadow:'0 0 0 1.5px #fff'}}/>}</button>
           {moreOpen&&(
             <div onMouseLeave={()=>setMoreOpen(false)} style={{position:'absolute',top:40,right:0,minWidth:186,backgroundColor:'#fff',border:'0.5px solid #E8E8EE',borderRadius:10,boxShadow:'0 0 0 0.5px rgba(20,20,25,0.06), 0 8px 24px rgba(20,20,25,0.10)',padding:6,zIndex:3000,display:'flex',flexDirection:'column',gap:1}}>
               <button onClick={()=>{doQuickSync();setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F7'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span style={{display:'inline-block',animation:olSyncing?'_spin 0.8s linear infinite':'none'}}>↻</span> 아웃룩 동기화</button>
@@ -4604,6 +4627,7 @@ function MobileApp(){
   const[detailEv,setDetailEv]=React.useState(null);
   const[noteMdl,setNoteMdl]=React.useState(null);
   const[settingsOpen,setSettingsOpen]=React.useState(false);
+  const mSyncErr=useSyncErrorDot();
   const[mdEdit,setMdEdit]=React.useState(null);
   const[todoAdd,setTodoAdd]=React.useState(false);
   const[todoVal,setTodoVal]=React.useState('');
@@ -4681,8 +4705,9 @@ function MobileApp(){
           </div>
         <button onClick={goToday} style={{fontSize:12.5,color:'#fff',padding:'6px 13px',backgroundColor:C.brand,borderRadius:18,fontWeight:600}}>오늘</button>
         <button onClick={()=>{location.href=location.pathname+'?v='+Date.now();}} aria-label="업데이트" title="최신 버전으로 업데이트" style={{width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',color:C.t2}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg></button>
-        <button onClick={()=>setSettingsOpen(true)} aria-label="설정" style={{width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',color:C.t2}}>
+        <button onClick={()=>setSettingsOpen(true)} aria-label="설정" style={{width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',color:C.t2,position:'relative'}}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>
+          {mSyncErr&&<span title="클라우드 동기화 실패" style={{position:'absolute',top:4,right:4,width:8,height:8,borderRadius:'50%',backgroundColor:'#E24B4A',boxShadow:'0 0 0 1.5px '+C.bg}}/>}
         </button>
       </div>
 
