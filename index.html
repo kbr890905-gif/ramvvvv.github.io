@@ -799,7 +799,6 @@ function StoreProvider({children}){
   const redoRef=useRef([]);
   const dirtyRef=useRef(false);
   const famBusyRef=useRef(false);
-  const carryDoneRef=useRef(false);
   const familySync=useCallback(async()=>{
     const{apiKey,binId}=famGetCreds();if(!apiKey||!binId||famBusyRef.current)return;
     famBusyRef.current=true;
@@ -897,6 +896,7 @@ function StoreProvider({children}){
   const stateRef=useRef(state);
   // cloudLoadedRef: cloudLoad 완료 전에는 cloudSave 차단 (race condition 방지)
   const cloudLoadedRef=useRef(false);
+  const[cloudReady,setCloudReady]=useState(false);
   useEffect(()=>{stateRef.current=state;},[state]);
   const dispatch=useCallback((action)=>{
     historyRef.current=[...historyRef.current.slice(-49),stateRef.current];
@@ -923,18 +923,18 @@ function StoreProvider({children}){
   // Auto-snapshot on mount
   useEffect(()=>{try{manualSnapshot(stateRef.current,'자동 백업 (앱 시작)');}catch(e){}setTimeout(()=>autoSnapshot(stateRef.current),1000);},[]);
 
-  // 할일 자동 이동: todos 변경될 때마다 체크 (cloud/fam 로드 후에도 동작)
+  // 할일 자동 이동: 클라우드 동기화가 끝난 뒤(레이스 방지), todos가 바뀔 때마다 재검사.
+  // 하루 1회 잠금을 두지 않음 — 미완료+과거날짜 조건 자체가 이미 멱등적이라
+  // (한번 오늘로 옮기면 조건에서 자동으로 빠짐) 별도 잠금이 없어도 중복 이동되지 않고,
+  // 오히려 잠금이 있으면 스냅샷 복원 등으로 예전 미완료 할일이 되살아났을 때 다시 이월되지 않는 버그가 생김.
   useEffect(()=>{
+    if(!cloudReady)return;
     const today=toDateKey(new Date());
-    const lastMoved=localStorage.getItem('lastTodoAutoMove');
-    if(lastMoved===today||carryDoneRef.current)return;
     const pastUndone=[...new Set((state.todos||[]).filter(t=>!t.done&&t.date<today).map(t=>t.date))];
-    if(pastUndone.length===0)return;// 없으면 표시 안 함 - 나중에 로드되면 다시 체크
-    carryDoneRef.current=true;
+    if(pastUndone.length===0)return;
     dirtyRef.current=true;
     rawDispatch({type:'BULK_MOVE_TODOS',fromDates:pastUndone,toDate:today});
-    localStorage.setItem('lastTodoAutoMove',today);
-  },[state.todos]);
+  },[state.todos,cloudReady]);
   // Cloud sync: load on mount (+ 생일→기념일 마이그레이션)
   useEffect(()=>{
     const doMigrate=(layers)=>{
@@ -944,7 +944,7 @@ function StoreProvider({children}){
     const{apiKey,binId}=cloudGetCreds();
     if(!apiKey||!binId){
       // 클라우드 미설정이면 저장 즉시 허용
-      cloudLoadedRef.current=true;
+      cloudLoadedRef.current=true;setCloudReady(true);
       doMigrate(stateRef.current.customLayers);
       return;
     }
@@ -1005,7 +1005,7 @@ function StoreProvider({children}){
       doMigrate(stateRef.current.customLayers);
     }).finally(()=>{
       // 로드 성공/실패 모두 완료 후 저장 허용
-      cloudLoadedRef.current=true;
+      cloudLoadedRef.current=true;setCloudReady(true);
     });
   },[]);
   // 탭 전환 시 + 10분 안전망 자동 재동기화 (모바일→데스크탑, 탭을 계속 열어둔 경우 포함)
