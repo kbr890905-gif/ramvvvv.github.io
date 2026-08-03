@@ -447,6 +447,8 @@ function SettingsModal({onClose}){
 
   const handleCloudConnect=async()=>{
     if(!formApiKey.trim()){showToast('API Key를 입력해 주세요','error');return;}
+    const hasLocalData=(state.weeklyEvents||[]).length>0||(state.todos||[]).length>0||(state.multiDayBlocks||[]).length>0;
+    if(hasLocalData&&!window.confirm('이 기기(브라우저)에 있는 현재 데이터로 새 클라우드 저장소를 만듭니다.\n\n이미 다른 기기에 더 정확한 최신 데이터가 있다면, 여기서 "새로 연결"하지 말고 그 기기에서 만든 "노트북 연결 링크"를 이 기기에서 여는 방식을 쓰세요. 잘못 누르면 이 기기의 데이터가 다른 기기들의 기준이 되어버립니다.\n\n그래도 이 기기 데이터로 새로 시작할까요?'))return;
     setCloudSyncing(true);setCloudErr('');
     try{
       const binId=await cloudCreate(formApiKey.trim(),state);
