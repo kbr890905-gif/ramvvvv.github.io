@@ -965,6 +965,13 @@ function StoreProvider({children}){
     dirtyRef.current=true;
     rawDispatch({type:'BULK_ROLL_HIGHLIGHTS',map});
   },[state.monthlyHighlights,cloudReady]);
+  // 주요일정 패널의 표시 월은 항상 '이번 달'로 시작 (클라우드에 저장된 과거 월이 복원되면
+  // 이월된 항목이 안 보여서 '사라진 것처럼' 보이는 문제 방지)
+  useEffect(()=>{
+    if(!cloudReady)return;
+    const now=new Date();
+    rawDispatch({type:'SET_HL_MONTH',hlYear:now.getFullYear(),hlMonth:now.getMonth()});
+  },[cloudReady]);
   // Cloud sync: load on mount (+ 생일→기념일 마이그레이션)
   useEffect(()=>{
     const doMigrate=(layers)=>{
