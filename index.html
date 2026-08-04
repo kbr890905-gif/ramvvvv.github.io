@@ -3912,9 +3912,9 @@ function WeeklyGrid({weekOffset,colH}){
             <div key={b.id} onClick={e=>{if(!isRz)setWkEditBlock(b);}} title={b.title}
               style={{position:'absolute',top:2+b.lane*20,left:`calc(${sc}/7*100% + 3px)`,width:`calc(${(ec-sc+1)}/7*100% - 6px)`,height:17,pointerEvents:'auto',cursor:'pointer'}}>
               <div style={{position:'relative',height:'100%',display:'flex',alignItems:'center',gap:5,
-                backgroundColor:cs.bg,color:cs.text,fontSize:11,fontWeight:500,padding:'0 12px 0 6px',opacity:0.86,
+                backgroundColor:cs.bg,color:cs.text,fontSize:11,fontWeight:500,padding:'0 12px 0 6px',opacity:0.62,
                 borderRadius:999,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
-                <span style={{width:3,height:11,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>
+                <span style={{width:7,height:7,borderRadius:'50%',flexShrink:0,backgroundColor:cs.dot||cs.text}}/>
                 <span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</span>
                 <div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setWkResize({id:b.id,side:'start',col:sc});}}
                   style={{position:'absolute',left:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>
@@ -3924,7 +3924,7 @@ function WeeklyGrid({weekOffset,colH}){
             </div>);})}
         </div>
       )}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',gap:0,alignItems:'stretch',height:'100%'}}>{weekDates.map(date=><DayColumn key={toDateKey(date)} date={date} onAddEvent={dk=>setPopoverDate(dk)} colH={colH} evtH={evtH} laneH={laneN?laneN*20+6:0}/>)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',gap:0,alignItems:'stretch',height:'100%'}}>{weekDates.map(date=>{const _dk=toDateKey(date);let _m=-1;wkBlocks.forEach(b=>{if(b.startDate<=_dk&&b.endDate>=_dk&&b.lane>_m)_m=b.lane;});return <DayColumn key={_dk} date={date} onAddEvent={dk=>setPopoverDate(dk)} colH={colH} evtH={evtH} laneH={_m>=0?(_m+1)*20+6:0}/>;})}</div>
       {popoverDate&&<EventPopover date={popoverDate} onClose={()=>setPopoverDate(null)}/>}
       {wkEditBlock&&<MultiDayBlockPopover editBlock={wkEditBlock} onClose={()=>setWkEditBlock(null)}/>}
     </div>
@@ -4163,6 +4163,8 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
   });
   const blocksWithLanes=assignLanes(weekBlocks,weekDates);
   const numLanes=blocksWithLanes.length>0?Math.max(...blocksWithLanes.map(b=>b.lane))+1:0;
+  // 칸(날짜)별로 실제 기간일정이 놓인 최대 레인 → 그 칸만 그만큼 자리를 비움
+  const laneByCol=weekDates.map(d=>{const _dk=toDateKey(d);let m=-1;blocksWithLanes.forEach(b=>{if(b.startDate<=_dk&&b.endDate>=_dk&&b.lane>m)m=b.lane;});return m;});
   // 칩 1개 pitch(높이 20 + 간격 2)와 동일하게 맞춰서 기간일정 바와 개별일정 간격을 통일
   const LANE_H=22;
   const CELL_DATE_H=26; // 셀 상단 padding(4) + 날짜숫자 줄(21) + gap(1)
@@ -4192,7 +4194,7 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
     <div ref={ref_} style={{position:'relative'}}>
       {/* Date cells row - block area reserved at bottom */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))'}}>
-        {weekDates.map(date=>{
+        {weekDates.map((date,_ci)=>{
           const dk=toDateKey(date);
           const inDrag=dragSorted&&dk>=dragSorted[0]&&dk<=dragSorted[1];
           const events=eventsByDate[dk]||[];
@@ -4204,7 +4206,7 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
               onMouseUp={()=>onCellMouseUp(dk)}
               onDoubleClick={(e)=>{e.stopPropagation();onDblClickCell(dk);}}
               onEventClick={onEventClick}
-              blockPad={blockAreaH-1}
+              blockPad={laneByCol[_ci]>=0?(laneByCol[_ci]+1)*LANE_H-1:0}
             />
           );
         })}
@@ -4227,11 +4229,11 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
                   style={{position:'absolute',top:b.lane*LANE_H,
                     left:`${(sc/7)*100}%`,width:`${((ec-sc+1)/7)*100}%`,
                     height:LANE_H-2,cursor:'pointer',pointerEvents:'all'}}>
-                  <div style={{position:'relative',height:'100%',backgroundColor:bg,opacity:0.86,
+                  <div style={{position:'relative',height:'100%',backgroundColor:bg,opacity:0.62,
                     borderRadius:pos.isStart&&pos.isEnd?999:pos.isStart?'999px 0 0 999px':pos.isEnd?'0 999px 999px 0':0,
-                    padding:pos.isStart?'0 12px 0 6px':'0 12px',overflow:'hidden',whiteSpace:'nowrap',gap:5,
+                    padding:pos.isStart?'0 12px 0 7px':'0 12px',overflow:'hidden',whiteSpace:'nowrap',gap:5,
                     fontSize:11,fontWeight:500,color,display:'flex',alignItems:'center',boxSizing:'border-box'}}>
-                    {pos.isStart&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:color}}/>}
+                    {pos.isStart&&<span style={{width:7,height:7,borderRadius:'50%',flexShrink:0,backgroundColor:color}}/>}
                     {pos.isStart&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{getBdayPrefix(b.category,state)}{b.title}</span>}
                     {pos.isStart&&<div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setCalResize({id:b.id,side:'start',col:sc});}}
                       style={{position:'absolute',left:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>}
@@ -4899,8 +4901,8 @@ function MobileApp(){
                         style={{minWidth:0,display:'flex',flexDirection:'column',alignItems:'center',paddingTop:3,cursor:'pointer',borderRadius:10,
                           backgroundColor:isSel&&!isTd?'#EFEBE2':'transparent',overflow:'hidden'}}>
                         <span style={{fontSize:14.5,fontWeight:isTd?700:500,width:26,height:26,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontVariantNumeric:'tabular-nums'}}>{d}</span>
-                        {/* 기간일정 바가 칸 안에 놓이도록 자리 확보 */}
-                        <div style={{height:laneN*barH,flexShrink:0}}/>
+                        {/* 기간일정 바가 있는 날만 그만큼 자리 확보 */}
+                        <div style={{height:(()=>{let m=-1;placed.forEach(p=>{if(p.b.startDate<=dk&&p.b.endDate>=dk&&p.lane>m)m=p.lane;});return m>=0?(m+1)*barH:0;})(),flexShrink:0}}/>
                         {hol&&<span style={{fontSize:8.5,color:'#E24B4A',fontWeight:600,maxWidth:'100%',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',flexShrink:0}}>{hol}</span>}
                         <div style={{display:'flex',gap:3,marginTop:2,height:6,alignItems:'center',flexShrink:0}}>
                           {dots.map((ev,i)=>{const cs=catStyle[ev.category]||catStyle.work;return<span key={i} style={{width:5,height:5,borderRadius:'50%',backgroundColor:cs.dot||cs.text}}/>;})}
@@ -4911,11 +4913,11 @@ function MobileApp(){
                   {placed.map(({b,sc,ec,lane,isS,isE})=>{const cs=catStyle[b.category]||catStyle.work;return(
                     <div key={b.id} onClick={e=>{e.stopPropagation();setMdEdit(b);}}
                       style={{position:'absolute',top:DATE_H+lane*barH,left:`calc(${sc}/7*100% + 2px)`,width:`calc(${ec-sc+1}/7*100% - 4px)`,height:barH-2,
-                        backgroundColor:cs.bg,color:cs.text,fontSize:9.5,fontWeight:600,opacity:0.86,
+                        backgroundColor:cs.bg,color:cs.text,fontSize:9.5,fontWeight:600,opacity:0.66,
                         display:'flex',alignItems:'center',gap:3,
                         paddingLeft:isS?4:4,paddingRight:4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',
                         borderRadius:isS&&isE?999:isS?'999px 0 0 999px':isE?'0 999px 999px 0':0}}>
-                      {isS&&<span style={{width:2.5,height:7,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
+                      {isS&&<span style={{width:5,height:5,borderRadius:'50%',flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
                       {isS&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</span>}
                     </div>);})}
                 </div>);
