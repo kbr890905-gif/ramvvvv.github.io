@@ -4867,7 +4867,7 @@ function MobileApp(){
       {tab==='month'&&(
         <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative'}}>
           {/* ── 달력 ── */}
-          <div onTouchStart={calTouchStart} onTouchEnd={calTouchEnd} style={{height:sheet?'44%':'100%',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
+          <div onTouchStart={calTouchStart} onTouchEnd={calTouchEnd} style={{height:sheet?'44%':'calc(100% - 54px)',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',padding:'4px 6px 4px',flexShrink:0}}>
               {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:i===0?'#E24B4A':i===6?'#4A7BC4':C.t2}}>{d}</div>)}
             </div>
@@ -4935,14 +4935,20 @@ function MobileApp(){
 
           {/* ── 하단 일정 시트 ── */}
           <div onTouchStart={e=>{shTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}} onTouchEnd={e=>{if(!shTouchRef.current)return;const dx=e.changedTouches[0].clientX-shTouchRef.current.x,dy=e.changedTouches[0].clientY-shTouchRef.current.y;shTouchRef.current=null;if(dy>45&&Math.abs(dy)>Math.abs(dx)*1.2)setSheet(false);}} style={{flex:1,minHeight:0,backgroundColor:C.card,borderRadius:'18px 18px 0 0',boxShadow:'0 -3px 16px rgba(20,20,40,0.08)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-            <div onClick={()=>setSheet(s=>!s)} style={{flexShrink:0,padding:'9px 0 5px',display:'flex',justifyContent:'center',cursor:'pointer'}}>
-              <div style={{width:38,height:4,borderRadius:2,backgroundColor:'#D5D5DC'}}/>
+            <div onClick={()=>setSheet(s=>!s)}
+              onTouchStart={e=>{mBarTouchRef.current=e.touches[0].clientY;}}
+              onTouchEnd={e=>{if(mBarTouchRef.current==null)return;const dy=e.changedTouches[0].clientY-mBarTouchRef.current;mBarTouchRef.current=null;if(Math.abs(dy)>25)setSheet(dy<0);}}
+              style={{flexShrink:0,cursor:'pointer',padding:'8px 16px 8px'}}>
+              <div style={{width:38,height:4,borderRadius:2,backgroundColor:'#D5D5DC',margin:'0 auto 7px'}}/>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:14,fontWeight:700,color:C.t1,letterSpacing:'-0.2px',flexShrink:0}}>{selD.getMonth()+1}월 {selD.getDate()}일 {DAY_NAMES[selD.getDay()]}요일</span>
+                {getHoliday(selDate)&&<span style={{color:'#E24B4A',fontSize:11.5,fontWeight:600,flexShrink:0}}>{getHoliday(selDate)}</span>}
+                <span style={{fontSize:11,color:C.t2,fontWeight:500,flex:1,minWidth:0,overflow:'hidden',whiteSpace:'nowrap'}}>일정 {selEvents.length+blocksOn(selDate).length} · 할일 {selTodos.length}</span>
+                <button onClick={e=>{e.stopPropagation();setEventPop(selDate);}} style={{width:26,height:26,borderRadius:'50%',color:'#fff',backgroundColor:C.brand,fontSize:16,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,border:'none',lineHeight:1}}>+</button>
+                <span style={{fontSize:9,color:C.t3,flexShrink:0,transform:sheet?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▲</span>
+              </div>
             </div>
-            <div style={{flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 18px 8px'}}>
-              <span style={{fontSize:14.5,fontWeight:700,color:C.t1,letterSpacing:'-0.2px'}}>{selD.getMonth()+1}월 {selD.getDate()}일 {DAY_NAMES[selD.getDay()]}요일{getHoliday(selDate)?<span style={{color:'#E24B4A',fontSize:12,fontWeight:600,marginLeft:6}}>{getHoliday(selDate)}</span>:null}</span>
-              <button onClick={()=>setEventPop(selDate)} style={{width:28,height:28,borderRadius:'50%',color:'#fff',backgroundColor:C.brand,fontSize:17,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
-            </div>
-            <div style={{flex:1,minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'0 18px 24px'}}>
+            <div style={{flex:1,minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'0 16px',paddingBottom:'calc(28px + env(safe-area-inset-bottom))'}}>
               {selEvents.length===0&&blocksOn(selDate).length===0&&<div style={{fontSize:14,color:C.t3,padding:'12px 0'}}>일정이 없습니다</div>}
               {blocksOn(selDate).map(b=>{const cs=catStyle[b.category]||catStyle.work;return(
                 <div key={b.id} onClick={()=>setMdEdit(b)} style={{display:'flex',alignItems:'stretch',gap:11,padding:'12px 2px',borderBottom:`0.5px solid ${C.line}`,cursor:'pointer'}}>
@@ -4980,7 +4986,7 @@ function MobileApp(){
 
       {/* WEEK (agenda) — 연속 스크롤. 좌→우 스와이프: 먼슬리 복귀 */}
       {tab==='week'&&(
-        <div style={{flex:1,minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',backgroundColor:C.card,paddingBottom:32}}
+        <div style={{flex:1,minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',backgroundColor:C.card,paddingBottom:'calc(72px + env(safe-area-inset-bottom))'}}
           ref={el=>{weekScrollRef.current=el;if(el&&!wkScrolledRef.current){wkScrolledRef.current=true;const t=el.querySelector('[data-today="1"]');if(t)setTimeout(()=>{try{t.scrollIntoView({block:'start',behavior:'auto'});}catch(e){}},60);}}}>
           {(()=>{const _base=new Date(today.getFullYear(),today.getMonth(),today.getDate());const _days=[];for(let i=-28;i<63;i++){const d=new Date(_base);d.setDate(_base.getDate()+i);_days.push(d);}return _days;})().map((d,di)=>{
             const dk=toDateKey(d);const evs=evByDate[dk]||[];const isTd=isToday(d);
@@ -4992,60 +4998,60 @@ function MobileApp(){
             const empty=evs.length===0&&dayBlocks.length===0&&!hol;
             return(
               <React.Fragment key={dk}>
-                {showMonth&&<div style={{padding:di===0?'14px 18px 8px':'26px 18px 8px',fontSize:13.5,fontWeight:700,color:C.t2,letterSpacing:'-0.1px'}}>{d.getFullYear()}년 {d.getMonth()+1}월</div>}
-                {isMonday&&!showMonth&&<div style={{borderTop:`1.5px solid ${C.t1}`,marginTop:10}}/>}
-                <div data-today={isTd?'1':undefined} style={{display:'flex',gap:12,padding:'12px 16px',borderBottom:`0.5px solid ${C.line}`,alignItems:'stretch',backgroundColor:isTd?'rgba(31,31,30,0.03)':'transparent'}}>
-                  <div style={{width:32,flexShrink:0,textAlign:'center'}}>
-                    <div style={{fontSize:11,fontWeight:600,color:isRed?'#E24B4A':isBlue?'#4A7BC4':C.t2}}>{DAY_NAMES[d.getDay()]}</div>
-                    <div style={{width:30,height:30,margin:'1px auto 0',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontSize:19,fontWeight:600,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{d.getDate()}</div>
+                {showMonth&&<div style={{padding:di===0?'13px 16px 7px':'23px 16px 7px',fontSize:12,fontWeight:700,color:C.t2,letterSpacing:'-0.1px'}}>{d.getFullYear()}년 {d.getMonth()+1}월</div>}
+                {isMonday&&!showMonth&&<div style={{borderTop:`1.5px solid ${C.t1}`,marginTop:9}}/>}
+                <div data-today={isTd?'1':undefined} style={{display:'flex',gap:11,padding:'11px 14px',borderBottom:`0.5px solid ${C.line}`,alignItems:'stretch',backgroundColor:isTd?'rgba(31,31,30,0.03)':'transparent'}}>
+                  <div style={{width:29,flexShrink:0,textAlign:'center'}}>
+                    <div style={{fontSize:10,fontWeight:600,color:isRed?'#E24B4A':isBlue?'#4A7BC4':C.t2}}>{DAY_NAMES[d.getDay()]}</div>
+                    <div style={{width:27,height:27,margin:'1px auto 0',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontSize:17,fontWeight:600,fontVariantNumeric:'tabular-nums',letterSpacing:'-0.5px'}}>{d.getDate()}</div>
                   </div>
-                  <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:11,justifyContent:'center'}}>
-                    {empty&&<button onClick={()=>setEventPop(dk)} style={{fontSize:14,color:C.t3,textAlign:'left',padding:0,background:'none',border:'none'}}>일정이 없습니다</button>}
+                  <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:10,justifyContent:'center'}}>
+                    {empty&&<button onClick={()=>setEventPop(dk)} style={{fontSize:12.5,color:C.t3,textAlign:'left',padding:0,background:'none',border:'none'}}>일정이 없습니다</button>}
                     {hol&&(
-                      <div style={{display:'flex',alignItems:'stretch',gap:11,minHeight:22}}>
-                        <span style={{width:3.5,borderRadius:2,backgroundColor:'#E24B4A',flexShrink:0}}/>
-                        <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center'}}><span style={{fontSize:15.5,fontWeight:600,color:C.t1}}>{hol}</span></div>
+                      <div style={{display:'flex',alignItems:'stretch',gap:10,minHeight:20}}>
+                        <span style={{width:3,borderRadius:2,backgroundColor:'#E24B4A',flexShrink:0}}/>
+                        <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center'}}><span style={{fontSize:14,fontWeight:600,color:C.t1}}>{hol}</span></div>
                       </div>
                     )}
                     {dayBlocks.map(b=>{const cs=catStyle[b.category]||catStyle.work;return(
-                      <div key={b.id} onClick={()=>setMdEdit(b)} style={{display:'flex',alignItems:'stretch',gap:11,cursor:'pointer'}}>
-                        <span style={{width:3.5,borderRadius:2,backgroundColor:cs.dot||cs.text,flexShrink:0}}/>
+                      <div key={b.id} onClick={()=>setMdEdit(b)} style={{display:'flex',alignItems:'stretch',gap:10,cursor:'pointer'}}>
+                        <span style={{width:3,borderRadius:2,backgroundColor:cs.dot||cs.text,flexShrink:0}}/>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:15.5,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px'}}>{b.title}</div>
-                          <div style={{fontSize:13,color:C.t2,marginTop:3}}>{b.startDate.slice(5).replace('-','/')} ~ {b.endDate.slice(5).replace('-','/')}</div>
+                          <div style={{fontSize:14,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px'}}>{b.title}</div>
+                          <div style={{fontSize:11.5,color:C.t2,marginTop:2}}>{b.startDate.slice(5).replace('-','/')} ~ {b.endDate.slice(5).replace('-','/')}</div>
                         </div>
                       </div>);})}
                     {evs.map(ev=>{const cs=catStyle[ev.category]||catStyle.work;return(
-                      <div key={ev.id} onClick={()=>setDetailEv(ev)} style={{display:'flex',alignItems:'stretch',gap:11,cursor:'pointer'}}>
-                        <span style={{width:3.5,borderRadius:2,backgroundColor:cs.dot||cs.text,flexShrink:0}}/>
+                      <div key={ev.id} onClick={()=>setDetailEv(ev)} style={{display:'flex',alignItems:'stretch',gap:10,cursor:'pointer'}}>
+                        <span style={{width:3,borderRadius:2,backgroundColor:cs.dot||cs.text,flexShrink:0}}/>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:15.5,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px'}}>{ev.title}{ev.meetingNoteId?' 📋':''}</div>
-                          <div style={{fontSize:13,color:C.t2,marginTop:3,fontVariantNumeric:'tabular-nums'}}>{fmtTime(ev.time)}</div>
+                          <div style={{fontSize:14,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.2px'}}>{ev.title}{ev.meetingNoteId?' 📋':''}</div>
+                          <div style={{fontSize:11.5,color:C.t2,marginTop:2,fontVariantNumeric:'tabular-nums'}}>{fmtTime(ev.time)}</div>
                         </div>
                       </div>);})}
                     {(dayTodos.length>0||weekTodoAdd===dk)&&(
-                      <div style={{borderTop:`0.5px solid ${C.line}`,paddingTop:8,display:'flex',flexDirection:'column',gap:3}}>
+                      <div style={{borderTop:`0.5px solid ${C.line}`,paddingTop:7,display:'flex',flexDirection:'column',gap:3}}>
                         {dayTodos.map(t=>(
                           <div key={t.id} style={{display:'flex',alignItems:'center',gap:8,padding:'2px 0'}}>
-                            <button onClick={e=>{e.stopPropagation();dispatch({type:'TOGGLE_TODO',id:t.id});}} style={{width:17,height:17,borderRadius:4,flexShrink:0,border:`1.5px solid ${t.done?'#D0D0D0':C.brand}`,backgroundColor:t.done?'#F0F0F0':'transparent',color:C.brand,fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>{t.done?'✓':''}</button>
-                            {editTodoId===t.id?(<input autoFocus value={editTodoVal} onChange={e=>setEditTodoVal(e.target.value)} onBlur={()=>{const v=editTodoVal.trim();if(!editCancelRef.current&&v&&v!==t.text)dispatch({type:'UPDATE_TODO',id:t.id,updates:{text:v}});editCancelRef.current=false;setEditTodoId(null);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){editCancelRef.current=true;e.currentTarget.blur();}}} style={{flex:1,fontSize:13.5,padding:'2px 5px',border:`0.5px solid ${C.brand}`,borderRadius:5}}/>):(<span onClick={()=>{if(!t.done){editCancelRef.current=false;setEditTodoId(t.id);setEditTodoVal(t.text);}}} style={{flex:1,fontSize:13.5,color:t.done?C.t3:C.t1,textDecoration:t.done?'line-through':'none'}}>{t.text}</span>)}
+                            <button onClick={e=>{e.stopPropagation();dispatch({type:'TOGGLE_TODO',id:t.id});}} style={{width:15,height:15,borderRadius:4,flexShrink:0,border:`1.5px solid ${t.done?'#D0D0D0':C.brand}`,backgroundColor:t.done?'#F0F0F0':'transparent',color:C.brand,fontSize:9,display:'flex',alignItems:'center',justifyContent:'center'}}>{t.done?'✓':''}</button>
+                            {editTodoId===t.id?(<input autoFocus value={editTodoVal} onChange={e=>setEditTodoVal(e.target.value)} onBlur={()=>{const v=editTodoVal.trim();if(!editCancelRef.current&&v&&v!==t.text)dispatch({type:'UPDATE_TODO',id:t.id,updates:{text:v}});editCancelRef.current=false;setEditTodoId(null);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){editCancelRef.current=true;e.currentTarget.blur();}}} style={{flex:1,fontSize:12,padding:'2px 5px',border:`0.5px solid ${C.brand}`,borderRadius:5}}/>):(<span onClick={()=>{if(!t.done){editCancelRef.current=false;setEditTodoId(t.id);setEditTodoVal(t.text);}}} style={{flex:1,fontSize:12,color:t.done?C.t3:C.t1,textDecoration:t.done?'line-through':'none'}}>{t.text}</span>)}
                             <button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_TODO',id:t.id});}} style={{fontSize:14,color:C.t3,padding:'0 3px',lineHeight:1}}>×</button>
                           </div>))}
                         {weekTodoAdd===dk?(
                           <div style={{display:'flex',alignItems:'center',gap:8,padding:'2px 0'}}>
-                            <div style={{width:17,height:17,borderRadius:4,flexShrink:0,border:`1.5px solid ${C.t3}`}}/>
-                            <input autoFocus value={weekTodoVal} onChange={e=>setWeekTodoVal(e.target.value)} onBlur={()=>{const v=weekTodoVal.trim();if(v)dispatch({type:'ADD_TODO',date:dk,text:v,category:mTodoCat});setWeekTodoVal('');setWeekTodoAdd(null);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){setWeekTodoVal('');setWeekTodoAdd(null);}}} placeholder="할 일 입력" style={{flex:1,fontSize:13.5,padding:'2px 5px',border:`0.5px solid ${C.brand}`,borderRadius:5,backgroundColor:'#fff'}}/>
+                            <div style={{width:15,height:15,borderRadius:4,flexShrink:0,border:`1.5px solid ${C.t3}`}}/>
+                            <input autoFocus value={weekTodoVal} onChange={e=>setWeekTodoVal(e.target.value)} onBlur={()=>{const v=weekTodoVal.trim();if(v)dispatch({type:'ADD_TODO',date:dk,text:v,category:mTodoCat});setWeekTodoVal('');setWeekTodoAdd(null);}} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();if(e.key==='Escape'){setWeekTodoVal('');setWeekTodoAdd(null);}}} placeholder="할 일 입력" style={{flex:1,fontSize:12,padding:'2px 5px',border:`0.5px solid ${C.brand}`,borderRadius:5,backgroundColor:'#fff'}}/>
                           </div>
                         ):(
-                          <button onClick={e=>{e.stopPropagation();setWeekTodoAdd(dk);}} style={{fontSize:12.5,color:C.t2,padding:'2px 0',textAlign:'left',background:'none',border:'none'}}>+ 할 일</button>
+                          <button onClick={e=>{e.stopPropagation();setWeekTodoAdd(dk);}} style={{fontSize:11.5,color:C.t2,padding:'2px 0',textAlign:'left',background:'none',border:'none'}}>+ 할 일</button>
                         )}
                       </div>
                     )}
                     {!empty&&dayTodos.length===0&&weekTodoAdd!==dk&&(
-                      <button onClick={e=>{e.stopPropagation();setWeekTodoAdd(dk);}} style={{fontSize:12.5,color:C.t3,padding:0,textAlign:'left',background:'none',border:'none'}}>+ 할 일</button>
+                      <button onClick={e=>{e.stopPropagation();setWeekTodoAdd(dk);}} style={{fontSize:11.5,color:C.t3,padding:0,textAlign:'left',background:'none',border:'none'}}>+ 할 일</button>
                     )}
                   </div>
-                  <button onClick={()=>setEventPop(dk)} style={{width:26,height:26,borderRadius:'50%',flexShrink:0,alignSelf:'center',backgroundColor:'#F0F0F4',color:C.t2,fontSize:16,lineHeight:1,border:'none'}}>+</button>
+                  <button onClick={()=>setEventPop(dk)} style={{width:23,height:23,borderRadius:'50%',flexShrink:0,alignSelf:'center',backgroundColor:'#F0F0F4',color:C.t2,fontSize:14,lineHeight:1,border:'none'}}>+</button>
                 </div>
               </React.Fragment>);
           })}
@@ -5054,22 +5060,6 @@ function MobileApp(){
 
       </div>
       </div>
-
-      {/* 하단 오늘/선택날짜 바 — 위로 스와이프(또는 탭)하면 그날 일정·할일이 올라옴 */}
-      {tab==='month'&&(
-        <div
-          onTouchStart={e=>{mBarTouchRef.current=e.touches[0].clientY;}}
-          onTouchEnd={e=>{if(mBarTouchRef.current==null)return;const dy=e.changedTouches[0].clientY-mBarTouchRef.current;mBarTouchRef.current=null;if(Math.abs(dy)>28)setSheet(dy<0);}}
-          onClick={()=>setSheet(s=>!s)}
-          style={{flexShrink:0,backgroundColor:C.card,borderTop:`0.5px solid ${C.line}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,padding:'8px 0 6px',paddingBottom:'calc(6px + env(safe-area-inset-bottom))',cursor:'pointer',boxShadow:'0 -2px 10px rgba(20,20,40,0.05)'}}>
-          <div style={{width:38,height:4,borderRadius:2,backgroundColor:'#D5D5DC'}}/>
-          <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontSize:13.5,fontWeight:700,color:C.t1,letterSpacing:'-0.2px'}}>{selD.getMonth()+1}월 {selD.getDate()}일 {DAY_NAMES[selD.getDay()]}요일</span>
-            <span style={{fontSize:11.5,color:C.t2,fontWeight:500}}>일정 {selEvents.length+blocksOn(selDate).length} · 할일 {selTodos.length}</span>
-            <span style={{fontSize:9,color:C.t3,transform:sheet?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▲</span>
-          </div>
-        </div>
-      )}
 
       {eventPop&&<EventPopover date={eventPop} onClose={()=>setEventPop(null)}/>}
       {detailEv&&<EventDetailPopover event={detailEv} onClose={()=>setDetailEv(null)} onDelete={()=>{dispatch({type:'DELETE_EVENT',id:detailEv.id});setDetailEv(null);}} onUpdate={u=>{dispatch({type:'UPDATE_EVENT',id:detailEv.id,updates:u});setDetailEv(null);}} onOpenNote={n=>{setDetailEv(null);setTimeout(()=>setNoteMdl(n),50);}}/>}
