@@ -250,13 +250,14 @@ function reducer(state,action){
     case 'SET_WEEKLY_EVENTS':return{...state,weeklyEvents:action.events};
     case 'FORCE_LAYER_VISIBLE':{const ct=action.cat;if(ct==='work')return state.workVisible?state:{...state,workVisible:true};if(ct==='personal')return state.personalVisible?state:{...state,personalVisible:true};return{...state,customLayers:(state.customLayers||[]).map(l=>l.id===ct&&l.visible===false?{...l,visible:true}:l)};}
     case 'ENSURE_CUSTOM_LAYER':{if((state.customLayers||[]).some(l=>l.id===action.layer.id))return state;const cl=[...(state.customLayers||[]),action.layer];const lo=(state.layerOrder||[]).includes(action.layer.id)?state.layerOrder:[...(state.layerOrder||[]),action.layer.id];return{...state,customLayers:cl,layerOrder:lo};}
-    case 'ADD_TODO':return{...state,todos:[...state.todos,{id:uid(),date:action.date,text:action.text,done:false,category:action.category||'work',updatedAt:Date.now()}]};
+    case 'ADD_TODO':return{...state,todos:[...state.todos,{id:uid(),date:action.date,text:action.text,done:false,category:action.category||'work',repeat:!!action.repeat,seriesId:action.seriesId||null,updatedAt:Date.now()}]};
+    case 'ADD_TODOS_BULK':return{...state,todos:[...state.todos,...(action.items||[]).map(it=>({id:uid(),date:it.date,text:it.text,done:false,category:it.category||'work',repeat:!!it.repeat,seriesId:it.seriesId||null,updatedAt:Date.now()}))]};
     case 'UPDATE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,...action.updates,updatedAt:Date.now()}:t)};
     case 'TOGGLE_TODO':return{...state,todos:state.todos.map(t=>t.id===action.id?{...t,done:!t.done,updatedAt:Date.now()}:t)};
     case 'DELETE_TODO':return{...state,todos:state.todos.filter(t=>t.id!==action.id),eventTombstones:{...(state.eventTombstones||{}),[action.id]:Date.now()}};
     case 'SET_TODOS':return{...state,todos:action.todos};
     case 'SET_MULTIDAY_BLOCKS':return{...state,multiDayBlocks:action.blocks};
-    case 'BULK_MOVE_TODOS':return{...state,todos:state.todos.map(t=>(!t.done&&action.fromDates.includes(t.date))?{...t,date:action.toDate,updatedAt:Date.now()}:t)};
+    case 'BULK_MOVE_TODOS':return{...state,todos:state.todos.map(t=>(!t.done&&!t.repeat&&action.fromDates.includes(t.date))?{...t,date:action.toDate,updatedAt:Date.now()}:t)};
     case 'MIGRATE_LAYER_NAME':return{...state,customLayers:(state.customLayers||[]).map(l=>l.name===action.from?{...l,name:action.to}:l)};
     case 'SET_WEEK_MEMO':return{...state,weekMemos:{...state.weekMemos,[action.date]:action.text}};
     case 'SET_WEEK_OFFSET':return{...state,weekOffset:action.payload};
@@ -421,7 +422,7 @@ function FamilyShareCard({showToast}){
 function SettingsModal({onClose}){
   const{state,dispatch}=useStore();
   const showToast=useToast();
-  const[tab,setTab]=useState('outlook');
+  const[tab,setTab]=useState('cloud');
   const[clientId,setClientId]=useState(state.outlookClientId||'');
   const[syncing,setSyncing]=useState(false);
   const[cloudConnected,setCloudConnected]=useState(()=>!!localStorage.getItem(CLOUD_BIN));
@@ -584,64 +585,12 @@ function SettingsModal({onClose}){
         </div>
         {/* tabs */}
         <div style={{display:'flex',borderBottom:'1px solid #F0F0F0',padding:'0 20px',gap:4,marginTop:4}}>
-          <button style={tabStyle(tab==='outlook')} onClick={()=>setTab('outlook')}>아웃룩 연동</button>
           <button style={tabStyle(tab==='backup')} onClick={()=>setTab('backup')}>백업 관리</button>
           <button style={tabStyle(tab==='cloud')} onClick={()=>setTab('cloud')}>클라우드 동기화</button>
           <button style={tabStyle(tab==='layers')} onClick={()=>setTab('layers')}>레이어 이름</button>
         </div>
         {/* body */}
         <div style={{flex:1,overflowY:'auto',padding:'18px 20px'}}>
-          {tab==='outlook'&&(
-            <div style={{display:'flex',flexDirection:'column',gap:14}}>
-              {state.outlookUser?(
-                <div style={{backgroundColor:'#EEEEF4',borderRadius:8,padding:'10px 14px'}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
-                    <span style={{fontSize:13,color:'#1F1F1E',fontWeight:600}}>✓ {state.outlookUser}</span>
-                    <span style={{fontSize:11,color:'#8C8C8C',flexShrink:0}}>{state.outlookSyncedAt?'마지막 동기화: '+new Date(state.outlookSyncedAt).toLocaleString('ko-KR'):''}</span>
-                  </div>
-                  <div style={{fontSize:11,color:'#7A73C4',marginTop:6,lineHeight:1.6}}>자동 동기화: <b>Claude 스케줄 작업</b>이 평일 아침 7:35에 아웃룩 웹 캘린더를 읽어 자동 반영합니다. 상단바 <b>↻</b> 버튼으로 수동 즉시 동기화도 가능하며, 결과는 클라우드를 통해 모든 기기에 반영됩니다.</div>
-                </div>
-              ):(
-                <div style={{backgroundColor:'#F6F6F9',borderRadius:8,padding:'10px 14px'}}>
-                  <div style={{fontSize:12,color:'#666',fontWeight:600,marginBottom:4}}>이 기기에서 연결되지 않음</div>
-                  <div style={{fontSize:11,color:'#8C8C8C',lineHeight:1.6}}>아웃룩 동기화는 <b>Claude 스케줄 작업</b>(평일 아침 7:35)이 아웃룩 웹 캘린더를 읽어 클라우드에 자동 반영하는 방식으로 동작합니다. 이 기기에 별도 연결은 필요 없습니다. 아래 Client ID 직접 연결(MSAL)은 선택 사항입니다.</div>
-                </div>
-              )}
-              <div>
-                <div style={{fontSize:12,color:'#555',marginBottom:6,fontWeight:500}}>Azure App Client ID</div>
-                <input value={clientId} onChange={e=>setClientId(e.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  style={{width:'100%',fontSize:12,padding:'8px 10px',borderRadius:6,border:'1px solid #E0E0E0',backgroundColor:'#F8F8FB',fontFamily:'monospace'}}/>
-              </div>
-              <details style={{backgroundColor:'#FFFBEB',borderRadius:8,padding:'10px 14px',fontSize:11,color:'#78600A',lineHeight:1.6}}>
-                <summary style={{fontWeight:600,cursor:'pointer',userSelect:'none'}}>Azure 앱 등록 방법 (처음 연결할 때만 필요)</summary>
-                <div style={{marginTop:6}}>
-                  <div>1. portal.azure.com → 앱 등록 → 새 등록</div>
-                  <div>2. 지원되는 계정 유형: 모든 조직 디렉터리 + 개인 계정</div>
-                  <div>3. 리디렉션 URI: 공개 클라이언트 / 네이티브 선택 후</div>
-                  <div style={{fontFamily:'monospace',marginLeft:8}}>https://login.microsoftonline.com/common/oauth2/nativeclient</div>
-                  <div>4. API 사용 권한: Calendars.Read + User.Read 추가</div>
-                  <div>5. 개요 탭의 애플리케이션(클라이언트) ID 복사</div>
-                </div>
-              </details>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                {!state.outlookUser?(
-                  <button disabled={syncing} onClick={handleConnect} style={{...btnBase,backgroundColor:'#1F1F1E',color:'#fff',opacity:syncing?0.6:1}}>
-                    {syncing?'연결 중...':'🔗 연결'}
-                  </button>
-                ):(
-                  <>
-                    <button disabled={syncing} onClick={handleSync} style={{...btnBase,backgroundColor:'#1F1F1E',color:'#fff',opacity:syncing?0.6:1}}>
-                      {syncing?'동기화 중...':'🔄 동기화'}
-                    </button>
-                    <button disabled={syncing} onClick={handleDisconnect} style={{...btnBase,backgroundColor:'#F5F5F5',color:'#666'}}>
-                      연결 해제
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
           {tab==='backup'&&(
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
               <div style={{display:'flex',gap:8}}>
@@ -931,7 +880,7 @@ function StoreProvider({children}){
   useEffect(()=>{
     if(!cloudReady)return;
     const today=toDateKey(new Date());
-    const pastUndone=[...new Set((state.todos||[]).filter(t=>!t.done&&t.date<today).map(t=>t.date))];
+    const pastUndone=[...new Set((state.todos||[]).filter(t=>!t.done&&!t.repeat&&t.date<today).map(t=>t.date))];
     if(pastUndone.length===0)return;
     dirtyRef.current=true;
     rawDispatch({type:'BULK_MOVE_TODOS',fromDates:pastUndone,toDate:today});
@@ -3772,7 +3721,23 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
   const[todoActive,setTodoActive]=useState(false);const[todoVal,setTodoVal]=useState('');const[todoCat,setTodoCat]=useState('personal');const[todoRepeat,setTodoRepeat]=useState(false);const todoRef=useRef(null);const[detailEvent,setDetailEvent]=useState(null);
   const[noteMdl,setNoteMdl]=useState(null);
   const activateTodo=()=>{setTodoActive(true);setTimeout(()=>todoRef.current?.focus(),20);};
-  const submitTodo=()=>{const t=todoVal.trim();if(t){if(todoRepeat){const d0=new Date(dk+'T00:00:00');for(let i=0;i<12;i++){const d=new Date(d0);d.setDate(d0.getDate()+i*7);dispatch({type:'ADD_TODO',date:toDateKey(d),text:t,category:todoCat});}}else{dispatch({type:'ADD_TODO',date:dk,text:t,category:todoCat});}}setTodoVal('');setTodoActive(false);setTodoRepeat(false);};
+  const submittedRef=useRef(false);
+  const submitTodo=()=>{
+    if(submittedRef.current)return; // Enter 처리 후 onBlur가 한 번 더 부르는 중복 생성 방지
+    const t=todoVal.trim();
+    if(t){
+      if(todoRepeat){
+        const sid='s'+Date.now()+Math.random().toString(36).slice(2,6);
+        const d0=new Date(dk+'T00:00:00');const items=[];
+        for(let i=0;i<12;i++){const d=new Date(d0);d.setDate(d0.getDate()+i*7);items.push({date:toDateKey(d),text:t,category:todoCat,repeat:true,seriesId:sid});}
+        dispatch({type:'ADD_TODOS_BULK',items});
+      }else{
+        dispatch({type:'ADD_TODO',date:dk,text:t,category:todoCat});
+      }
+      submittedRef.current=true;setTimeout(()=>{submittedRef.current=false;},400);
+    }
+    setTodoVal('');setTodoActive(false);setTodoRepeat(false);
+  };
   const isRedDay=(isSun(date)||!!getHoliday(dk))&&!todayDate;
   const isBlueDay=isSat(date)&&!todayDate&&!getHoliday(dk);
   const hdrBg=todayDate?'#1F1F1E':'#F8F8FB';const dateColor=todayDate?'#fff':isRedDay?'#E24B4A':isBlueDay?'#4A7BC4':'#2F2F2F';const dayColor=todayDate?'rgba(255,255,255,0.7)':isRedDay?'#E88B8A':isBlueDay?'#8FAEDB':'#C4C4C4';
@@ -4061,7 +4026,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
       {dragIdx!==null&&events.length===0&&<div style={{height:19,borderRadius:6,border:'1.5px dashed #E0E0E8',backgroundColor:'rgba(20,20,25,0.06)',flexShrink:0,animation:'slotIn 0.15s ease',overflow:'hidden'}}/>}
       {/* Events as chips */}
       {events.length>0&&(
-        <div ref={chipsRef} style={{display:'flex',flexDirection:'column',gap:1,overflow:'hidden',flex:1,position:'relative',paddingBottom:dragIdx!==null?25:0,transition:'padding-bottom 0.15s ease'}}>
+        <div ref={chipsRef} style={{display:'flex',flexDirection:'column',gap:2,overflow:'hidden',flex:1,position:'relative',paddingBottom:dragIdx!==null?25:0,transition:'padding-bottom 0.15s ease'}}>
           {dragIdx!==null&&<div style={{position:'absolute',left:0,right:0,top:dragIdx*25,height:23,borderRadius:6,border:'1.5px dashed #E0E0E8',backgroundColor:'rgba(20,20,25,0.07)',pointerEvents:'none',transition:'top 0.12s ease',zIndex:2}}/>}
           {events.slice(0,4).map((ev,ci)=>{
             const cs=catStyle[ev.category]||catStyle.work;
@@ -4127,9 +4092,10 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
   });
   const blocksWithLanes=assignLanes(weekBlocks,weekDates);
   const numLanes=blocksWithLanes.length>0?Math.max(...blocksWithLanes.map(b=>b.lane))+1:0;
-  const LANE_H=19;
+  // 칩 1개 pitch(높이 20 + 간격 2)와 동일하게 맞춰서 기간일정 바와 개별일정 간격을 통일
+  const LANE_H=22;
   const CELL_DATE_H=26; // 셀 상단 padding(4) + 날짜숫자 줄(21) + gap(1)
-  const blockAreaH=numLanes>0?numLanes*LANE_H+2:0;
+  const blockAreaH=numLanes>0?numLanes*LANE_H:0;
   const[calResize,setCalResize]=useState(null);
   const calContRef=useRef(null);
   const calResizeRef=useRef(null);
@@ -4167,7 +4133,7 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
               onMouseUp={()=>onCellMouseUp(dk)}
               onDoubleClick={(e)=>{e.stopPropagation();onDblClickCell(dk);}}
               onEventClick={onEventClick}
-              blockPad={blockAreaH}
+              blockPad={blockAreaH-1}
             />
           );
         })}
@@ -4187,9 +4153,9 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
               const bg=proj?lighten(proj.color,0.82):cs.bg;
               return(
                 <div key={b.id} onClick={e=>{e.stopPropagation();if(!isRz)onBlockClick(b);}}
-                  style={{position:'absolute',top:b.lane*LANE_H+2,
+                  style={{position:'absolute',top:b.lane*LANE_H,
                     left:`${(sc/7)*100}%`,width:`${((ec-sc+1)/7)*100}%`,
-                    height:LANE_H-3,cursor:'pointer',pointerEvents:'all'}}>
+                    height:LANE_H-2,cursor:'pointer',pointerEvents:'all'}}>
                   <div style={{position:'relative',height:'100%',backgroundColor:bg,
                     boxShadow:pos.isStart?`inset 2.5px 0 0 ${color}`:'none',
                     borderRadius:pos.isStart&&pos.isEnd?6:pos.isStart?'6px 0 0 6px':pos.isEnd?'0 6px 6px 0':0,
@@ -4677,10 +4643,48 @@ function MobileApp(){
   const weekAddRef=React.useRef(null);
   const weekScrollRef=React.useRef(null);
   const mTouchRef=React.useRef(null);
+  const mBarTouchRef=React.useRef(null);
   const[editTodoId,setEditTodoId]=React.useState(null);const[editTodoVal,setEditTodoVal]=React.useState('');
   const editCancelRef=React.useRef(false);
   const[weekTodoAdd,setWeekTodoAdd]=React.useState(null);const[weekTodoVal,setWeekTodoVal]=React.useState('');
-  const[sheet,setSheet]=React.useState(false); // 먼슬리 하단 일정 시트(아래→위 스와이프로 열림)
+  const[sheet,setSheet]=React.useState(false); // 먼슬리 하단 일정 시트(오늘날짜 바에서 위로 스와이프)
+  const[slideX,setSlideX]=React.useState(0);      // 좌우 스와이프 시 화면이 따라오는 효과
+  const[slideAnim,setSlideAnim]=React.useState(false);
+  const axisRef=React.useRef(null);
+  const slideBusyRef=React.useRef(false);
+  const stageW=()=>(typeof window!=='undefined'?window.innerWidth:390);
+  // 좌우 스와이프: 화면이 손가락을 따라오다가 임계값 넘으면 페이지가 넘어가듯 전환
+  const stageTouchStart=(e)=>{if(slideBusyRef.current)return;mTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};axisRef.current=null;setSlideAnim(false);};
+  const stageTouchMove=(e)=>{
+    if(!mTouchRef.current||slideBusyRef.current)return;
+    const dx=e.touches[0].clientX-mTouchRef.current.x,dy=e.touches[0].clientY-mTouchRef.current.y;
+    if(!axisRef.current&&(Math.abs(dx)>12||Math.abs(dy)>12))axisRef.current=Math.abs(dx)>Math.abs(dy)?'x':'y';
+    if(axisRef.current==='x'){
+      const max=stageW();
+      setSlideX(Math.max(-max,Math.min(max,dx*0.92)));
+    }
+  };
+  const stageTouchEnd=(e)=>{
+    if(!mTouchRef.current||slideBusyRef.current){mTouchRef.current=null;return;}
+    const dx=e.changedTouches[0].clientX-mTouchRef.current.x,dy=e.changedTouches[0].clientY-mTouchRef.current.y;
+    const axis=axisRef.current;mTouchRef.current=null;axisRef.current=null;
+    if(axis==='x'){
+      const W=stageW();
+      if(Math.abs(dx)>60){
+        slideBusyRef.current=true;
+        setSlideAnim(true);setSlideX(dx<0?-W:W);
+        const next=tab==='month'?'week':'month';
+        setTimeout(()=>{
+          setTab(next);if(next==='month')setSheet(false);
+          setSlideAnim(false);setSlideX(dx<0?W:-W);
+          requestAnimationFrame(()=>{setSlideAnim(true);setSlideX(0);setTimeout(()=>{slideBusyRef.current=false;},260);});
+        },230);
+      }else{setSlideAnim(true);setSlideX(0);}
+      return;
+    }
+    // 먼슬리에서 위/아래 스와이프 = 다음달 / 이전달
+    if(axis==='y'&&tab==='month'&&Math.abs(dy)>50){if(dy<0)goNext();else goPrev();}
+  };
   const fmtTime=(t)=>{if(!t)return '종일';const p=String(t).split(':');const h=parseInt(p[0],10),m=parseInt(p[1]||'0',10);if(isNaN(h))return t;const ap=h<12?'오전':'오후';const hh=h%12===0?12:h%12;return ap+' '+hh+':'+String(isNaN(m)?0:m).padStart(2,'0');};
 
   const layerLabel=(cat)=>cat==='work'?(state.workLabel||'업무'):cat==='personal'?(state.personalLabel||'개인'):cat==='outlook'?'아웃룩':((state.customLayers||[]).find(l=>l.id===cat)||{}).name||'기타';
@@ -4744,7 +4748,10 @@ function MobileApp(){
       <div style={{height:HDR,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:6,backgroundColor:C.bg,borderBottom:`0.5px solid ${C.line}`}}>
         
           <div style={{flex:1,display:'flex',alignItems:'center',gap:4}}>
-            <span style={{fontSize:19,fontWeight:600,color:C.t1,letterSpacing:'-0.3px'}}>{tab==='month'?`${navY}. ${navM+1}`:'위클리'}</span>
+            <button onClick={()=>{const n=tab==='month'?'week':'month';setTab(n);if(n==='month')setSheet(false);}} style={{display:'flex',alignItems:'center',gap:5,background:'none',border:'none',padding:0,cursor:'pointer'}}>
+              <span style={{fontSize:19,fontWeight:600,color:C.t1,letterSpacing:'-0.3px'}}>{tab==='month'?`${navY}. ${navM+1}`:'위클리'}</span>
+              <span style={{fontSize:9.5,color:C.t2,backgroundColor:'#EAEAEF',borderRadius:4,padding:'2px 5px',fontWeight:600,flexShrink:0}}>{tab==='month'?'위클리':'먼슬리'}</span>
+            </button>
             {tab==='month'&&<><button onClick={goPrev} style={{fontSize:20,color:C.t3,padding:'0 5px',lineHeight:1}}>‹</button>
             <button onClick={goNext} style={{fontSize:20,color:C.t3,padding:'0 5px',lineHeight:1}}>›</button></>}
           </div>
@@ -4756,19 +4763,18 @@ function MobileApp(){
         </button>
       </div>
 
-      {/* MONTH — 기본화면(달력). 아래→위 스와이프: 그날 일정 시트, 우→좌 스와이프: 위클리 */}
+      {/* 스와이프 스테이지: 좌우로 밀면 화면이 따라오며 먼슬리↔위클리 전환 */}
+      <div style={{flex:1,minHeight:0,position:'relative',overflow:'hidden'}}
+        onTouchStart={stageTouchStart} onTouchMove={stageTouchMove} onTouchEnd={stageTouchEnd}>
+      <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+        transform:`translateX(${slideX}px)`,
+        transition:slideAnim?'transform 0.23s cubic-bezier(.32,.72,0,1)':'none',
+        willChange:'transform'}}>
+      {/* MONTH — 기본화면(달력). 위/아래 스와이프: 이전달/다음달 */}
       {tab==='month'&&(
-        <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative'}}
-          onTouchStart={e=>{mTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}}
-          onTouchEnd={e=>{
-            if(!mTouchRef.current)return;
-            const dx=e.changedTouches[0].clientX-mTouchRef.current.x,dy=e.changedTouches[0].clientY-mTouchRef.current.y;
-            mTouchRef.current=null;
-            if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.3){if(dx<0)setTab('week');return;}
-            if(Math.abs(dy)>45&&Math.abs(dy)>Math.abs(dx)*1.3)setSheet(dy<0);
-          }}>
+        <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative'}}>
           {/* ── 달력 ── */}
-          <div style={{height:sheet?'46%':'calc(100% - 46px)',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
+          <div style={{height:sheet?'44%':'100%',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',padding:'4px 6px 4px',flexShrink:0}}>
               {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:i===0?'#E24B4A':i===6?'#4A7BC4':C.t2}}>{d}</div>)}
             </div>
@@ -4880,9 +4886,7 @@ function MobileApp(){
 
       {/* WEEK (agenda) — 연속 스크롤. 좌→우 스와이프: 먼슬리 복귀 */}
       {tab==='week'&&(
-        <div style={{flex:1,minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',backgroundColor:C.card,paddingBottom:TAB+16}}
-          onTouchStart={e=>{mTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}}
-          onTouchEnd={e=>{if(!mTouchRef.current)return;const dx=e.changedTouches[0].clientX-mTouchRef.current.x,dy=e.changedTouches[0].clientY-mTouchRef.current.y;mTouchRef.current=null;if(dx>55&&Math.abs(dx)>Math.abs(dy)*1.3)setTab('month');}}
+        <div style={{flex:1,minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',backgroundColor:C.card,paddingBottom:32}}
           ref={el=>{weekScrollRef.current=el;if(el){const t=el.querySelector('[data-today="1"]');if(t)setTimeout(()=>t.scrollIntoView({block:'start',behavior:'auto'}),40);}}}>
           {(()=>{const _base=new Date(today.getFullYear(),today.getMonth(),today.getDate());const _days=[];for(let i=-28;i<63;i++){const d=new Date(_base);d.setDate(_base.getDate()+i);_days.push(d);}return _days;})().map((d,di)=>{
             const dk=toDateKey(d);const evs=evByDate[dk]||[];const isTd=isToday(d);
@@ -4954,16 +4958,24 @@ function MobileApp(){
         </div>
       )}
 
-      {/* Bottom tabs */}
-      <div style={{height:TAB,flexShrink:0,backgroundColor:C.card,borderTop:`0.5px solid ${C.line}`,display:'flex',paddingBottom:'env(safe-area-inset-bottom)'}}>
-        {[{id:'month',label:'먼슬리'},{id:'week',label:'위클리'}].map(t=>(
-          <button key={t.id} onClick={()=>{setTab(t.id);if(t.id==='month')setSheet(false);}} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,color:tab===t.id?C.brand:'#B7B2A6',background:'none',border:'none'}}>
-            <IcCal s={21}/>
-            <span style={{fontSize:10.5,fontWeight:tab===t.id?700:500}}>{t.label}</span>
-          </button>
-        ))}
+      </div>
       </div>
 
+      {/* 하단 오늘/선택날짜 바 — 위로 스와이프(또는 탭)하면 그날 일정·할일이 올라옴 */}
+      {tab==='month'&&(
+        <div
+          onTouchStart={e=>{mBarTouchRef.current=e.touches[0].clientY;}}
+          onTouchEnd={e=>{if(mBarTouchRef.current==null)return;const dy=e.changedTouches[0].clientY-mBarTouchRef.current;mBarTouchRef.current=null;if(Math.abs(dy)>28)setSheet(dy<0);}}
+          onClick={()=>setSheet(s=>!s)}
+          style={{flexShrink:0,backgroundColor:C.card,borderTop:`0.5px solid ${C.line}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,padding:'8px 0 6px',paddingBottom:'calc(6px + env(safe-area-inset-bottom))',cursor:'pointer',boxShadow:'0 -2px 10px rgba(20,20,40,0.05)'}}>
+          <div style={{width:38,height:4,borderRadius:2,backgroundColor:'#D5D5DC'}}/>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:13.5,fontWeight:700,color:C.t1,letterSpacing:'-0.2px'}}>{selD.getMonth()+1}월 {selD.getDate()}일 {DAY_NAMES[selD.getDay()]}요일</span>
+            <span style={{fontSize:11.5,color:C.t2,fontWeight:500}}>일정 {selEvents.length+blocksOn(selDate).length} · 할일 {selTodos.length}</span>
+            <span style={{fontSize:9,color:C.t3,transform:sheet?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▲</span>
+          </div>
+        </div>
+      )}
 
       {eventPop&&<EventPopover date={eventPop} onClose={()=>setEventPop(null)}/>}
       {detailEv&&<EventDetailPopover event={detailEv} onClose={()=>setDetailEv(null)} onDelete={()=>{dispatch({type:'DELETE_EVENT',id:detailEv.id});setDetailEv(null);}} onUpdate={u=>{dispatch({type:'UPDATE_EVENT',id:detailEv.id,updates:u});setDetailEv(null);}} onOpenNote={n=>{setDetailEv(null);setTimeout(()=>setNoteMdl(n),50);}}/>}
