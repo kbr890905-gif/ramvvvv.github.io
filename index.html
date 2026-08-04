@@ -794,17 +794,17 @@ function StoreProvider({children}){
       const curSig=JSON.stringify((st.weeklyEvents||[]).filter(e=>shared.has(e.category)&&!e.isOutlook).map(e=>[e.id,e.date,e.time||undefined,e.title,e.category,e.updatedAt||0]).sort());
       if(sig!==curSig)rawDispatch({type:'SET_WEEKLY_EVENTS',events:[...keep,...sharedEv]});
       // 할일 병합
-      const ltodos={};(st.todos||[]).forEach(t=>{if(shared.has(t.category))ltodos[t.id]={id:t.id,date:t.date,text:t.text,category:t.category,done:!!t.done,updatedAt:t.updatedAt||0};});
+      const ltodos={};(st.todos||[]).forEach(t=>{if(shared.has(t.category))ltodos[t.id]={id:t.id,date:t.date,text:t.text,category:t.category,done:!!t.done,repeat:!!t.repeat,seriesId:t.seriesId||null,updatedAt:t.updatedAt||0};});
       const rTodos=(remote&&remote.titems)||{};
       const tmerged={};const tids=new Set([...Object.keys(rTodos),...Object.keys(ltodos)]);
       tids.forEach(id=>{const r=rTodos[id],l=ltodos[id];const rt=r?(r.updatedAt||0):-1,lt=l?(l.updatedAt||0):-1,tt=tomb[id]||0;
         if(tt>0&&tt>rt&&tt>=lt){tmerged[id]={deleted:true,updatedAt:tt};return;}
         if(r&&r.deleted&&(r.updatedAt||0)>0&&(r.updatedAt||0)>=lt){tmerged[id]={deleted:true,updatedAt:r.updatedAt};return;}
-        const pick=rt>=lt?r:l;if(pick)tmerged[id]=pick.deleted?{deleted:true,updatedAt:pick.updatedAt}:{id,date:pick.date,text:pick.text,category:pick.category,done:!!pick.done,updatedAt:pick.updatedAt||0};});
+        const pick=rt>=lt?r:l;if(pick)tmerged[id]=pick.deleted?{deleted:true,updatedAt:pick.updatedAt}:{id,date:pick.date,text:pick.text,category:pick.category,done:!!pick.done,repeat:!!pick.repeat,seriesId:pick.seriesId||null,updatedAt:pick.updatedAt||0};});
       const keepT=(st.todos||[]).filter(t=>!shared.has(t.category));
-      const sharedT=Object.values(tmerged).filter(m=>!m.deleted).map(m=>({id:m.id,date:m.date,text:m.text,category:m.category,done:m.done,updatedAt:m.updatedAt}));
-      const tsig=JSON.stringify(sharedT.map(t=>[t.id,t.date,t.text,t.category,t.done,t.updatedAt]).sort());
-      const curTsig=JSON.stringify((st.todos||[]).filter(t=>shared.has(t.category)).map(t=>[t.id,t.date,t.text,t.category,!!t.done,t.updatedAt||0]).sort());
+      const sharedT=Object.values(tmerged).filter(m=>!m.deleted).map(m=>({id:m.id,date:m.date,text:m.text,category:m.category,done:m.done,repeat:!!m.repeat,seriesId:m.seriesId||null,updatedAt:m.updatedAt}));
+      const tsig=JSON.stringify(sharedT.map(t=>[t.id,t.date,t.text,t.category,t.done,!!t.repeat,t.updatedAt]).sort());
+      const curTsig=JSON.stringify((st.todos||[]).filter(t=>shared.has(t.category)).map(t=>[t.id,t.date,t.text,t.category,!!t.done,!!t.repeat,t.updatedAt||0]).sort());
       if(tsig!==curTsig)rawDispatch({type:'SET_TODOS',todos:[...keepT,...sharedT]});
       // ── multiDayBlocks 병합 ──
       const lmblocks={};(st.multiDayBlocks||[]).forEach(b=>{if(shared.has(b.category))lmblocks[b.id]={id:b.id,startDate:b.startDate,endDate:b.endDate,title:b.title,category:b.category,updatedAt:b.updatedAt||0};});
