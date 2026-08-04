@@ -51,6 +51,8 @@
   .lp-sec:hover .lp-add{opacity:1;}
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;} input[type=number]{-moz-appearance:textfield;}
   @keyframes popIn{from{opacity:0;transform:scale(0.97) translateY(4px);}to{opacity:1;transform:scale(1) translateY(0);}}
+  @keyframes mSlideInR{from{transform:translateX(100%);}to{transform:translateX(0);}}
+  @keyframes mSlideInL{from{transform:translateX(-100%);}to{transform:translateX(0);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes slideInRight{from{transform:translateX(28px);opacity:0;}to{transform:translateX(0);opacity:1;}}
   @keyframes slotIn{from{height:0;opacity:0;margin-top:0;}to{height:19px;opacity:1;margin-top:1px;}}
@@ -440,6 +442,8 @@ function SettingsModal({onClose}){
   const[snaps,setSnaps]=useState(()=>{try{return JSON.parse(localStorage.getItem('snapshots')||'[]');}catch{return[];}});
   const[workName,setWorkName]=useState(state.workLabel||'업무');
   const[personalName,setPersonalName]=useState(state.personalLabel||'개인');
+  const[palFor,setPalFor]=useState(null);      // 색상 팔레트를 열어둔 레이어 id
+  const[newLayerName,setNewLayerName]=useState('');
   const ref=useRef(null);
   useEffect(()=>{
     const h=(e)=>{if(ref.current&&!ref.current.contains(e.target))onClose();};
@@ -587,7 +591,7 @@ function SettingsModal({onClose}){
         <div style={{display:'flex',borderBottom:'1px solid #F0F0F0',padding:'0 20px',gap:4,marginTop:4}}>
           <button style={tabStyle(tab==='backup')} onClick={()=>setTab('backup')}>백업 관리</button>
           <button style={tabStyle(tab==='cloud')} onClick={()=>setTab('cloud')}>클라우드 동기화</button>
-          <button style={tabStyle(tab==='layers')} onClick={()=>setTab('layers')}>레이어 이름</button>
+          <button style={tabStyle(tab==='layers')} onClick={()=>setTab('layers')}>레이어 관리</button>
         </div>
         {/* body */}
         <div style={{flex:1,overflowY:'auto',padding:'18px 20px'}}>
@@ -682,7 +686,74 @@ function SettingsModal({onClose}){
               )}
             </div>
           )}
-          {tab==='layers'&&(<div style={{display:'flex',flexDirection:'column',gap:16}}><div><label style={{fontSize:11,color:'#A3A3A3',display:'block',marginBottom:4}}>업무 레이어 이름</label><input value={workName} onChange={e=>setWorkName(e.target.value)} style={{width:'100%',fontSize:14,color:'#2F2F2F',border:'0.5px solid #E0E0E8',borderRadius:6,padding:'8px 10px',backgroundColor:'#F9F9FB'}}/></div><div><label style={{fontSize:11,color:'#A3A3A3',display:'block',marginBottom:4}}>개인 레이어 이름</label><input value={personalName} onChange={e=>setPersonalName(e.target.value)} style={{width:'100%',fontSize:14,color:'#2F2F2F',border:'0.5px solid #E0E0E8',borderRadius:6,padding:'8px 10px',backgroundColor:'#F9F9FB'}}/></div><button onClick={()=>{if(workName.trim())dispatch({type:'UPDATE_WORK_CAT',label:workName.trim()});if(personalName.trim())dispatch({type:'UPDATE_PERSONAL_CAT',label:personalName.trim()});showToast('레이어 이름 저장됨','success');}} style={{...btnBase,backgroundColor:'#1F1F1E',color:'#fff',padding:'8px 14px'}}>저장</button></div>)}
+          {tab==='layers'&&(()=>{
+            const inpSt={flex:1,fontSize:13.5,color:'#2F2F2F',border:'0.5px solid #E0E0E8',borderRadius:6,padding:'7px 9px',backgroundColor:'#fff',minWidth:0};
+            const rowSt={display:'flex',alignItems:'center',gap:8};
+            const secLbl={fontSize:11,color:'#9A9A95',letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600,marginBottom:8};
+            const miniBtn=(active)=>({fontSize:11,padding:'5px 9px',borderRadius:6,border:'0.5px solid #E0E0E8',backgroundColor:active?'#EEEEF4':'#F8F8FB',color:active?'#1F1F1E':'#A3A3A3',flexShrink:0,cursor:'pointer',fontWeight:600});
+            const dotBtn=(color)=>({width:20,height:20,borderRadius:6,backgroundColor:color||'#B8B8B8',border:'1px solid rgba(0,0,0,0.12)',flexShrink:0,cursor:'pointer',padding:0});
+            const Palette=({onPick})=>(
+              <div style={{display:'grid',gridTemplateColumns:'repeat(12,1fr)',gap:5,padding:'8px 2px 2px'}}>
+                {PROJECT_COLORS.map(c=>(
+                  <button key={c} onClick={()=>{onPick(c);setPalFor(null);}} title={c}
+                    style={{width:16,height:16,borderRadius:'50%',backgroundColor:c,border:'1px solid rgba(0,0,0,0.12)',cursor:'pointer',padding:0,boxSizing:'border-box'}}/>
+                ))}
+              </div>
+            );
+            const custom=(state.customLayers||[]);
+            return(
+            <div style={{display:'flex',flexDirection:'column',gap:20}}>
+              <div>
+                <div style={secLbl}>기본 레이어</div>
+                <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                  <div>
+                    <div style={rowSt}>
+                      <button onClick={()=>setPalFor(palFor==='work'?null:'work')} style={dotBtn(state.workColor)}/>
+                      <input value={workName} onChange={e=>setWorkName(e.target.value)} placeholder="업무" style={inpSt}/>
+                      <span style={{fontSize:10.5,color:'#B8B8B8',flexShrink:0}}>기본</span>
+                    </div>
+                    {palFor==='work'&&<Palette onPick={c=>dispatch({type:'UPDATE_WORK_CAT',color:c})}/>}
+                  </div>
+                  <div>
+                    <div style={rowSt}>
+                      <button onClick={()=>setPalFor(palFor==='personal'?null:'personal')} style={dotBtn(state.personalColor)}/>
+                      <input value={personalName} onChange={e=>setPersonalName(e.target.value)} placeholder="개인" style={inpSt}/>
+                      <span style={{fontSize:10.5,color:'#B8B8B8',flexShrink:0}}>기본</span>
+                    </div>
+                    {palFor==='personal'&&<Palette onPick={c=>dispatch({type:'UPDATE_PERSONAL_CAT',color:c})}/>}
+                  </div>
+                </div>
+                <button onClick={()=>{if(workName.trim())dispatch({type:'UPDATE_WORK_CAT',label:workName.trim()});if(personalName.trim())dispatch({type:'UPDATE_PERSONAL_CAT',label:personalName.trim()});showToast('레이어 이름 저장됨','success');}} style={{...btnBase,backgroundColor:'#1F1F1E',color:'#fff',padding:'8px 14px',marginTop:10}}>이름 저장</button>
+                <div style={{fontSize:11,color:'#A3A3A3',lineHeight:1.6,marginTop:8}}>일정·할일 배지에 표시되는 이름입니다. 여기서 바꾸면 클라우드를 통해 웹·폰·가족공유에 모두 반영됩니다.</div>
+              </div>
+
+              <div style={{height:'0.5px',backgroundColor:'#E8E8EE'}}/>
+
+              <div>
+                <div style={secLbl}>커스텀 레이어</div>
+                {custom.length===0&&<div style={{fontSize:12.5,color:'#C0C0C0',padding:'2px 0 8px'}}>추가된 커스텀 레이어가 없습니다</div>}
+                <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                  {custom.map(l=>(
+                    <div key={l.id}>
+                      <div style={rowSt}>
+                        <button onClick={()=>setPalFor(palFor===l.id?null:l.id)} style={dotBtn(l.color)}/>
+                        <input value={l.name} onChange={e=>dispatch({type:'UPDATE_CUSTOM_LAYER',id:l.id,updates:{name:e.target.value}})} style={inpSt}/>
+                        <button onClick={()=>dispatch({type:'TOGGLE_CUSTOM_LAYER',id:l.id})} style={miniBtn(l.visible!==false)}>{l.visible!==false?'표시':'숨김'}</button>
+                        <button onClick={()=>{if(window.confirm(`'${l.name}' 레이어를 삭제할까요?\n(이 레이어의 일정·할일은 사라지지 않지만 화면에서 분류가 없어집니다)`))dispatch({type:'DELETE_CUSTOM_LAYER',id:l.id});}} style={{...miniBtn(false),color:'#E24B4A',borderColor:'#F0D6D6'}}>삭제</button>
+                      </div>
+                      {palFor===l.id&&<Palette onPick={c=>dispatch({type:'UPDATE_CUSTOM_LAYER',id:l.id,updates:{color:c}})}/>}
+                    </div>
+                  ))}
+                </div>
+                <div style={{...rowSt,marginTop:12}}>
+                  <input value={newLayerName} onChange={e=>setNewLayerName(e.target.value)}
+                    onKeyDown={e=>{if(e.key==='Enter'&&newLayerName.trim()){dispatch({type:'ADD_CUSTOM_LAYER',name:newLayerName.trim(),color:PROJECT_COLORS[7]});setNewLayerName('');}}}
+                    placeholder="새 레이어 이름" style={inpSt}/>
+                  <button onClick={()=>{if(newLayerName.trim()){dispatch({type:'ADD_CUSTOM_LAYER',name:newLayerName.trim(),color:PROJECT_COLORS[7]});setNewLayerName('');showToast('레이어 추가됨','success');}}} style={{...btnBase,backgroundColor:'#EEEEF4',color:'#1F1F1E',padding:'8px 14px',flexShrink:0}}>+ 추가</button>
+                </div>
+              </div>
+            </div>);
+          })()}
         </div>
       </div>
     </div>
@@ -3840,11 +3911,11 @@ function WeeklyGrid({weekOffset,colH}){
             return(
             <div key={b.id} onClick={e=>{if(!isRz)setWkEditBlock(b);}} title={b.title}
               style={{position:'absolute',top:2+b.lane*20,left:`calc(${sc}/7*100% + 3px)`,width:`calc(${(ec-sc+1)}/7*100% - 6px)`,height:17,pointerEvents:'auto',cursor:'pointer'}}>
-              <div style={{position:'relative',height:'100%',
-                backgroundColor:cs.bg,color:cs.text,fontSize:11,fontWeight:500,padding:'1px 14px',
-                borderRadius:6,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',
-                boxShadow:'inset 2.5px 0 0 '+(cs.dot||cs.text)}}>
-                {b.title}
+              <div style={{position:'relative',height:'100%',display:'flex',alignItems:'center',gap:5,
+                backgroundColor:cs.bg,color:cs.text,fontSize:11,fontWeight:500,padding:'0 12px 0 6px',opacity:0.86,
+                borderRadius:999,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
+                <span style={{width:3,height:11,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>
+                <span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</span>
                 <div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setWkResize({id:b.id,side:'start',col:sc});}}
                   style={{position:'absolute',left:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>
                 <div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setWkResize({id:b.id,side:'end',col:ec});}}
@@ -4009,7 +4080,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
         borderRight:cellBorder,borderBottom:cellBorder,outline:todayOutline,outlineOffset:'-0.5px',cursor:'pointer',userSelect:'none',
         display:'flex',flexDirection:'column',gap:1}}>
       {/* Date number */}
-      <div style={{display:'flex',alignItems:'center',gap:3,flexShrink:0}}>
+      <div style={{display:'flex',alignItems:'center',gap:3,flexShrink:0,height:21}}>
         <span style={{fontSize:isFirstOfMonth?11:13,
           fontWeight:todayCell?700:(isFirstOfMonth?700:500),lineHeight:1,
           backgroundColor:todayCell?'#1F1F1E':'transparent',
@@ -4133,7 +4204,7 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
               onMouseUp={()=>onCellMouseUp(dk)}
               onDoubleClick={(e)=>{e.stopPropagation();onDblClickCell(dk);}}
               onEventClick={onEventClick}
-              blockPad={blockAreaH-1}
+              blockPad={blockAreaH-2}
             />
           );
         })}
@@ -4156,11 +4227,11 @@ function CalendarWeekRow({weekDates,eventsByDate,multiDayBlocks,drag,onCellMouse
                   style={{position:'absolute',top:b.lane*LANE_H,
                     left:`${(sc/7)*100}%`,width:`${((ec-sc+1)/7)*100}%`,
                     height:LANE_H-2,cursor:'pointer',pointerEvents:'all'}}>
-                  <div style={{position:'relative',height:'100%',backgroundColor:bg,
-                    boxShadow:pos.isStart?`inset 2.5px 0 0 ${color}`:'none',
-                    borderRadius:pos.isStart&&pos.isEnd?6:pos.isStart?'6px 0 0 6px':pos.isEnd?'0 6px 6px 0':0,
-                    padding:pos.isStart?'0 14px 0 9px':'0 14px',overflow:'hidden',whiteSpace:'nowrap',
+                  <div style={{position:'relative',height:'100%',backgroundColor:bg,opacity:0.86,
+                    borderRadius:pos.isStart&&pos.isEnd?999:pos.isStart?'999px 0 0 999px':pos.isEnd?'0 999px 999px 0':0,
+                    padding:pos.isStart?'0 12px 0 6px':'0 12px',overflow:'hidden',whiteSpace:'nowrap',gap:5,
                     fontSize:11,fontWeight:500,color,display:'flex',alignItems:'center',boxSizing:'border-box'}}>
+                    {pos.isStart&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:color}}/>}
                     {pos.isStart&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{getBdayPrefix(b.category,state)}{b.title}</span>}
                     {pos.isStart&&<div onMouseDown={e=>{e.stopPropagation();e.preventDefault();setCalResize({id:b.id,side:'start',col:sc});}}
                       style={{position:'absolute',left:0,top:0,bottom:0,width:10,cursor:'ew-resize',zIndex:2}}/>}
@@ -4644,12 +4715,14 @@ function MobileApp(){
   const weekScrollRef=React.useRef(null);
   const mTouchRef=React.useRef(null);
   const mBarTouchRef=React.useRef(null);
+  const wkScrolledRef=React.useRef(false);
   const[editTodoId,setEditTodoId]=React.useState(null);const[editTodoVal,setEditTodoVal]=React.useState('');
   const editCancelRef=React.useRef(false);
   const[weekTodoAdd,setWeekTodoAdd]=React.useState(null);const[weekTodoVal,setWeekTodoVal]=React.useState('');
   const[sheet,setSheet]=React.useState(false); // 먼슬리 하단 일정 시트(오늘날짜 바에서 위로 스와이프)
   const[slideX,setSlideX]=React.useState(0);      // 좌우 스와이프 시 화면이 따라오는 효과
   const[slideAnim,setSlideAnim]=React.useState(false);
+  const[slideDir,setSlideDir]=React.useState('left');
   const axisRef=React.useRef(null);
   const slideBusyRef=React.useRef(false);
   const stageW=()=>(typeof window!=='undefined'?window.innerWidth:390);
@@ -4674,17 +4747,26 @@ function MobileApp(){
         slideBusyRef.current=true;
         setSlideAnim(true);setSlideX(dx<0?-W:W);
         const next=tab==='month'?'week':'month';
+        setSlideDir(dx<0?'left':'right');
         setTimeout(()=>{
           setTab(next);if(next==='month')setSheet(false);
-          setSlideAnim(false);setSlideX(dx<0?W:-W);
-          requestAnimationFrame(()=>{setSlideAnim(true);setSlideX(0);setTimeout(()=>{slideBusyRef.current=false;},260);});
-        },230);
+          setSlideAnim(false);setSlideX(0);
+          slideBusyRef.current=false;
+        },210);
       }else{setSlideAnim(true);setSlideX(0);}
-      return;
     }
-    // 먼슬리에서 위/아래 스와이프 = 다음달 / 이전달
-    if(axis==='y'&&tab==='month'&&Math.abs(dy)>50){if(dy<0)goNext();else goPrev();}
   };
+  // 달력 영역 전용: 위/아래 스와이프 = 다음달 / 이전달 (시트 위에서는 동작하지 않음)
+  const calTouchRef=React.useRef(null);
+  const calTouchStart=(e)=>{calTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};};
+  const calTouchEnd=(e)=>{
+    if(!calTouchRef.current)return;
+    const dx=e.changedTouches[0].clientX-calTouchRef.current.x,dy=e.changedTouches[0].clientY-calTouchRef.current.y;
+    calTouchRef.current=null;
+    if(Math.abs(dy)>45&&Math.abs(dy)>Math.abs(dx)*1.2){if(dy<0)goNext();else goPrev();}
+  };
+  // 시트 전용: 아래로 스와이프 = 닫기
+  const shTouchRef=React.useRef(null);
   const fmtTime=(t)=>{if(!t)return '종일';const p=String(t).split(':');const h=parseInt(p[0],10),m=parseInt(p[1]||'0',10);if(isNaN(h))return t;const ap=h<12?'오전':'오후';const hh=h%12===0?12:h%12;return ap+' '+hh+':'+String(isNaN(m)?0:m).padStart(2,'0');};
 
   const layerLabel=(cat)=>cat==='work'?(state.workLabel||'업무'):cat==='personal'?(state.personalLabel||'개인'):cat==='outlook'?'아웃룩':((state.customLayers||[]).find(l=>l.id===cat)||{}).name||'기타';
@@ -4709,7 +4791,7 @@ function MobileApp(){
 
   const goPrev=()=>{if(tab==='month'){const mm=navM===0?11:navM-1,yy=navM===0?navY-1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w-1);};
   const goNext=()=>{if(tab==='month'){const mm=navM===11?0:navM+1,yy=navM===11?navY+1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w+1);};
-  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());setWeekOff(0);setSelDate(toDateKey(today));setTimeout(()=>{if(weekScrollRef.current){const el=weekScrollRef.current.querySelector('[data-today="1"]');if(el)el.scrollIntoView({block:'start',behavior:'smooth'});}},80);};
+  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());setWeekOff(0);setSelDate(toDateKey(today));wkScrolledRef.current=false;setTimeout(()=>{if(weekScrollRef.current){const el=weekScrollRef.current.querySelector('[data-today="1"]');if(el)el.scrollIntoView({block:'start',behavior:'smooth'});}},80);};
 
   // month grid cells
   const first=new Date(navY,navM,1);
@@ -4766,15 +4848,16 @@ function MobileApp(){
       {/* 스와이프 스테이지: 좌우로 밀면 화면이 따라오며 먼슬리↔위클리 전환 */}
       <div style={{flex:1,minHeight:0,position:'relative',overflow:'hidden'}}
         onTouchStart={stageTouchStart} onTouchMove={stageTouchMove} onTouchEnd={stageTouchEnd}>
-      <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
+      <div key={tab} style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',
         transform:`translateX(${slideX}px)`,
-        transition:slideAnim?'transform 0.23s cubic-bezier(.32,.72,0,1)':'none',
+        transition:slideAnim?'transform 0.21s cubic-bezier(.32,.72,0,1)':'none',
+        animation:slideX===0&&!slideAnim?`${slideDir==='left'?'mSlideInR':'mSlideInL'} 0.22s cubic-bezier(.32,.72,0,1)`:'none',
         willChange:'transform'}}>
       {/* MONTH — 기본화면(달력). 위/아래 스와이프: 이전달/다음달 */}
       {tab==='month'&&(
         <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative'}}>
           {/* ── 달력 ── */}
-          <div style={{height:sheet?'44%':'100%',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
+          <div onTouchStart={calTouchStart} onTouchEnd={calTouchEnd} style={{height:sheet?'44%':'100%',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',padding:'4px 6px 4px',flexShrink:0}}>
               {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:11,fontWeight:600,color:i===0?'#E24B4A':i===6?'#4A7BC4':C.t2}}>{d}</div>)}
             </div>
@@ -4828,11 +4911,12 @@ function MobileApp(){
                   {placed.map(({b,sc,ec,lane,isS,isE})=>{const cs=catStyle[b.category]||catStyle.work;return(
                     <div key={b.id} onClick={e=>{e.stopPropagation();setMdEdit(b);}}
                       style={{position:'absolute',top:DATE_H+lane*barH,left:`calc(${sc}/7*100% + 2px)`,width:`calc(${ec-sc+1}/7*100% - 4px)`,height:barH-2,
-                        backgroundColor:cs.bg,color:cs.text,fontSize:9.5,fontWeight:600,lineHeight:`${barH-2}px`,
-                        paddingLeft:isS?6:4,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',cursor:'pointer',
-                        boxShadow:isS?`inset 2.5px 0 0 ${cs.dot||cs.text}`:'none',
-                        borderRadius:isS&&isE?5:isS?'5px 0 0 5px':isE?'0 5px 5px 0':0}}>
-                      {isS?b.title:''}
+                        backgroundColor:cs.bg,color:cs.text,fontSize:9.5,fontWeight:600,opacity:0.86,
+                        display:'flex',alignItems:'center',gap:3,
+                        paddingLeft:isS?4:4,paddingRight:4,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',
+                        borderRadius:isS&&isE?999:isS?'999px 0 0 999px':isE?'0 999px 999px 0':0}}>
+                      {isS&&<span style={{width:2.5,height:7,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
+                      {isS&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</span>}
                     </div>);})}
                 </div>);
               })}
@@ -4840,7 +4924,7 @@ function MobileApp(){
           </div>
 
           {/* ── 하단 일정 시트 ── */}
-          <div style={{flex:1,minHeight:0,backgroundColor:C.card,borderRadius:'18px 18px 0 0',boxShadow:'0 -3px 16px rgba(20,20,40,0.08)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          <div onTouchStart={e=>{shTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}} onTouchEnd={e=>{if(!shTouchRef.current)return;const dx=e.changedTouches[0].clientX-shTouchRef.current.x,dy=e.changedTouches[0].clientY-shTouchRef.current.y;shTouchRef.current=null;if(dy>45&&Math.abs(dy)>Math.abs(dx)*1.2)setSheet(false);}} style={{flex:1,minHeight:0,backgroundColor:C.card,borderRadius:'18px 18px 0 0',boxShadow:'0 -3px 16px rgba(20,20,40,0.08)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
             <div onClick={()=>setSheet(s=>!s)} style={{flexShrink:0,padding:'9px 0 5px',display:'flex',justifyContent:'center',cursor:'pointer'}}>
               <div style={{width:38,height:4,borderRadius:2,backgroundColor:'#D5D5DC'}}/>
             </div>
@@ -4887,7 +4971,7 @@ function MobileApp(){
       {/* WEEK (agenda) — 연속 스크롤. 좌→우 스와이프: 먼슬리 복귀 */}
       {tab==='week'&&(
         <div style={{flex:1,minHeight:0,overflowY:'auto',WebkitOverflowScrolling:'touch',backgroundColor:C.card,paddingBottom:32}}
-          ref={el=>{weekScrollRef.current=el;if(el){const t=el.querySelector('[data-today="1"]');if(t)setTimeout(()=>t.scrollIntoView({block:'start',behavior:'auto'}),40);}}}>
+          ref={el=>{weekScrollRef.current=el;if(el&&!wkScrolledRef.current){wkScrolledRef.current=true;const t=el.querySelector('[data-today="1"]');if(t)setTimeout(()=>{try{t.scrollIntoView({block:'start',behavior:'auto'});}catch(e){}},60);}}}>
           {(()=>{const _base=new Date(today.getFullYear(),today.getMonth(),today.getDate());const _days=[];for(let i=-28;i<63;i++){const d=new Date(_base);d.setDate(_base.getDate()+i);_days.push(d);}return _days;})().map((d,di)=>{
             const dk=toDateKey(d);const evs=evByDate[dk]||[];const isTd=isToday(d);
             const hol=getHoliday(dk);const isRed=(d.getDay()===0||hol)&&!isTd;const isBlue=d.getDay()===6&&!isTd&&!hol;
