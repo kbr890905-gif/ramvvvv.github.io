@@ -42,7 +42,6 @@
   #root *{font-family:inherit;}
   .fmt-btn{transition:background-color 0.1s;}
   .fmt-btn:hover{background-color:#F3F3F3;}
-  [data-sticky-note]{animation:popIn 0.18s ease;}
   .note-editor:empty::before{content:attr(data-placeholder);color:#B8B8C0;pointer-events:none;}
   .note-editor ul{list-style:disc;padding-left:16px;margin:1px 0;}
   .note-editor ol{list-style:decimal;padding-left:16px;margin:1px 0;}
@@ -85,9 +84,9 @@ if(!localStorage.getItem('monoSkinV1')){
   }catch(e){}
   localStorage.setItem('monoSkinV1','1');
 }
-// One-time sticker system migration: clear v1 test stickers
+// 스티커·포스트잇 기능 제거에 따른 잔여 데이터 정리(1회)
 if(!localStorage.getItem('stickerSystemV2')){
-  localStorage.removeItem('placedStickers');
+  localStorage.removeItem('placedStickers');localStorage.removeItem('stickyNotes');localStorage.removeItem('dockW');localStorage.removeItem('dockTab');
   localStorage.setItem('stickerSystemV2','1');
 }
 if(!localStorage.getItem('olTitleNFC')){
@@ -218,8 +217,6 @@ const initialState={
   todos:lsLoad('todos',[]),weekMemos:lsLoad('weekMemos',{}),eventTombstones:lsLoad('eventTombstones',{}),
   weekOffset:0,weeklyCollapsed:lsLoad('weeklyCollapsed',false),hlYear:new Date().getFullYear(),hlMonth:new Date().getMonth(),
   multiDayBlocks:lsLoad('multiDayBlocks',[]),
-  stickyNotes:lsLoad('stickyNotes',[]),
-  placedStickers:lsLoad('placedStickers',[]),
   outlookUser:lsLoad('outlookUser',null),outlookClientId:lsLoad('outlookClientId',''),outlookSyncedAt:lsLoad('outlookSyncedAt',null),
 };
 
@@ -291,13 +288,6 @@ function reducer(state,action){
     case 'SET_TITLE':return{...state,titleText:action.text};
     case 'SET_TOPBAR_BG':return{...state,topBarBg:action.bg};
     case 'SET_TOPBAR_IMG':return{...state,topBarImg:action.img};
-    case 'ADD_STICKY_NOTE':return{...state,stickyNotes:[...state.stickyNotes,{id:uid(),...action.note}]};
-    case 'UPDATE_STICKY_NOTE':return{...state,stickyNotes:state.stickyNotes.map(n=>n.id===action.id?{...n,...action.updates}:n)};
-    case 'DELETE_STICKY_NOTE':return{...state,stickyNotes:state.stickyNotes.filter(n=>n.id!==action.id)};
-    case 'ADD_PLACED_STICKER':return{...state,placedStickers:[...state.placedStickers,{id:uid(),...action.sticker}]};
-    case 'UPDATE_PLACED_STICKER':return{...state,placedStickers:state.placedStickers.map(s=>s.id===action.id?{...s,...action.updates}:s)};
-    case 'DELETE_PLACED_STICKER':return{...state,placedStickers:state.placedStickers.filter(s=>s.id!==action.id)};
-      case 'CLEAR_ALL_STICKERS':return{...state,placedStickers:[]};
     case 'REORDER_FOLDERS':return{...state,projectFolders:action.folders};
     case 'MOVE_MEMO':{const src=getMemoList(state.projectMemos[action.fromProjectId]);const memo=src.find(m=>m.id===action.memoId);if(!memo)return state;const dst=getMemoList(state.projectMemos[action.toProjectId]);return{...state,projectMemos:{...state.projectMemos,[action.fromProjectId]:src.filter(m=>m.id!==action.memoId),[action.toProjectId]:[...dst,memo]}};}
     case 'ADD_PROJECT_FULL':return{...state,projects:[...state.projects,action.project]};
@@ -1051,7 +1041,7 @@ function StoreProvider({children}){
           const HEX=['#FFF176','#CCFF90','#FFB3C6','#80DEEA','#FFCC80','#CF9FFF'];
           const NEUT='rgb(234, 234, 230)';
           const fix=(o)=>{if(o==null)return o;let s=JSON.stringify(o);RE.forEach(re=>{s=s.replace(re,NEUT);});HEX.forEach(h=>{s=s.split(h).join('#E6E6EC');s=s.split(h.toLowerCase()).join('#E6E6EC');});return JSON.parse(s);};
-          const patch={};['projectMemos','weekMemos','stickyNotes','meetingNotes','monthlyHighlights','projects'].forEach(k=>{if(S[k]!=null)patch[k]=fix(S[k]);});
+          const patch={};['projectMemos','weekMemos','meetingNotes','monthlyHighlights','projects'].forEach(k=>{if(S[k]!=null)patch[k]=fix(S[k]);});
           rawDispatch({type:'RESTORE_FULL',state:patch});
         }catch(e){}
         localStorage.setItem('monoV5','1');
@@ -1110,7 +1100,7 @@ function StoreProvider({children}){
     lsTimerRef.current=setTimeout(()=>{
       const LS_KEYS=['workVisible','personalVisible','projects','projectFolders','monthlyHighlights','projectMemos',
         'weeklyEvents','todos','weekMemos','weeklyCollapsed','multiDayBlocks','outlookVisible','outlookColor',
-        'customLayers','layerOrder','meetingNotes','stickyNotes','placedStickers','workLabel','personalLabel','workColor','personalColor',
+        'customLayers','layerOrder','meetingNotes','workLabel','personalLabel','workColor','personalColor',
         'titleText','topBarBg','topBarImg','eventTombstones',
         'outlookUser','outlookClientId','outlookSyncedAt'];
       LS_KEYS.forEach(k=>lsSave(k,state[k]));
@@ -1181,654 +1171,6 @@ const useDynCatStyle=()=>{
 };
 
 // ─── FREE LAYER CONSTANTS ─────────────────────
-const STICKY_COLORS=['#FFFDE7','#E3F2FD','#E8F5E9','#FCE4EC','#EDE7F6','#FFF3E0'];
-
-function StickyNote({note,isActive,onUpdate,onDelete,onFocus,freeLayerVisible}){
-  const isText=note.type==='text';
-  const collapsed=isText?false:(note.collapsed||false);
-  const fontSize=note.fontSize||(isText?15:13);
-  const textColor=note.textColor||(isText?'#1A1A1A':'#333');
-  const bgColor=isText?(note.bgColor||'transparent'):(note.color||STICKY_COLORS[0]);
-  const edRef=React.useRef(null);
-  const[editing,setEditing]=React.useState(false);
-  const rootRef=React.useRef(null);
-
-  /* contentEditable 초기화 (plain text → HTML 마이그레이션) */
-  React.useEffect(()=>{
-    if(edRef.current&&!editing){
-      const h=(note.html!=null&&note.html!=='')?note.html:(note.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-      if(edRef.current.innerHTML!==h)edRef.current.innerHTML=h;
-    }
-  },[collapsed,editing,note.html]);
-  const syncNote=()=>{const el=edRef.current;if(el)onUpdate({html:el.innerHTML,text:el.textContent||''});};
-  const fmt=(cmd,val)=>{setEditing(true);document.execCommand(cmd,false,val||null);edRef.current?.focus();syncNote();};
-
-  /* 드래그 이동 */
-  const startDrag=(e)=>{
-    e.stopPropagation();e.preventDefault();
-    const sx=e.clientX,sy=e.clientY,nx=note.x,ny=note.y;
-    const onMove=(ev)=>onUpdate({x:nx+(ev.clientX-sx),y:ny+(ev.clientY-sy)});
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  };
-  const startRotate=(e)=>{
-    e.stopPropagation();e.preventDefault();
-    const r=rootRef.current?rootRef.current.getBoundingClientRect():null;
-    if(!r)return;
-    const cx=r.left+r.width/2,cy=r.top+r.height/2;
-    const startA=Math.atan2(e.clientY-cy,e.clientX-cx)*180/Math.PI;
-    const base=note.rotate||0;
-    const onMove=(ev)=>{
-      const a=Math.atan2(ev.clientY-cy,ev.clientX-cx)*180/Math.PI;
-      let nr=(base+a-startA)%360;if(nr<0)nr+=360;
-      if(ev.shiftKey)nr=Math.round(nr/15)*15;
-      onUpdate({rotate:Math.round(nr)});
-    };
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  };
-  const onRootDown=(e)=>{
-    onFocus?.();
-    if(!freeLayerVisible)return;
-    if(e.target.isContentEditable||e.target.tagName==='BUTTON'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
-    rootRef.current&&rootRef.current.focus();
-    startDrag(e);
-  };
-  /* 리사이즈: 텍스트박스는 가로만, 포스트잇은 양방향 */
-  const onResizeStart=(e)=>{
-    e.stopPropagation();e.preventDefault();
-    const sx=e.clientX,sy=e.clientY,sw=note.w||170,sh=note.h||(isText?36:140);
-    const onMove=(ev)=>{
-      if(isText)onUpdate({w:Math.max(60,sw+(ev.clientX-sx)),h:Math.max(24,sh+(ev.clientY-sy))});
-      else onUpdate({w:Math.max(120,sw+(ev.clientX-sx)),h:Math.max(60,sh+(ev.clientY-sy))});
-    };
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  };
-
-  const tbBtn={color:'#3F3E45',fontSize:12,background:'none',border:'none',minWidth:22,height:22,padding:'0 4px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',lineHeight:1,display:'inline-flex',alignItems:'center',justifyContent:'center',flexShrink:0};
-  const[openPicker,setOpenPicker]=React.useState(null);
-  React.useEffect(()=>{if(!isActive)setEditing(false);},[isActive]);
-  const SN_TEXT_COLORS=['#1A1A1A','#1F1F1E','#1B7FDB','#2FAE60','#E8792B','#E24B4A','#8B5CF6','#9A9A9A','#fff'];
-  const SN_HL_COLORS=['#E6E6EC','#E4E5E1','#E7E9EC','#ECEAE6','#E2E3E6','#EDE9EE'];
-  const SN_BG_COLORS=isText?['transparent','#FFFDE7','#FFF3E0','#E3F2FD','#E8F5E9','#FCE4EC','#EDE7F6','#F1EAFE','#1F1F29']:STICKY_COLORS;
-  const applySel=(cmd,val,fallback)=>{
-    const sel=window.getSelection();
-    const has=sel&&!sel.isCollapsed&&edRef.current&&edRef.current.contains(sel.anchorNode);
-    if(has){document.execCommand(cmd,false,val);syncNote();}
-    else if(fallback)fallback();
-  };
-
-  return(
-    <div ref={rootRef} data-sticky-note="true" tabIndex={0}
-      className={isText?'txt-note':''}
-      onKeyDown={e=>{if((e.key==='Delete'||e.key==='Backspace')&&isActive&&e.target===e.currentTarget){e.preventDefault();e.stopPropagation();onDelete();}}}
-      onMouseDown={onRootDown}
-      style={{position:'absolute',left:note.x,top:note.y,
-        width:note.w||170,
-        height:collapsed?(isActive?26:22):(isText?'auto':undefined),
-        minHeight:collapsed?undefined:(isText?Math.max(note.h||0,Math.round(fontSize*1.6)+6):(note.h||140)),
-        backgroundColor:bgColor,
-        borderRadius:isText?3:6,
-        boxShadow:isText?'none':(isActive?'0 4px 20px rgba(0,0,0,0.18)':'0 2px 10px rgba(0,0,0,0.11)'),
-        border:isText?(isActive?'1px solid #E0E0E8':'1px solid transparent'):'0.5px solid rgba(0,0,0,0.07)',
-        padding:collapsed?'2px 8px':(isText?'2px 5px':'8px 10px'),
-        cursor:freeLayerVisible?(isActive?'default':'grab'):'default',
-        pointerEvents:'all',
-        userSelect:'none',display:'flex',flexDirection:'column',
-        overflow:isText?'visible':'hidden',
-        zIndex:isActive?50:30,outline:'none',transform:note.rotate?`rotate(${note.rotate}deg)`:'none',
-        transition:'box-shadow 0.15s,border-color 0.15s'}}>
-
-      {/* ── 플로팅 서식 툴바 (선택 시, Miro 스타일) ── */}
-      {isActive&&freeLayerVisible&&!collapsed&&(
-        <div onMouseDown={e=>e.stopPropagation()}
-          style={{position:'absolute',top:openPicker?-62:-36,left:-1,display:'flex',flexDirection:'column',gap:1,
-            padding:'3px 4px',backgroundColor:'#fff',border:'0.5px solid #E0E0E8',borderRadius:8,
-            boxShadow:'0 0 0 0.5px rgba(15,15,35,0.04), 0 6px 18px rgba(15,15,35,0.14)',zIndex:70,whiteSpace:'nowrap'}}>
-          <div style={{display:'flex',alignItems:'center',gap:1}}>
-            <span title="드래그하여 이동" onMouseDown={startDrag}
-              style={{cursor:'grab',color:'#B0B0B8',fontSize:11,padding:'0 5px',userSelect:'none',lineHeight:1}}>⠿</span>
-            <div style={{width:1,height:14,backgroundColor:'#E8E8EE',margin:'0 2px'}}/>
-            <button className="fmt-btn" title="굵게" onMouseDown={e=>{e.preventDefault();fmt('bold');}} style={{...tbBtn,fontWeight:600}}>B</button>
-            <button className="fmt-btn" title="기울임" onMouseDown={e=>{e.preventDefault();fmt('italic');}} style={{...tbBtn,fontStyle:'italic',fontFamily:'Georgia,serif'}}>i</button>
-            <button className="fmt-btn" title="밑줄" onMouseDown={e=>{e.preventDefault();fmt('underline');}} style={{...tbBtn,textDecoration:'underline'}}>U</button>
-            <button className="fmt-btn" title="취소선" onMouseDown={e=>{e.preventDefault();fmt('strikeThrough');}} style={{...tbBtn,textDecoration:'line-through'}}>S</button>
-            <button className="fmt-btn" title="글머리 기호" onMouseDown={e=>{e.preventDefault();fmt('insertUnorderedList');}} style={tbBtn}>•</button>
-            <div style={{width:1,height:14,backgroundColor:'#E8E8EE',margin:'0 2px'}}/>
-            <button className="fmt-btn" title="글자색 (드래그한 부분 또는 전체)" onMouseDown={e=>{e.preventDefault();setOpenPicker(p=>p==='fore'?null:'fore');}}
-              style={{...tbBtn,flexDirection:'column',gap:1.5,backgroundColor:openPicker==='fore'?'#F3F3F3':'transparent'}}>
-              <span style={{lineHeight:1,fontSize:10.5,fontWeight:600}}>A</span>
-              <span style={{width:11,height:3,borderRadius:1.5,backgroundColor:textColor==='#fff'?'#C8C8D0':textColor,display:'block'}}/>
-            </button>
-            <button className="fmt-btn" title="마커 (드래그한 부분 색칠)" onMouseDown={e=>{e.preventDefault();setOpenPicker(p=>p==='hl'?null:'hl');}}
-              style={{...tbBtn,backgroundColor:openPicker==='hl'?'#F3F3F3':'transparent'}}>
-              <span style={{width:12,height:12,borderRadius:3,background:'linear-gradient(135deg,#FFF176 50%,#80DEEA 50%)',display:'block',boxShadow:'inset 0 0 0 0.5px rgba(0,0,0,0.12)'}}/>
-            </button>
-            <button className="fmt-btn" title="박스 배경색" onMouseDown={e=>{e.preventDefault();setOpenPicker(p=>p==='bg'?null:'bg');}}
-              style={{...tbBtn,backgroundColor:openPicker==='bg'?'#F3F3F3':'transparent'}}>
-              <span style={{width:12,height:12,borderRadius:3,backgroundColor:bgColor==='transparent'?'#fff':bgColor,border:bgColor==='transparent'?'1px dashed #C8C8D0':'none',display:'block',boxShadow:'inset 0 0 0 0.5px rgba(0,0,0,0.12)'}}/>
-            </button>
-            <div style={{width:1,height:14,backgroundColor:'#E8E8EE',margin:'0 2px'}}/>
-            <button className="fmt-btn" title="글자 작게" onMouseDown={e=>{e.preventDefault();onUpdate({fontSize:Math.max(9,fontSize-1)});}} style={{...tbBtn,fontSize:10}}>A−</button>
-            <button className="fmt-btn" title="글자 크게" onMouseDown={e=>{e.preventDefault();onUpdate({fontSize:Math.min(48,fontSize+1)});}} style={{...tbBtn,fontSize:12.5}}>A+</button>
-            <button className="fmt-btn" title="각도 초기화 (0°)" onMouseDown={e=>{e.preventDefault();onUpdate({rotate:0});}} style={{...tbBtn,fontSize:11}}>⟳0</button>
-            <div style={{width:1,height:14,backgroundColor:'#E8E8EE',margin:'0 2px'}}/>
-            {!isText&&(
-              <button className="fmt-btn" title="접기" onMouseDown={e=>{e.preventDefault();onUpdate({collapsed:!collapsed});}} style={{...tbBtn,fontSize:9}}>▲</button>
-            )}
-            <button className="fmt-btn" title="삭제" onMouseDown={e=>{e.preventDefault();onDelete();}} style={{...tbBtn,color:'#C94B4A',fontSize:13}}>×</button>
-          </div>
-          {openPicker&&(
-            <div style={{display:'flex',alignItems:'center',gap:3,padding:'3px 3px 1px',borderTop:'0.5px solid #E8E8EE'}}>
-              {openPicker==='fore'&&SN_TEXT_COLORS.map(c=>(
-                <button key={c} onMouseDown={e=>{e.preventDefault();applySel('foreColor',c,()=>onUpdate({textColor:c}));}}
-                  style={{width:17,height:17,borderRadius:'50%',border:'none',cursor:'pointer',padding:0,backgroundColor:c,flexShrink:0,
-                    boxShadow:c==='#fff'?'inset 0 0 0 1px #D6D6DE':'inset 0 0 0 0.5px rgba(0,0,0,0.14)'}}/>
-              ))}
-              {openPicker==='hl'&&(<>
-                {SN_HL_COLORS.map(c=>(
-                  <button key={c} title="드래그한 텍스트에 마커" onMouseDown={e=>{e.preventDefault();applySel('backColor',c,null);}}
-                    style={{width:17,height:17,borderRadius:4,border:'none',cursor:'pointer',padding:0,backgroundColor:c,flexShrink:0,boxShadow:'inset 0 0 0 0.5px rgba(0,0,0,0.12)'}}/>
-                ))}
-                <button title="마커 제거" onMouseDown={e=>{e.preventDefault();applySel('backColor','rgba(0,0,0,0)',null);}}
-                  style={{width:17,height:17,borderRadius:4,border:'none',cursor:'pointer',padding:0,backgroundColor:'#fff',boxShadow:'inset 0 0 0 1px #D6D6DE',fontSize:8,color:'#9A9A9A',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>✕</button>
-                <span style={{fontSize:9,color:'#ABABAB',paddingLeft:2}}>드래그한 부분에 적용</span>
-              </>)}
-              {openPicker==='bg'&&SN_BG_COLORS.map(c=>(
-                <button key={c} onMouseDown={e=>{e.preventDefault();onUpdate(isText?{bgColor:c}:{color:c});}}
-                  style={{width:17,height:17,borderRadius:4,cursor:'pointer',padding:0,flexShrink:0,
-                    backgroundColor:c==='transparent'?'#fff':c,
-                    border:c==='transparent'?'1px dashed #C8C8D0':'none',
-                    boxShadow:c==='transparent'?'none':'inset 0 0 0 0.5px rgba(0,0,0,0.10)'}}/>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {/* 접힘 상태 툴바 */}
-      {isActive&&collapsed&&(
-        <div onMouseDown={e=>e.stopPropagation()}
-          style={{position:'absolute',top:-32,left:-1,display:'flex',alignItems:'center',gap:1,padding:'2px 3px',
-            backgroundColor:'#fff',border:'0.5px solid #E0E0E8',borderRadius:7,
-            boxShadow:'0 4px 14px rgba(15,15,35,0.12)',zIndex:70}}>
-          <button className="fmt-btn" title="펼치기" onMouseDown={e=>{e.preventDefault();onUpdate({collapsed:false});}} style={{...tbBtn,fontSize:9}}>▼</button>
-          <button className="fmt-btn" title="삭제" onMouseDown={e=>{e.preventDefault();onDelete();}} style={{...tbBtn,color:'#C94B4A',fontSize:13}}>×</button>
-        </div>
-      )}
-
-      {/* ── 가장자리 이동존 (PPT식) ── */}
-      {isActive&&freeLayerVisible&&!collapsed&&(<>
-        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',top:-5,left:0,right:0,height:9,cursor:'move',zIndex:55}}/>
-        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',bottom:-5,left:0,right:0,height:9,cursor:'move',zIndex:55}}/>
-        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',left:-5,top:0,bottom:0,width:9,cursor:'move',zIndex:55}}/>
-        <div onMouseDown={startDrag} title="드래그하여 이동" style={{position:'absolute',right:-5,top:0,bottom:0,width:9,cursor:'move',zIndex:55}}/>
-        <div onMouseDown={startRotate} title="드래그하여 회전 (Shift: 15° 스냅)"
-          style={{position:'absolute',bottom:-26,left:'50%',marginLeft:-7,width:14,height:14,borderRadius:'50%',
-            backgroundColor:'#fff',border:'2.5px solid #E0E0E8',cursor:'grab',zIndex:60,boxShadow:'0 1px 4px rgba(15,15,35,0.25)'}}/>
-      </>)}
-      {/* ── 본문 (리치 텍스트) ── */}
-      {!collapsed&&(
-        <div ref={edRef} contentEditable={freeLayerVisible&&editing} suppressContentEditableWarning
-          className="note-editor"
-          data-placeholder={isText?'텍스트 입력':'메모 입력...'}
-          spellCheck={false}
-          onMouseDown={e=>{e.stopPropagation();if(!freeLayerVisible)return;if(!editing){e.preventDefault();onFocus?.();rootRef.current&&rootRef.current.focus();startDrag(e);}}}
-          onDoubleClick={e=>{if(!freeLayerVisible)return;e.stopPropagation();setEditing(true);setTimeout(()=>{if(edRef.current)edRef.current.focus();},0);}}
-          onFocus={()=>onFocus?.()}
-          onInput={syncNote}
-          onBlur={syncNote}
-          style={{flex:1,minHeight:isText?Math.round(fontSize*1.5):80,
-            fontSize,color:textColor,
-            outline:'none',cursor:editing?'text':(freeLayerVisible?'move':'default'),lineHeight:1.55,fontFamily:'inherit',
-            fontWeight:isText?500:400,padding:0,wordBreak:'break-word',whiteSpace:'pre-wrap',userSelect:'text'}}/>
-      )}
-      {collapsed&&<span style={{fontSize:11,color:textColor,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,opacity:0.7}}>
-        {note.text||'(빈 노트)'}
-      </span>}
-
-      {/* ── 작성일 (포스트잇만) ── */}
-      {!isText&&!collapsed&&note.createdAt&&(
-        <div style={{fontSize:7,color:'rgba(0,0,0,0.25)',textAlign:'right',flexShrink:0,
-          marginTop:'auto',paddingTop:2,lineHeight:1.4,letterSpacing:'0.2px'}}>
-          {(()=>{const d=new Date(note.createdAt);const yy=String(d.getFullYear()).slice(2);const mm=String(d.getMonth()+1).padStart(2,'0');const dd=String(d.getDate()).padStart(2,'0');const hh=String(d.getHours()).padStart(2,'0');const mi=String(d.getMinutes()).padStart(2,'0');return`'${yy}.${mm}.${dd} ${hh}:${mi}`;})()}
-        </div>
-      )}
-      {/* ── 리사이즈 핸들 ── */}
-      {freeLayerVisible&&!collapsed&&isActive&&(
-        <div onMouseDown={onResizeStart}
-          style={{position:'absolute',right:-4,bottom:-4,width:16,height:16,cursor:'se-resize',
-            display:'flex',alignItems:'center',justifyContent:'center',zIndex:60}}
-          onClick={e=>e.stopPropagation()}>
-          <div style={{width:9,height:9,borderRadius:2.5,backgroundColor:'#E0E0E8',border:'1.5px solid #fff',boxShadow:'0 1px 3px rgba(15,15,35,0.25)'}}/>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// StickyNotesCanvas: renders inside CalendarSection
-function StickyNotesCanvas(){
-  const{state,dispatch}=useStore();
-  const{freeLayerVisible,calendarScrollRef,activeNoteId,setActiveNoteId}=useLayout();
-
-  // Deactivate note when clicking outside any note
-  useEffect(()=>{
-    const h=(e)=>{if(!e.target.closest('[data-sticky-note]')&&!e.target.closest('[data-free-note-panel]')){setActiveNoteId(null);const sel=window.getSelection();if(sel&&!sel.isCollapsed)sel.removeAllRanges();}};
-    document.addEventListener('mousedown',h);
-    return()=>document.removeEventListener('mousedown',h);
-  },[setActiveNoteId]);
-
-  useEffect(()=>{
-    const h=(e)=>{
-      if((e.key==='Delete'||e.key==='Backspace')&&activeNoteId){
-        const t=e.target;
-        if(t.tagName==='TEXTAREA'||t.tagName==='INPUT'||t.isContentEditable)return;
-        e.preventDefault();
-        dispatch({type:'DELETE_STICKY_NOTE',id:activeNoteId});
-        setActiveNoteId(null);
-      }
-    };
-    document.addEventListener('keydown',h);
-    return()=>document.removeEventListener('keydown',h);
-  },[activeNoteId,dispatch,setActiveNoteId]);
-
-  const handleDblClick=useCallback((e)=>{
-    if(!freeLayerVisible)return;
-    if(e.target!==e.currentTarget)return;
-    const container=calendarScrollRef?.current;
-    if(!container)return;
-    const rect=container.getBoundingClientRect();
-    const x=e.clientX-rect.left;
-    const y=container.scrollTop+(e.clientY-rect.top);
-    const newId='n'+Date.now();
-    dispatch({type:'ADD_STICKY_NOTE',note:{id:newId,x,y,w:170,h:140,text:'',color:STICKY_COLORS[0],type:'sticky',createdAt:new Date().toISOString()}});
-    setActiveNoteId(newId);
-  },[freeLayerVisible,calendarScrollRef,dispatch]);
-
-  return(
-    <div onDoubleClick={handleDblClick}
-      style={{position:'absolute',top:0,left:0,right:0,bottom:0,minHeight:'100%',
-        pointerEvents:freeLayerVisible?'all':'none',
-        visibility:freeLayerVisible?'visible':'hidden',
-        cursor:freeLayerVisible?'crosshair':'default',
-        zIndex:20}}>
-      {(state.stickyNotes||[]).map(note=>(
-        <StickyNote
-          key={note.id}
-          note={note}
-          isActive={activeNoteId===note.id}
-          freeLayerVisible={freeLayerVisible}
-          onFocus={()=>setActiveNoteId(note.id)}
-          onUpdate={updates=>dispatch({type:'UPDATE_STICKY_NOTE',id:note.id,updates})}
-          onDelete={()=>{dispatch({type:'DELETE_STICKY_NOTE',id:note.id});setActiveNoteId(null);}}
-        />
-      ))}
-    </div>
-  );
-}
-
-// FreeLayer: empty shell (notes live in StickyNotesCanvas)
-function FreeLayer(){return null;}
-
-// ─── STICKER SYSTEM ──────────────────────────
-const EMOJI_TABS={
-  groups:[
-    {name:'업무', type:'work', items:null},
-    {name:'일상', type:'life', items:null},
-    {name:'숫자·별점', type:'num', items:null},
-    {name:'마크', type:'mark', items:null},
-    {name:'화살표', type:'arrow', items:null},
-    {name:'도형', type:'shape', items:null},
-    {name:'이모지', type:'emojiset', sets:[
-      {label:'자주 쓰는', items:['✅','❌','⭐','🔥','❗','❓','📌','📍','🚩','🎯','⏰','📅','💡','⚠️','💰','✉️','🔁','✏️','💯','🎉','✨','☕','🎂','🎁','📚','💬','🔔','⚡','🌸','🍀']},
-      {label:'동물', items:['🐶','🐱','🐰','🦊','🐻','🐼','🐯','🦁','🐷','🐸','🦄','🐧','🐥','🦉','🐢','🐬','🐳','🦋','🐝','🐾']},
-      {label:'손짓', items:['👍','👎','👏','🙏','💪','✌️','👌','🤙','👉','👈','👆','👇','🫶','🤝','✋','🖐']},
-    ]},
-    {name:'표정', type:'face', items:null},
-  ]
-};
-
-// ─── SHAPE STICKERS ──────────────────────────────────────────────────────────
-const SHAPE_COLORS=[
-  {id:'red',   fill:'#FF5252'},
-  {id:'orange',fill:'#FF9800'},
-  {id:'yellow',fill:'#FFD600'},
-  {id:'green', fill:'#4CAF50'},
-  {id:'blue',  fill:'#2196F3'},
-  {id:'purple',fill:'#9C27B0'},
-  {id:'pink',  fill:'#F06292'},
-  {id:'gray',  fill:'#9E9E9E'},
-  {id:'black', fill:'#212121'},
-];
-const SHAPE_STICKERS=(()=>{
-  const cur=[
-    /* 말풍선/생각풍선 */
-    {id:'shp-sp1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M6 8.5 Q6 5.5 9 5.5 H31 Q34 5.5 34 8.5 V21.5 Q34 24.5 31 24.5 H18.5 L11 32 L12.8 24.5 H9 Q6 24.5 6 21.5 Z" fill="#fff" stroke="#1F1F1E" strokeWidth="2.2" strokeLinejoin="round"/></svg>},
-    {id:'shp-sp2',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M6 8.5 Q6 5.5 9 5.5 H31 Q34 5.5 34 8.5 V21.5 Q34 24.5 31 24.5 H18.5 L11 32 L12.8 24.5 H9 Q6 24.5 6 21.5 Z" fill="#FFF4C9" stroke="#E8B10A" strokeWidth="1.8" strokeLinejoin="round"/></svg>},
-    {id:'shp-th1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><ellipse cx="21" cy="14" rx="14" ry="9.5" fill="#fff" stroke="#4B4A54" strokeWidth="2"/><circle cx="12" cy="27" r="3" fill="#fff" stroke="#4B4A54" strokeWidth="1.8"/><circle cx="7.5" cy="33" r="1.8" fill="#fff" stroke="#4B4A54" strokeWidth="1.5"/></svg>},
-    /* 배너/리본 */
-    {id:'shp-bn1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M4 11 H36 L31 20 L36 29 H4 Z" fill="#1F1F1E"/></svg>},
-    {id:'shp-bn2',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M36 11 H4 L9 20 L4 29 H36 Z" fill="#E24B4A"/></svg>},
-    /* 형광 하이라이트 바 */
-    {id:'shp-hly',cat:'s',render:()=><svg viewBox="0 0 80 20" width="100%" height="100%"><rect x="2" y="4" width="76" height="12" rx="4" fill="#FFE94A" opacity="0.6"/></svg>},
-    {id:'shp-hlg',cat:'s',render:()=><svg viewBox="0 0 80 20" width="100%" height="100%"><rect x="2" y="4" width="76" height="12" rx="4" fill="#7BE495" opacity="0.55"/></svg>},
-    {id:'shp-hlp',cat:'s',render:()=><svg viewBox="0 0 80 20" width="100%" height="100%"><rect x="2" y="4" width="76" height="12" rx="4" fill="#FF9EC0" opacity="0.55"/></svg>},
-    /* 밑줄 */
-    {id:'shp-un1',cat:'s',render:()=><svg viewBox="0 0 80 16" width="100%" height="100%"><path d="M4 8 H76" stroke="#E24B4A" strokeWidth="4.5" strokeLinecap="round"/></svg>},
-    {id:'shp-un2',cat:'s',render:()=><svg viewBox="0 0 80 16" width="100%" height="100%"><path d="M4 9 Q11 3 18 9 T32 9 T46 9 T60 9 T74 9" fill="none" stroke="#E24B4A" strokeWidth="3.2" strokeLinecap="round"/></svg>},
-    /* 프레임 (강조 테두리) */
-    {id:'shp-fr1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="3.5" y="7" width="33" height="26" rx="6" fill="none" stroke="#E24B4A" strokeWidth="2.6"/></svg>},
-    {id:'shp-fr2',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="3.5" y="7" width="33" height="26" rx="6" fill="none" stroke="#1F1F1E" strokeWidth="2.6" strokeDasharray="6 4"/></svg>},
-    {id:'shp-fr3',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><ellipse cx="20" cy="20" rx="16.5" ry="13" fill="none" stroke="#E24B4A" strokeWidth="2.6"/></svg>},
-    {id:'shp-fr4',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><ellipse cx="20" cy="20" rx="16.5" ry="13" fill="none" stroke="#1F1F1E" strokeWidth="2.6" strokeDasharray="6 4"/></svg>},
-    /* 중괄호 */
-    {id:'shp-br1',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M24 4 Q17 4 17 11 V16 Q17 20 12 20 Q17 20 17 24 V29 Q17 36 24 36" fill="none" stroke="#4B4A54" strokeWidth="2.6" strokeLinecap="round"/></svg>},
-    /* 컬러 도트 */
-    {id:'shp-dr',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#E24B4A"/></svg>},
-    {id:'shp-dy',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#F5A623"/></svg>},
-    {id:'shp-dg',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#2FAE60"/></svg>},
-    {id:'shp-db',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#1B7FDB"/></svg>},
-    {id:'shp-dp',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#8B5CF6"/></svg>},
-    {id:'shp-dk',cat:'s',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="11" fill="#3B3A43"/></svg>},
-  ];
-  /* 레거시 도형 (이미 배치된 스티커 렌더 호환용 — 팔레트에는 미표시) */
-  const arr=[];
-  SHAPE_COLORS.forEach(c=>{
-    const f=c.fill;
-    arr.push({id:`cf-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill={f}/></svg>});
-    arr.push({id:`co-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16" fill="none" stroke={f} strokeWidth="3.5"/></svg>});
-    arr.push({id:`sf-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="3" y="3" width="34" height="34" rx="4" fill={f}/></svg>});
-    arr.push({id:`so-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="3" y="3" width="34" height="34" rx="4" fill="none" stroke={f} strokeWidth="3.5"/></svg>});
-    arr.push({id:`tf-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><polygon points="20,3 37,38 3,38" fill={f}/></svg>});
-    arr.push({id:`to-${c.id}`,render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><polygon points="20,3 37,38 3,38" fill="none" stroke={f} strokeWidth="3.5"/></svg>});
-  });
-  return [...cur,...arr];
-})();
-
-// ─── ARROW SVG STICKERS ─────────────────────────────────────────────────────
-const ARROW_SVG_STICKERS=[
-  /* ── 플레인 (배경 없음) ── */
-  {id:'ap-r',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M5 20 H30.5 M22.5 11.5 L31.5 20 L22.5 28.5" fill="none" stroke="#3B3A43" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-l',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M35 20 H9.5 M17.5 11.5 L8.5 20 L17.5 28.5" fill="none" stroke="#3B3A43" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-rr',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M5 20 H30.5 M22.5 11.5 L31.5 20 L22.5 28.5" fill="none" stroke="#E24B4A" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-ne',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M9 31 L29.5 10.5 M15.5 10 H30 V24.5" fill="none" stroke="#3B3A43" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-dash',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M4 20 H23" fill="none" stroke="#1F1F1E" strokeWidth="3" strokeLinecap="round" strokeDasharray="5 4.5"/><path d="M21 12 L30.5 20 L21 28" fill="none" stroke="#1F1F1E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-swoosh',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M5 33 Q21 31 28.5 13" fill="none" stroke="#E24B4A" strokeWidth="3.2" strokeLinecap="round"/><path d="M20.5 12.5 L29.5 9 L31 18.5" fill="none" stroke="#E24B4A" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-ret',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M32 8 V19 Q32 23.5 27.5 23.5 H10.5 M16 17 L9.5 23.5 L16 30" fill="none" stroke="#3B3A43" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-trend',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M4 29 L13.5 19.5 L20 26 L33 11.5 M24.5 10.5 H34 V20" fill="none" stroke="#2E9E5B" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'ap-drop',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M4 11 L13.5 20.5 L20 14 L33 28.5 M24.5 29.5 H34 V20" fill="none" stroke="#E24B4A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-ch1',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M14 7 L28 20 L14 33" fill="none" stroke="#4B4A54" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-ch2',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M8 8 L20 20 L8 32" fill="none" stroke="#1F1F1E" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M20 8 L32 20 L20 32" fill="none" stroke="#E0E0E8" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-ch3',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M5 10 L14 20 L5 30" fill="none" stroke="#1F1F1E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><path d="M15.5 10 L24.5 20 L15.5 30" fill="none" stroke="#8C8C8C" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/><path d="M26 10 L35 20 L26 30" fill="none" stroke="#CFCBF2" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-cv1',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M8 31 Q8 12 25 11.5" fill="none" stroke="#1F1F1E" strokeWidth="3.2" strokeLinecap="round"/><path d="M20.5 6.5 L26.5 11.5 L20.5 16.5" fill="none" stroke="#1F1F1E" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-cv2',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M8 9 Q8 28 25 28.5" fill="none" stroke="#1F1F1E" strokeWidth="3.2" strokeLinecap="round"/><path d="M20.5 23.5 L26.5 28.5 L20.5 33.5" fill="none" stroke="#1F1F1E" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-ut',cat:'plain',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M12 32 V16 Q12 8.5 20 8.5 Q28 8.5 28 16 V30" fill="none" stroke="#E0447C" strokeWidth="3.1" strokeLinecap="round"/><path d="M22.5 25 L28 31 L33.5 25" fill="none" stroke="#E0447C" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  /* ── 원형 뱃지형 ── */
-  {id:'as-r1',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#EEEEF4"/><path d="M11.5 20 H28 M21.5 13.5 L28.5 20 L21.5 26.5" fill="none" stroke="#1F1F1E" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-r2',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#1F1F1E"/><path d="M11.5 20 H28 M21.5 13.5 L28.5 20 L21.5 26.5" fill="none" stroke="#fff" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-r3',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#E6F1FB"/><path d="M11.5 20 H28 M21.5 13.5 L28.5 20 L21.5 26.5" fill="none" stroke="#1B7FDB" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-r4',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#1B7FDB"/><path d="M11.5 20 H28 M21.5 13.5 L28.5 20 L21.5 26.5" fill="none" stroke="#fff" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-r5',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#E8E8EE"/><path d="M12 13 L19.5 20 L12 27 M21 13 L28.5 20 L21 27" fill="none" stroke="#4B4A54" strokeWidth="2.9" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-ne1',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#E1F4F4"/><path d="M13.5 26.5 L26 14 M16.5 13.5 H26.5 V23.5" fill="none" stroke="#128C8C" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-ne2',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#128C8C"/><path d="M13.5 26.5 L26 14 M16.5 13.5 H26.5 V23.5" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-up',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#E4F5EA"/><path d="M20 28.5 V12 M13.5 18.5 L20 11.5 L26.5 18.5" fill="none" stroke="#2E9E5B" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-dn',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#FDEEDF"/><path d="M20 11.5 V28 M13.5 21.5 L20 28.5 L26.5 21.5" fill="none" stroke="#E8792B" strokeWidth="3.1" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-ud',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#F1EAFE"/><path d="M20 10.5 V29.5 M14.5 16 L20 10.5 L25.5 16 M14.5 24 L20 29.5 L25.5 24" fill="none" stroke="#8B5CF6" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-lr',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#F1EAFE"/><path d="M10.5 20 H29.5 M16 14.5 L10.5 20 L16 25.5 M24 14.5 L29.5 20 L24 25.5" fill="none" stroke="#8B5CF6" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-cl1',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#EEEEF4"/><path d="M27.2 15.2 A9 9 0 1 0 28.6 22.5" fill="none" stroke="#1F1F1E" strokeWidth="2.9" strokeLinecap="round"/><path d="M28 9.5 V15.7 H21.8" fill="none" stroke="#1F1F1E" strokeWidth="2.9" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'as-cl2',cat:'circle',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#1F1F1E"/><path d="M27.2 15.2 A9 9 0 1 0 28.6 22.5" fill="none" stroke="#fff" strokeWidth="2.9" strokeLinecap="round"/><path d="M28 9.5 V15.7 H21.8" fill="none" stroke="#fff" strokeWidth="2.9" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-];
-
-// ─── 마크 + 다이어리 뱃지 스티커 (cat: 'mark' | 'badge') ─────────
-const SKETCH_STICKERS=[
-  /* ── 마크 ── */
-  {id:'sk-check',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="17" fill="#2FAE60"/><path d="M12.5 20.5 L17.8 25.8 L28 14.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'sk-bang',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="17" fill="#E24B4A"/><rect x="18.3" y="10" width="3.4" height="13" rx="1.7" fill="#fff"/><circle cx="20" cy="28.6" r="2.2" fill="#fff"/></svg>},
-  {id:'sk-qm',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="17" fill="#1B7FDB"/><path d="M14.5 15.5 Q14.5 9.5 20 9.5 Q25.5 9.5 25.5 14.5 Q25.5 18 21.8 19.6 Q20 20.5 20 23.5" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"/><circle cx="20" cy="29" r="2.1" fill="#fff"/></svg>},
-  {id:'sk-star',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 4 L24.7 13.8 L35.3 15.2 L27.6 22.8 L29.5 33.4 L20 28.3 L10.5 33.4 L12.4 22.8 L4.7 15.2 L15.3 13.8 Z" fill="#FFC53D" stroke="#EDA711" strokeWidth="1.5" strokeLinejoin="round"/></svg>},
-  {id:'sk-heart',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 33 C10 26 5.5 20.5 5.5 14.8 C5.5 10.4 9 7 13.2 7 C16 7 18.6 8.6 20 11 C21.4 8.6 24 7 26.8 7 C31 7 34.5 10.4 34.5 14.8 C34.5 20.5 30 26 20 33 Z" fill="#F0527F" stroke="#D63A68" strokeWidth="1.2" strokeLinejoin="round"/></svg>},
-  {id:'sk-tri',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M18 6.5 Q20 3.5 22 6.5 L36 30.5 Q37.5 33.5 34 33.5 H6 Q2.5 33.5 4 30.5 Z" fill="#FFB020" stroke="#E8940A" strokeWidth="1.3" strokeLinejoin="round"/><rect x="18.6" y="13.5" width="2.9" height="10" rx="1.45" fill="#fff"/><circle cx="20" cy="28" r="1.9" fill="#fff"/></svg>},
-  {id:'sk-aster',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 3.5 Q22.5 15.5 36.5 20 Q22.5 24.5 20 36.5 Q17.5 24.5 3.5 20 Q17.5 15.5 20 3.5 Z" fill="#8B5CF6"/><circle cx="30.5" cy="8.5" r="2.6" fill="#C4B5FD"/></svg>},
-  {id:'sk-oval',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><ellipse cx="20" cy="20" rx="16.5" ry="11.5" fill="none" stroke="#E24B4A" strokeWidth="3" strokeLinecap="round" opacity="0.92"/></svg>},
-  {id:'sk-ar',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M8 32 L28 12" stroke="#E24B4A" strokeWidth="3.4" strokeLinecap="round"/><path d="M17.5 10.5 L30 10 L29.5 22.5" fill="none" stroke="#E24B4A" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'sk-hash',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="15.5" fill="#fff" stroke="#E24B4A" strokeWidth="3"/><circle cx="20" cy="20" r="8.6" fill="none" stroke="#E24B4A" strokeWidth="3"/><circle cx="20" cy="20" r="2.7" fill="#E24B4A"/></svg>},
-  {id:'sk-flag',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M11 35.5 V5.5" stroke="#5A5A64" strokeWidth="2.7" strokeLinecap="round"/><path d="M11 7 H30.5 L26 12.75 L30.5 18.5 H11 Z" fill="#E24B4A" stroke="#C93736" strokeWidth="1" strokeLinejoin="round"/></svg>},
-  {id:'sk-bulb',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 4.5 A11 11 0 0 1 26 24.5 Q25 25.5 25 27 H15 Q15 25.5 14 24.5 A11 11 0 0 1 20 4.5 Z" fill="#FFD54F" stroke="#E8B10A" strokeWidth="1.4" strokeLinejoin="round"/><rect x="15.5" y="29" width="9" height="3.2" rx="1.6" fill="#B98E12"/><rect x="16.8" y="33.4" width="6.4" height="2.8" rx="1.4" fill="#8A6A0D"/></svg>},
-  {id:'sk-pin',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M20 22 L20 35.5" stroke="#5A5A64" strokeWidth="2.5" strokeLinecap="round"/><circle cx="20" cy="13.5" r="9.5" fill="#E24B4A" stroke="#C93736" strokeWidth="1"/><circle cx="16.8" cy="10.4" r="2.8" fill="#F58E8D"/></svg>},
-  {id:'sk-crown',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><path d="M7 27.5 L5 11.5 L13.5 17.5 L20 8 L26.5 17.5 L35 11.5 L33 27.5 Z" fill="#FFC53D" stroke="#EDA711" strokeWidth="1.4" strokeLinejoin="round"/><rect x="7" y="29.5" width="26" height="4.5" rx="2.2" fill="#EDA711"/></svg>},
-  {id:'sk-clock',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="15.5" fill="#fff" stroke="#3B3A43" strokeWidth="2.7"/><path d="M20 11.5 V20 L26.5 24" fill="none" stroke="#3B3A43" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round"/></svg>},
-  {id:'sk-coin',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#FFD54F" stroke="#E8B10A" strokeWidth="1.6"/><text x="20" y="27" textAnchor="middle" fontSize="18" fontWeight="800" fill="#9A7409">₩</text></svg>},
-  {id:'sk-gift',cat:'mark',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><rect x="7" y="15.5" width="26" height="18.5" rx="3" fill="#F0527F"/><rect x="7" y="12.5" width="26" height="6.5" rx="2" fill="#D63A68"/><rect x="18.4" y="12.5" width="3.2" height="21.5" fill="#FFD9E4"/><path d="M20 11.5 Q13.5 11.5 13.5 8 Q13.5 5.5 16.5 5.5 Q20 5.5 20 11.5 Q20 5.5 23.5 5.5 Q26.5 5.5 26.5 8 Q26.5 11.5 20 11.5" fill="none" stroke="#D63A68" strokeWidth="2"/></svg>},
-  {id:'sk-n1',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">1</text></svg>},
-  {id:'sk-n2',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">2</text></svg>},
-  {id:'sk-n3',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">3</text></svg>},
-  {id:'sk-n4',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">4</text></svg>},
-  {id:'sk-n5',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">5</text></svg>},
-  {id:'sk-n6',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">6</text></svg>},
-  {id:'sk-n7',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">7</text></svg>},
-  {id:'sk-n8',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">8</text></svg>},
-  {id:'sk-n9',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="26.5" textAnchor="middle" fontSize="18" fontWeight="800" fill="#1F1F1E">9</text></svg>},
-  {id:'sk-n10',cat:'num',render:()=><svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="16.5" fill="#EEEEF4" stroke="#E0E0E8" strokeWidth="1.5"/><text x="20" y="25.5" textAnchor="middle" fontSize="15" fontWeight="800" fill="#1F1F1E">10</text></svg>},
-  /* ── 다이어리 뱃지 ── */
-  {id:'sk-line2',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FFF4E0" stroke="#F5A623" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C97D06">중요</text></svg>},
-  {id:'sk-urgent',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E24B4A"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">긴급</text></svg>},
-  {id:'sk-wave',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">완료</text></svg>},
-  {id:'sk-dday',cat:'work',render:()=><svg viewBox="0 0 64 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="61" height="25" rx="12.5" fill="#1F1F29"/><text x="32" y="19.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff" letterSpacing="0.5">D-DAY</text></svg>},
-  {id:'sk-conf',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E6F1FB" stroke="#1B7FDB" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#155F9E">확인</text></svg>},
-  {id:'sk-hold',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8E8EE" stroke="#C4C4C4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">보류</text></svg>},
-  {id:'sk-meet',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EEEEF4" stroke="#8C8C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1F1F1E">회의</text></svg>},
-  {id:'sk-due',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#C93736"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">마감</text></svg>},
-  {id:'sk-vac',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">휴가</text></svg>},
-  {id:'sk-bday',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">생일</text></svg>},
-  {id:'sk-anniv',cat:'life',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#F1EAFE" stroke="#8B5CF6" strokeWidth="1.5"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6D3FD1">기념일</text></svg>},
-  {id:'sk-appt',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">약속</text></svg>},
-  {id:'sk-gym',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">운동</text></svg>},
-  {id:'sk-study',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8ECF8" stroke="#4A6BC4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#33529E">공부</text></svg>},
-  {id:'sk-trip',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDEEDF" stroke="#E8792B" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#BC5D1B">여행</text></svg>},
-  {id:'sk-hosp',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDE8E8" stroke="#E24B4A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13332">병원</text></svg>},
-  {id:'sk-pay',cat:'life',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#FFF4D6" stroke="#E8B10A" strokeWidth="1.5"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#9A7409">월급날</text></svg>},
-  {id:'sk-todo',cat:'work',render:()=><svg viewBox="0 0 64 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="61" height="25" rx="12.5" fill="#fff" stroke="#C4C4C4" strokeWidth="1.5" strokeDasharray="4 3"/><text x="32" y="19.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#6B6B75">TO DO</text></svg>},
-  {id:'sk-new',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E24B4A"/><text x="29" y="19.5" textAnchor="middle" fontSize="12" fontWeight="800" fill="#fff" letterSpacing="1">NEW</text></svg>},
-  {id:'sk-rate1',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★</tspan><tspan fill="#DEDEE4">★★★★</tspan></text></svg>},
-  {id:'sk-rate2',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★</tspan><tspan fill="#DEDEE4">★★★</tspan></text></svg>},
-  {id:'sk-rate3',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★</tspan><tspan fill="#DEDEE4">★★</tspan></text></svg>},
-  {id:'sk-rate4',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★★</tspan><tspan fill="#DEDEE4">★</tspan></text></svg>},
-  {id:'sk-rate5',cat:'num',render:()=><svg viewBox="0 0 96 24" width="100%" height="100%"><text x="48" y="19" textAnchor="middle" fontSize="19"><tspan fill="#FFC53D">★★★★★</tspan></text></svg>},
-  {id:'sk-biz',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">출장</text></svg>},
-  {id:'sk-report',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#EEEEF4" stroke="#8C8C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1F1F1E">보고</text></svg>},
-  {id:'sk-pt',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#F1EAFE" stroke="#8B5CF6" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6D3FD1">발표</text></svg>},
-  {id:'sk-sign',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8ECF8" stroke="#4A6BC4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#33529E">결재</text></svg>},
-  {id:'sk-submit',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">제출</text></svg>},
-  {id:'sk-dinner',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDEEDF" stroke="#E8792B" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#BC5D1B">회식</text></svg>},
-  {id:'sk-edu',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E4F5EA" stroke="#2FAE60" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1E7A42">교육</text></svg>},
-  {id:'sk-interview',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#1F1F1E"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">면접</text></svg>},
-  {id:'sk-contract',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FFF4D6" stroke="#E8B10A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#9A7409">계약</text></svg>},
-  {id:'sk-halfday',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4FB" stroke="#3BA7D9" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1D7FAD">반차</text></svg>},
-  {id:'sk-dayoff',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E6F1FB" stroke="#1B7FDB" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#155F9E">연차</text></svg>},
-  {id:'sk-remote',cat:'work',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8E8EE" stroke="#C4C4C4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">재택</text></svg>},
-  {id:'sk-bill',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FDE8E8" stroke="#E24B4A" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13332">납부</text></svg>},
-  {id:'sk-resv',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#128C8C"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">예약</text></svg>},
-  {id:'sk-shop',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">쇼핑</text></svg>},
-  {id:'sk-date',cat:'life',render:()=><svg viewBox="0 0 70 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="67" height="25" rx="12.5" fill="#E0447C"/><text x="35" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#fff">데이트</text></svg>},
-  {id:'sk-clean',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E8E8EE" stroke="#C4C4C4" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#6B6B75">청소</text></svg>},
-  {id:'sk-gather',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#E1F4F4" stroke="#128C8C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#0E6B6B">모임</text></svg>},
-  {id:'sk-hair',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#FCE7F0" stroke="#E0447C" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#C13268">미용</text></svg>},
-  {id:'sk-cafe',cat:'life',render:()=><svg viewBox="0 0 58 28" width="100%" height="100%"><rect x="1.5" y="1.5" width="55" height="25" rx="12.5" fill="#F3EDE6" stroke="#A67B52" strokeWidth="1.5"/><text x="29" y="19.5" textAnchor="middle" fontSize="13" fontWeight="700" fill="#7C5836">카페</text></svg>},
-];
-
-const FACE_STICKERS=[
-  {id:'f-happy', emoji:'😊'},
-  {id:'f-laugh', emoji:'😆'},
-  {id:'f-cry',   emoji:'😭'},
-  {id:'f-angry', emoji:'😡'},
-  {id:'f-cool',  emoji:'😎'},
-  {id:'f-love',  emoji:'😍'},
-  {id:'f-think', emoji:'🤔'},
-  {id:'f-sleep', emoji:'😴'},
-  {id:'f-shock', emoji:'😱'},
-  {id:'f-wink',  emoji:'😉'},
-  {id:'f-party', emoji:'🥳'},
-  {id:'f-smirk', emoji:'😏'},
-  {id:'f-nerd',  emoji:'🤓'},
-  {id:'f-star',  emoji:'🤩'},
-  {id:'f-sick',  emoji:'🤒'},
-  {id:'f-hug',   emoji:'🥰'},
-];
-
-function PlacedSticker({sticker,freeLayerVisible,selectedId,setSelectedId}){
-  const{dispatch}=useStore();
-  const ref=useRef(null);
-  const isSelected=selectedId===sticker.id;
-  const size=sticker.size||44;
-  const rotation=sticker.rotation||0;
-
-  // Delete key when selected
-  useEffect(()=>{
-    if(!isSelected)return;
-    const onKey=(e)=>{
-      if(e.key==='Delete'||e.key==='Backspace'){
-        const t=e.target;
-        if(t&&(t.tagName==='TEXTAREA'||t.tagName==='INPUT'||t.isContentEditable))return;
-        e.preventDefault();
-        dispatch({type:'DELETE_PLACED_STICKER',id:sticker.id});
-        setSelectedId(null);
-      }
-    };
-    document.addEventListener('keydown',onKey);
-    return()=>document.removeEventListener('keydown',onKey);
-  },[isSelected,sticker.id,dispatch,setSelectedId]);
-
-  // Drag to move body
-  const onBodyMouseDown=useCallback((e)=>{
-    if(!freeLayerVisible)return;
-    e.stopPropagation();e.preventDefault();
-    setSelectedId(sticker.id);
-    const startX=e.clientX,startY=e.clientY,ox=sticker.x,oy=sticker.y;
-    const onMove=(ev)=>dispatch({type:'UPDATE_PLACED_STICKER',id:sticker.id,updates:{x:ox+(ev.clientX-startX),y:oy+(ev.clientY-startY)}});
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);
-    document.addEventListener('mouseup',onUp);
-  },[freeLayerVisible,sticker.id,sticker.x,sticker.y,dispatch,setSelectedId]);
-
-  // Resize handle (bottom-right drag)
-  const onResizeMouseDown=useCallback((e)=>{
-    e.stopPropagation();e.preventDefault();
-    const startX=e.clientX,startSz=size;
-    const onMove=(ev)=>{
-      const ns=Math.max(20,Math.min(200,startSz+(ev.clientX-startX)));
-      dispatch({type:'UPDATE_PLACED_STICKER',id:sticker.id,updates:{size:ns}});
-    };
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);
-    document.addEventListener('mouseup',onUp);
-  },[sticker.id,size,dispatch]);
-
-  // Rotation handle (top-center drag)
-  const onRotateMouseDown=useCallback((e)=>{
-    e.stopPropagation();e.preventDefault();
-    const rect=ref.current.getBoundingClientRect();
-    const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
-    const startAngle=Math.atan2(e.clientY-cy,e.clientX-cx)*(180/Math.PI);
-    const startRot=rotation;
-    const onMove=(ev)=>{
-      const angle=Math.atan2(ev.clientY-cy,ev.clientX-cx)*(180/Math.PI);
-      dispatch({type:'UPDATE_PLACED_STICKER',id:sticker.id,updates:{rotation:startRot+(angle-startAngle)}});
-    };
-    const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);
-    document.addEventListener('mouseup',onUp);
-  },[sticker.id,rotation,dispatch]);
-
-  const shapeDef=SHAPE_STICKERS.find(s=>s.id===sticker.content);
-  const arrowDef=sticker.type==='arrow_svg'?ARROW_SVG_STICKERS.find(s=>s.id===sticker.content):null;
-  const sketchDef=sticker.type==='sketch'?SKETCH_STICKERS.find(s=>s.id===sticker.content):null;
-  const faceEmoji=sticker.type==='face'?FACE_STICKERS.find(s=>s.id===sticker.content)?.emoji:null;
-
-  return(
-    <div ref={ref} onMouseDown={onBodyMouseDown}
-      onClick={(e)=>{e.stopPropagation();if(freeLayerVisible)setSelectedId(sticker.id);}}
-      style={{position:'absolute',left:sticker.x,top:sticker.y,width:size,height:size,
-        transform:`rotate(${rotation}deg)`,
-        cursor:freeLayerVisible?'grab':'default',
-        userSelect:'none',pointerEvents:freeLayerVisible?'all':'none',
-        zIndex:isSelected?26:22,
-        outline:isSelected?'2px solid #1F1F1E':'none',
-        outlineOffset:2,borderRadius:4,
-        boxShadow:isSelected?'0 0 0 4px rgba(20,20,25,0.12)':'none',
-        transition:'box-shadow 0.1s'}}>
-      {sticker.type==='shape'?(
-        <div style={{width:'100%',height:'100%'}}>{shapeDef&&shapeDef.render()}</div>
-      ):sticker.type==='arrow_svg'?(
-        <div style={{width:'100%',height:'100%'}}>{arrowDef&&arrowDef.render()}</div>
-      ):sticker.type==='sketch'?(
-        <div style={{width:'100%',height:'100%'}}>{sketchDef&&sketchDef.render()}</div>
-      ):(
-        <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',
-          fontSize:size*0.8,lineHeight:1,textAlign:'center'}}>
-          {sticker.type==='face'?faceEmoji:sticker.content}
-        </div>
-      )}
-      {isSelected&&freeLayerVisible&&(
-        <>
-          {/* Delete button top-left */}
-          <button
-            onMouseDown={e=>e.stopPropagation()}
-            onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_PLACED_STICKER',id:sticker.id});setSelectedId(null);}}
-            style={{position:'absolute',top:-10,left:-10,width:20,height:20,borderRadius:'50%',
-              backgroundColor:'#E24B4A',color:'white',fontSize:13,display:'flex',alignItems:'center',
-              justifyContent:'center',border:'2px solid white',boxShadow:'0 2px 6px rgba(0,0,0,0.3)',
-              zIndex:30,lineHeight:1,padding:0,fontWeight:500,cursor:'pointer'}}>×</button>
-          {/* Rotation handle (top-center, orange circle) */}
-          <div onMouseDown={onRotateMouseDown}
-            style={{position:'absolute',top:-22,left:'50%',transform:'translateX(-50%)',
-              width:14,height:14,borderRadius:'50%',backgroundColor:'#FF9800',
-              border:'2px solid white',boxShadow:'0 1px 4px rgba(0,0,0,0.25)',
-              cursor:'grab',zIndex:30}}/>
-          {/* Connector line from rotation handle to sticker */}
-          <div style={{position:'absolute',top:-8,left:'50%',transform:'translateX(-50%)',
-            width:1,height:8,backgroundColor:'#FF9800',opacity:0.6,zIndex:29}}/>
-          {/* Resize handle (bottom-right, blue square) */}
-          <div onMouseDown={onResizeMouseDown}
-            style={{position:'absolute',bottom:-7,right:-7,width:14,height:14,
-              borderRadius:3,backgroundColor:'#1F1F1E',
-              border:'2px solid white',boxShadow:'0 1px 4px rgba(0,0,0,0.25)',
-              cursor:'nwse-resize',zIndex:30}}/>
-        </>
-      )}
-    </div>
-  );
-}
-
-function StickerCanvas(){
-  const{state}=useStore();
-  const{freeLayerVisible,stickerMode,selectedStickerId,setSelectedStickerId}=useLayout();
-  // Deselect on outside click
-  useEffect(()=>{
-    const onClick=(e)=>{
-      if(!e.target.closest('[data-sticker]'))setSelectedStickerId(null);
-    };
-    document.addEventListener('click',onClick);
-    return()=>document.removeEventListener('click',onClick);
-  },[setSelectedStickerId]);
-  if(!freeLayerVisible)return null;
-  return(
-    <div style={{position:'absolute',top:0,left:0,right:0,bottom:0,minHeight:'100%',
-      pointerEvents:'none',zIndex:21}}>
-      {(state.placedStickers||[]).map(s=>(
-        <div key={s.id} data-sticker="true" style={{position:'absolute',left:0,top:0,pointerEvents:'none'}}>
-          <PlacedSticker sticker={s} freeLayerVisible={freeLayerVisible}
-            selectedId={selectedStickerId} setSelectedId={setSelectedStickerId}/>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// StickerPicker is now inside FreeNotePanel — no floating panel
-
-// ─── SHARED POPOVERS ─────────────────────────
-
 function ColorPickerPopover({selectedColor,onSelect,onClose,style={}}){
   const ref=useRef(null);
   useEffect(()=>{const h=(e)=>{if(ref.current&&!ref.current.contains(e.target))onClose();};setTimeout(()=>document.addEventListener('mousedown',h),0);return()=>document.removeEventListener('mousedown',h);},[onClose]);
@@ -1943,7 +1285,7 @@ function LayerCtxMenu({menu,onClose,dispatch,workLabel,workColor,personalLabel,p
 function TopBar(){
   const{state,dispatch,undo,redo}=useStore();
   const{workVisible,personalVisible,outlookVisible,customLayers,layerOrder,workLabel,personalLabel,workColor,personalColor,titleText,topBarBg,topBarImg}=state;
-  const{freeLayerVisible,setFreeLayerVisible,stickerMode,setStickerMode,scrollToTodayRef,monthLabel,monthNavRef,addEventRef}=useLayout();
+  const{scrollToTodayRef,monthLabel,monthNavRef,addEventRef}=useLayout();
   const catStyle=useDynCatStyle();
   const[settingsOpen,setSettingsOpen]=useState(false);
   const[moreOpen,setMoreOpen]=useState(false);
@@ -2064,7 +1406,6 @@ function TopBar(){
           {moreOpen&&(
             <div onMouseLeave={()=>setMoreOpen(false)} style={{position:'absolute',top:40,right:0,minWidth:186,backgroundColor:'#fff',border:'0.5px solid #E8E8EE',borderRadius:10,boxShadow:'0 0 0 0.5px rgba(20,20,25,0.06), 0 8px 24px rgba(20,20,25,0.10)',padding:6,zIndex:3000,display:'flex',flexDirection:'column',gap:1}}>
               <button onClick={()=>{doQuickSync();setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F7'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span style={{display:'inline-block',animation:olSyncing?'_spin 0.8s linear infinite':'none'}}>↻</span> 아웃룩 동기화</button>
-              <button onClick={()=>{const nv=!freeLayerVisible;setFreeLayerVisible(nv);if(!nv)setStickerMode(false);setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F7'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span style={{width:9,height:9,borderRadius:1,backgroundColor:freeLayerVisible?'#1F1F1E':'#C8C8C8',transform:'rotate(45deg)',display:'inline-block'}}/> 노트·스티커</button>
               <button onClick={()=>{undo();setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F7'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span>↺</span> 되돌리기</button>
               <button onClick={()=>{redo();setMoreOpen(false);}} style={mItem} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#F3F3F7'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}><span>↻</span> 다시 실행</button>
               <div style={{height:'0.5px',backgroundColor:'#E8E8EE',margin:'4px 2px'}}/>
@@ -2099,7 +1440,7 @@ function HighlightItem({highlight,project}){
   useEffect(()=>{if(!highlight.text&&!highlight.date)textRef.current?.focus();},[]);
   return(
     <div style={{position:'relative',marginBottom:2,opacity:done?0.5:1,transition:'opacity 0.15s'}} onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
-      <div style={{display:'flex',alignItems:'center',borderRadius:4,overflow:'hidden',border:'0.5px solid #F0F0F0'}}>
+      <div style={{display:'flex',alignItems:'center',borderRadius:6,overflow:'hidden',border:'0.5px solid #E8E8EE'}}>
         <div style={{flexShrink:0,alignSelf:'stretch',display:'flex',alignItems:'center'}}>
           <div onClick={()=>setPickerOpen(v=>!v)} style={{width:3,alignSelf:'stretch',backgroundColor:barColor,cursor:'pointer'}} onMouseEnter={e=>e.currentTarget.style.opacity='0.7'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}/>
         </div>
@@ -2109,13 +1450,13 @@ function HighlightItem({highlight,project}){
         <div style={{flex:1,padding:'4px 6px 4px 0',display:'flex',flexDirection:'column',gap:2}}>
           {project&&<span style={{fontSize:10,color:barColor,fontWeight:600,lineHeight:1.3}}>{project.name}</span>}
           <div style={{display:'flex',alignItems:'center',gap:6}}>
-            <input value={highlight.date} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{date:e.target.value}})} placeholder="날짜" style={{width:48,fontSize:10,color:'#AAA',borderBottom:'0.5px solid #F0F0F0',flexShrink:0,textDecoration:done?'line-through':'none'}}/>
-            <input ref={textRef} value={highlight.text} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{text:e.target.value}})} placeholder="내용" style={{flex:1,fontSize:11,color:done?'#ABABAB':'#333',minWidth:0,textDecoration:done?'line-through':'none'}}/>
+            <input value={highlight.date} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{date:e.target.value}})} placeholder="날짜" style={{width:48,fontSize:10,color:'#B4B4AE',borderBottom:'0.5px solid #E8E8EE',flexShrink:0,textDecoration:done?'line-through':'none'}}/>
+            <input ref={textRef} value={highlight.text} onChange={e=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{text:e.target.value}})} placeholder="내용" style={{flex:1,fontSize:11,color:done?'#B4B4AE':'#37352F',minWidth:0,textDecoration:done?'line-through':'none'}}/>
           </div>
         </div>
       </div>
       {pickerOpen&&<ProjectPickerPopover selectedProjectId={highlight.projectId} onSelect={id=>dispatch({type:'UPDATE_HIGHLIGHT',id:highlight.id,updates:{projectId:id}})} onClose={()=>setPickerOpen(false)} style={{top:4,left:8}}/>}
-      {hovered&&<button onClick={()=>dispatch({type:'DELETE_HIGHLIGHT',id:highlight.id})} style={{position:'absolute',right:-6,top:'50%',transform:'translateY(-50%)',fontSize:13,color:'#CCC',width:16,height:16,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',backgroundColor:'#fff',border:'0.5px solid #E8E8EE'}} onMouseEnter={e=>{e.currentTarget.style.color='#E24B4A';e.currentTarget.style.borderColor='#E24B4A';}} onMouseLeave={e=>{e.currentTarget.style.color='#CCC';e.currentTarget.style.borderColor='#E8E8EE';}}>×</button>}
+      {hovered&&<button onClick={()=>dispatch({type:'DELETE_HIGHLIGHT',id:highlight.id})} style={{position:'absolute',right:-6,top:'50%',transform:'translateY(-50%)',fontSize:13,color:'#C4C4C4',width:16,height:16,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',backgroundColor:'#fff',border:'0.5px solid #E8E8EE'}} onMouseEnter={e=>{e.currentTarget.style.color='#E24B4A';e.currentTarget.style.borderColor='#E24B4A';}} onMouseLeave={e=>{e.currentTarget.style.color='#C4C4C4';e.currentTarget.style.borderColor='#E8E8EE';}}>×</button>}
     </div>
   );
 }
@@ -2135,16 +1476,16 @@ function MonthlyHighlights(){
   });
   return(
     <section className="lp-sec" style={{marginBottom:18}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,paddingBottom:6,borderBottom:'0.5px solid #E8E8EE'}}>
         <div style={{display:'flex',alignItems:'center',gap:4}}>
-          <button onClick={toggleFold} style={{display:'inline-flex',alignItems:'center',gap:4,background:'none',border:'none',cursor:'pointer',padding:0}}><span style={{fontSize:8,color:'#C4C4C4',display:'inline-block',transform:fold?'rotate(-90deg)':'none',transition:'transform 0.15s'}}>▼</span><span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:600}}>주요일정</span></button>
-          <button onClick={goPrevHl} style={{fontSize:12,color:'#C8C8C8',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>‹</button>
-          <span style={{fontSize:13,color:'#888',fontWeight:500,minWidth:38,textAlign:'center'}}>{hlYear}년 {hlMonth+1}월</span>
-          <button onClick={goNextHl} style={{fontSize:12,color:'#C8C8C8',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>›</button>
+          <button onClick={toggleFold} style={{display:'inline-flex',alignItems:'center',gap:4,background:'none',border:'none',cursor:'pointer',padding:0}}><span style={{fontSize:8,color:'#B4B4AE',display:'inline-block',transform:fold?'rotate(-90deg)':'none',transition:'transform 0.15s'}}>▼</span><span style={{fontSize:11,color:'#9A9A95',letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600}}>주요일정</span></button>
+          <button onClick={goPrevHl} style={{fontSize:12,color:'#B4B4AE',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>‹</button>
+          <span style={{fontSize:13,color:'#9A9A95',fontWeight:500,minWidth:38,textAlign:'center'}}>{hlYear}년 {hlMonth+1}월</span>
+          <button onClick={goNextHl} style={{fontSize:12,color:'#B4B4AE',padding:'0 3px'}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>›</button>
         </div>
-        <button className="lp-add" onClick={()=>dispatch({type:'ADD_HIGHLIGHT',yearMonth:currentYM})} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E0E0E8',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E0E0E8';}}>+ 추가</button>
+        <button className="lp-add" onClick={()=>dispatch({type:'ADD_HIGHLIGHT',yearMonth:currentYM})} style={{fontSize:11,color:'#9A9A95',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E0E0E8',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#C4C4C4';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A95';e.currentTarget.style.borderColor='#E0E0E8';}}>+ 추가</button>
       </div>
-      {!fold&&(filteredHighlights.length===0?<div style={{fontSize:13,color:'#CDCDCD',textAlign:'center',padding:'6px 0'}}>이 달에 주요일정이 없습니다</div>:<div style={{display:'flex',flexDirection:'column',gap:2,paddingRight:8}}>{filteredHighlights.map(h=><HighlightItem key={h.id} highlight={h} project={getProject(h.projectId)}/>)}</div>)}
+      {!fold&&(filteredHighlights.length===0?<div style={{fontSize:13,color:'#B4B4AE',textAlign:'center',padding:'6px 0'}}>이 달에 주요일정이 없습니다</div>:<div style={{display:'flex',flexDirection:'column',gap:2,paddingRight:8}}>{filteredHighlights.map(h=><HighlightItem key={h.id} highlight={h} project={getProject(h.projectId)}/>)}</div>)}
     </section>
   );
 }
@@ -2195,21 +1536,21 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
     >
       <div style={{display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}
         onClick={()=>dispatch({type:'UPDATE_MEMO',projectId,id:memo.id,updates:{collapsed:!memo.collapsed}})}>
-        <span style={{fontSize:7,color:'#CCCCCC',flexShrink:0,transform:memo.collapsed?'rotate(-90deg)':'rotate(0deg)',display:'inline-block',transition:'transform 0.15s',userSelect:'none'}}>▼</span>
+        <span style={{fontSize:7,color:'#C4C4C4',flexShrink:0,transform:memo.collapsed?'rotate(-90deg)':'rotate(0deg)',display:'inline-block',transition:'transform 0.15s',userSelect:'none'}}>▼</span>
         {editTitle?(
           <input autoFocus value={titleVal}
             onClick={e=>e.stopPropagation()}
             onChange={e=>setTitleVal(e.target.value)}
             onBlur={saveTitle}
             onKeyDown={e=>{if(e.key==='Enter')saveTitle();if(e.key==='Escape'){setTitleVal(memo.title);setEditTitle(false);}}}
-            style={{flex:1,fontSize:12,fontWeight:600,color:'#333',borderBottom:`0.5px solid ${projectColor}`,paddingBottom:1,minWidth:0,background:'transparent'}}/>
+            style={{flex:1,fontSize:12,fontWeight:600,color:'#37352F',borderBottom:`0.5px solid ${projectColor}`,paddingBottom:1,minWidth:0,background:'transparent'}}/>
         ):(
           <span onDoubleClick={e=>{e.stopPropagation();setTitleVal(memo.title);setEditTitle(true);}}
-            style={{flex:1,fontSize:12,fontWeight:600,color:'#444',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',userSelect:'none'}}>
+            style={{flex:1,fontSize:12,fontWeight:600,color:'#37352F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',userSelect:'none'}}>
             {memo.title}
           </span>
         )}
-        {hovered&&<button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_MEMO',projectId,id:memo.id});}} style={{fontSize:11,color:'#DDD',flexShrink:0,padding:'0 2px',lineHeight:1}} onMouseEnter={e=>{e.stopPropagation();e.currentTarget.style.color='#E24B4A';}} onMouseLeave={e=>e.currentTarget.style.color='#DDD'}>×</button>}
+        {hovered&&<button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_MEMO',projectId,id:memo.id});}} style={{fontSize:11,color:'#C4C4C4',flexShrink:0,padding:'0 2px',lineHeight:1}} onMouseEnter={e=>{e.stopPropagation();e.currentTarget.style.color='#E24B4A';}} onMouseLeave={e=>e.currentTarget.style.color='#C4C4C4'}>×</button>}
       </div>
       {!memo.collapsed&&(
         <div style={{position:'relative'}}>
@@ -2240,7 +1581,7 @@ function MemoItem({memo,projectId,projectColor,memoIdx,memoCount,dispatch}){
             onInput={save}
             onKeyDown={e=>{if(e.key==='Tab'){e.preventDefault();e.shiftKey?doOutdent():doIndent();}}}
             style={{minHeight:24,marginTop:3,fontSize:11,color:'#555',lineHeight:1.6,
-              borderBottom:`0.5px solid ${bodyFocus?projectColor:'#F0F0F0'}`,
+              borderBottom:`0.5px solid ${bodyFocus?projectColor:'#E8E8EE'}`,
               outline:'none',wordBreak:'break-word',fontFamily:'inherit',
               transition:'border-color 0.15s',paddingBottom:2}}
           />
@@ -2278,17 +1619,17 @@ function ProjectItem({project,dragId,dragOverId,onDragStart,onDragEnd,onDragOver
     >
       {isDragOver&&<div style={{position:'absolute',top:0,left:0,right:0,height:2,backgroundColor:project.color,borderRadius:1,zIndex:2}}/>}
       <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
-        <span onClick={e=>{e.stopPropagation();dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{folded:!project.folded}});}} title={project.folded?'펼치기':'접기'} style={{fontSize:8,color:'#C4C4C4',cursor:'pointer',flexShrink:0,display:'inline-block',transform:project.folded?'rotate(-90deg)':'none',transition:'transform 0.15s',userSelect:'none',padding:'2px 1px'}}>▼</span>
-        <span title="드래그해서 순서 변경" style={{fontSize:12,color:hovered?'#C8C8C8':'transparent',cursor:'grab',flexShrink:0,lineHeight:1,transition:'color 0.15s',userSelect:'none'}}>⠿</span>
+        <span onClick={e=>{e.stopPropagation();dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{folded:!project.folded}});}} title={project.folded?'펼치기':'접기'} style={{fontSize:8,color:'#B4B4AE',cursor:'pointer',flexShrink:0,display:'inline-block',transform:project.folded?'rotate(-90deg)':'none',transition:'transform 0.15s',userSelect:'none',padding:'2px 1px'}}>▼</span>
+        <span title="드래그해서 순서 변경" style={{fontSize:12,color:hovered?'#B4B4AE':'transparent',cursor:'grab',flexShrink:0,lineHeight:1,transition:'color 0.15s',userSelect:'none'}}>⠿</span>
         <div style={{position:'relative',flexShrink:0}}>
           <div onClick={()=>setCpOpen(v=>!v)} style={{width:9,height:9,borderRadius:'50%',backgroundColor:project.color,cursor:'pointer',border:`1.5px solid ${project.color}`,transition:'transform 0.1s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.2)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}/>
           {cpOpen&&<ColorPickerPopover selectedColor={project.color} onSelect={c=>dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{color:c}})} onClose={()=>setCpOpen(false)} style={{top:12,left:0}}/>}
         </div>
         {editing?<input autoFocus value={nameVal} onChange={e=>setNameVal(e.target.value)} onBlur={saveName} onKeyDown={e=>{if(e.key==='Enter')saveName();if(e.key==='Escape'){setNameVal(project.name);setEditing(false);}}} style={{flex:1,fontSize:13,fontWeight:500,color:project.color,borderBottom:`0.5px solid ${project.color}`,paddingBottom:1,minWidth:0}}/>:<span onDoubleClick={()=>{setNameVal(project.name);setEditing(true);}} style={{flex:1,fontSize:13,fontWeight:500,color:project.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'text',minWidth:0}}>{project.name}</span>}
-        {hovered&&!editing&&<button onClick={e=>{e.stopPropagation();setNameVal(project.name);setEditing(true);}} title="이름 수정" style={{fontSize:10,color:'#C4C4C4',flexShrink:0,padding:'0 2px',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C4C4C4'}>✎</button>}
-        {memos.length>0&&<span style={{fontSize:9.5,color:'#9A9A9A',backgroundColor:'#F3F3F3',borderRadius:8,padding:'1px 6px',lineHeight:1.4,flexShrink:0}}>{memos.length}</span>}
-        <button onClick={()=>dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{layer:project.layer==='work'?'personal':'work'}})} title={project.layer==='personal'?'개인→업무':'업무→개인'} style={{fontSize:10,padding:'1px 4px',borderRadius:3,flexShrink:0,opacity:0.6,border:'0.5px solid #E0E0E0',color:project.layer==='personal'?'#185FA5':'#1F1F1E',backgroundColor:project.layer==='personal'?'#E6F1FB':'#EEEEF4'}}>{project.layer==='personal'?'개인':'업무'}</button>
-        {hovered&&!editing&&<button onClick={()=>dispatch({type:'DELETE_PROJECT',id:project.id})} style={{fontSize:13,color:'#CCC',lineHeight:1,flexShrink:0,padding:'1px 2px'}} onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'} onMouseLeave={e=>e.currentTarget.style.color='#CCC'}>×</button>}
+        {hovered&&!editing&&<button onClick={e=>{e.stopPropagation();setNameVal(project.name);setEditing(true);}} title="이름 수정" style={{fontSize:10,color:'#B4B4AE',flexShrink:0,padding:'0 2px',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>✎</button>}
+        {memos.length>0&&<span style={{fontSize:9.5,color:'#9A9A95',backgroundColor:'#F3F3F7',borderRadius:8,padding:'1px 6px',lineHeight:1.4,flexShrink:0}}>{memos.length}</span>}
+        <button onClick={()=>dispatch({type:'UPDATE_PROJECT',id:project.id,updates:{layer:project.layer==='work'?'personal':'work'}})} title={project.layer==='personal'?'개인→업무':'업무→개인'} style={{fontSize:10,padding:'1px 4px',borderRadius:3,flexShrink:0,opacity:0.6,border:'0.5px solid #E0E0E8',color:project.layer==='personal'?'#185FA5':'#1F1F1E',backgroundColor:project.layer==='personal'?'#E6F1FB':'#EEEEF4'}}>{project.layer==='personal'?'개인':'업무'}</button>
+        {hovered&&!editing&&<button onClick={()=>dispatch({type:'DELETE_PROJECT',id:project.id})} style={{fontSize:13,color:'#C4C4C4',lineHeight:1,flexShrink:0,padding:'1px 2px'}} onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'} onMouseLeave={e=>e.currentTarget.style.color='#C4C4C4'}>×</button>}
       </div>
       <div>
         {!project.folded&&memos.map((memo,idx)=>(
@@ -2296,9 +1637,9 @@ function ProjectItem({project,dragId,dragOverId,onDragStart,onDragEnd,onDragOver
         ))}
       </div>
       <button onClick={()=>dispatch({type:'ADD_MEMO',projectId:project.id,title:'메모'})}
-        style={{marginLeft:14,marginTop:4,fontSize:11,color:'#CCCCCC',padding:'1px 6px',borderRadius:3,border:'0.5px dashed #E0E0E0',backgroundColor:'transparent',cursor:'pointer'}}
-        onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';}}
-        onMouseLeave={e=>{e.currentTarget.style.color='#CCCCCC';e.currentTarget.style.borderColor='#E0E0E0';}}>
+        style={{marginLeft:14,marginTop:4,fontSize:11,color:'#C4C4C4',padding:'1px 6px',borderRadius:3,border:'0.5px dashed #E0E0E8',backgroundColor:'transparent',cursor:'pointer'}}
+        onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#C4C4C4';}}
+        onMouseLeave={e=>{e.currentTarget.style.color='#C4C4C4';e.currentTarget.style.borderColor='#E0E0E8';}}>
         + 메모
       </button>
     </div>
@@ -2320,24 +1661,24 @@ function FolderRow({f,count,dragId,dispatch,clearDrag,fDrag,setFDrag,onFolderReo
       onDrop={e=>{setOver(false);if(dragId){e.preventDefault();dispatch({type:'UPDATE_PROJECT',id:dragId,updates:{folderId:f.id}});clearDrag();}else if(fDrag&&fDrag!==f.id){e.preventDefault();onFolderReorder&&onFolderReorder(fDrag,f.id);setFDrag&&setFDrag(null);}}}
       onClick={()=>dispatch({type:'UPDATE_FOLDER',id:f.id,updates:{folded:!f.folded}})}
       style={{display:'flex',alignItems:'center',gap:5,padding:'4px 7px',borderRadius:7,cursor:'pointer',
-        backgroundColor:over?'#EEEEF4':'#F7F7F8',border:`0.5px solid ${over?'#E0E0E8':'#E8E8EE'}`,transition:'all 0.12s'}}>
+        backgroundColor:over?'#EEEEF4':'#F8F8FB',border:`0.5px solid ${over?'#E0E0E8':'#E8E8EE'}`,transition:'all 0.12s'}}>
       <span style={{fontSize:8,color:'#B8B8B8',display:'inline-block',transform:f.folded?'rotate(-90deg)':'none',transition:'transform 0.15s',flexShrink:0}}>▼</span>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M3 7 Q3 5 5 5 H9 L11.5 7.5 H19 Q21 7.5 21 9.5 V17 Q21 19 19 19 H5 Q3 19 3 17 Z"/></svg>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9A9A95" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M3 7 Q3 5 5 5 H9 L11.5 7.5 H19 Q21 7.5 21 9.5 V17 Q21 19 19 19 H5 Q3 19 3 17 Z"/></svg>
       {edit?(
         <input autoFocus value={val} onClick={e=>e.stopPropagation()} onChange={e=>setVal(e.target.value)} onBlur={save}
           onKeyDown={e=>{if(e.key==='Enter')save();if(e.key==='Escape'){setVal(f.name);setEdit(false);}}}
-          style={{flex:1,fontSize:12.5,fontWeight:600,color:'#2F2F2F',borderBottom:'0.5px solid #E0E0E8',minWidth:0,background:'transparent'}}/>
+          style={{flex:1,fontSize:12.5,fontWeight:600,color:'#37352F',borderBottom:'0.5px solid #E0E0E8',minWidth:0,background:'transparent'}}/>
       ):(
         <span onDoubleClick={e=>{e.stopPropagation();setVal(f.name);setEdit(true);}}
-          style={{flex:1,fontSize:12.5,fontWeight:600,color:'#3D3D3D',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',userSelect:'none'}}>{f.name}</span>
+          style={{flex:1,fontSize:12.5,fontWeight:600,color:'#37352F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',userSelect:'none'}}>{f.name}</span>
       )}
-      {hover&&!edit&&<button onClick={e=>{e.stopPropagation();dispatch({type:'ADD_PROJECT_FULL',project:{id:uid(),name:'새 프로젝트',color:PROJECT_COLORS[3],layer:'work',folderId:f.id}});dispatch({type:'UPDATE_FOLDER',id:f.id,updates:{folded:false}});}} title="이 폴더에 프로젝트 추가" style={{fontSize:12,color:'#C4C4C4',flexShrink:0,padding:'0 2px',lineHeight:1,fontWeight:600}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C4C4C4'}>+</button>}
-      {hover&&!edit&&<button onClick={e=>{e.stopPropagation();setVal(f.name);setEdit(true);}} title="폴더 이름 수정" style={{fontSize:10,color:'#C4C4C4',flexShrink:0,padding:'0 2px',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C4C4C4'}>✎</button>}
-      <span style={{fontSize:9.5,color:'#9A9A9A',backgroundColor:'#E8E8EE',borderRadius:8,padding:'1px 6px',flexShrink:0}}>{count}</span>
+      {hover&&!edit&&<button onClick={e=>{e.stopPropagation();dispatch({type:'ADD_PROJECT_FULL',project:{id:uid(),name:'새 프로젝트',color:PROJECT_COLORS[3],layer:'work',folderId:f.id}});dispatch({type:'UPDATE_FOLDER',id:f.id,updates:{folded:false}});}} title="이 폴더에 프로젝트 추가" style={{fontSize:12,color:'#B4B4AE',flexShrink:0,padding:'0 2px',lineHeight:1,fontWeight:600}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>+</button>}
+      {hover&&!edit&&<button onClick={e=>{e.stopPropagation();setVal(f.name);setEdit(true);}} title="폴더 이름 수정" style={{fontSize:10,color:'#B4B4AE',flexShrink:0,padding:'0 2px',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#B4B4AE'}>✎</button>}
+      <span style={{fontSize:9.5,color:'#9A9A95',backgroundColor:'#E8E8EE',borderRadius:8,padding:'1px 6px',flexShrink:0}}>{count}</span>
       {hover&&!edit&&<button onClick={e=>{e.stopPropagation();if(confirm('폴더를 삭제할까요? 하위 프로젝트는 미분류로 이동합니다.'))dispatch({type:'DELETE_FOLDER',id:f.id});}}
-        style={{fontSize:12,color:'#D2D2D2',lineHeight:1,flexShrink:0,padding:'0 2px'}}
+        style={{fontSize:12,color:'#C4C4C4',lineHeight:1,flexShrink:0,padding:'0 2px'}}
         onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
-        onMouseLeave={e=>e.currentTarget.style.color='#D2D2D2'}>×</button>}
+        onMouseLeave={e=>e.currentTarget.style.color='#C4C4C4'}>×</button>}
     </div>
   );
 }
@@ -2369,23 +1710,23 @@ function ProjectsSection(){
   };
   return(
     <section className="lp-sec">
-      <div onDragOver={e=>{if(dragId)e.preventDefault();}} onDrop={e=>{if(dragId){e.preventDefault();dispatch({type:'UPDATE_PROJECT',id:dragId,updates:{folderId:null}});setDragId(null);setDragOverId(null);}}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingBottom:6,borderBottom:'0.5px solid #F0F0F0'}}>
-        <button onClick={toggleFold} style={{display:'inline-flex',alignItems:'center',gap:4,background:'none',border:'none',cursor:'pointer',padding:0}}><span style={{fontSize:8,color:'#C4C4C4',display:'inline-block',transform:fold?'rotate(-90deg)':'none',transition:'transform 0.15s'}}>▼</span><span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:600}}>프로젝트</span></button>
-        <span className="lp-add" style={{display:'inline-flex',gap:4}}><button onClick={()=>dispatch({type:'ADD_FOLDER',folder:{id:uid(),name:'새 폴더',folded:false}})} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E0E0E8',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';}}>+ 폴더</button><button onClick={()=>{setAdding(true);setTimeout(()=>nameRef.current?.focus(),30);}} style={{fontSize:11,color:'#9A9A9A',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E0E0E8',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#CFCFCF';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A9A';e.currentTarget.style.borderColor='#E0E0E8';}}>+ 추가</button></span>
+      <div onDragOver={e=>{if(dragId)e.preventDefault();}} onDrop={e=>{if(dragId){e.preventDefault();dispatch({type:'UPDATE_PROJECT',id:dragId,updates:{folderId:null}});setDragId(null);setDragOverId(null);}}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingBottom:6,borderBottom:'0.5px solid #E8E8EE'}}>
+        <button onClick={toggleFold} style={{display:'inline-flex',alignItems:'center',gap:4,background:'none',border:'none',cursor:'pointer',padding:0}}><span style={{fontSize:8,color:'#B4B4AE',display:'inline-block',transform:fold?'rotate(-90deg)':'none',transition:'transform 0.15s'}}>▼</span><span style={{fontSize:11,color:'#9A9A95',letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600}}>프로젝트</span></button>
+        <span className="lp-add" style={{display:'inline-flex',gap:4}}><button onClick={()=>dispatch({type:'ADD_FOLDER',folder:{id:uid(),name:'새 폴더',folded:false}})} style={{fontSize:11,color:'#9A9A95',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E0E0E8',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#C4C4C4';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A95';}}>+ 폴더</button><button onClick={()=>{setAdding(true);setTimeout(()=>nameRef.current?.focus(),30);}} style={{fontSize:11,color:'#9A9A95',padding:'1px 5px',borderRadius:3,border:'0.5px solid #E0E0E8',lineHeight:1.6}} onMouseEnter={e=>{e.currentTarget.style.color='#1F1F1E';e.currentTarget.style.borderColor='#C4C4C4';}} onMouseLeave={e=>{e.currentTarget.style.color='#9A9A95';e.currentTarget.style.borderColor='#E0E0E8';}}>+ 추가</button></span>
       </div>
       {!fold&&(<>
       {adding&&<div style={{border:'0.5px solid #E8E8EE',borderRadius:6,padding:'8px',marginBottom:10,backgroundColor:'#F8F8FB'}}>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
           <div style={{position:'relative',flexShrink:0}}><div onClick={()=>setCpOpen(v=>!v)} style={{width:14,height:14,borderRadius:'50%',backgroundColor:newColor,cursor:'pointer',border:`1.5px solid ${newColor}`}}/>{cpOpen&&<ColorPickerPopover selectedColor={newColor} onSelect={c=>setNewColor(c)} onClose={()=>setCpOpen(false)} style={{top:18,left:0}}/>}</div>
-          <input ref={nameRef} value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleAdd();if(e.key==='Escape')setAdding(false);}} placeholder="프로젝트명" style={{flex:1,fontSize:13,color:'#333',borderBottom:'0.5px solid #E0E0E0',paddingBottom:2,minWidth:0}}/>
-          <button onClick={()=>setNewLayer(l=>l==='work'?'personal':'work')} style={{fontSize:10,padding:'1px 6px',borderRadius:3,border:'0.5px solid #E0E0E0',color:newLayer==='personal'?'#185FA5':'#1F1F1E',backgroundColor:newLayer==='personal'?'#E6F1FB':'#EEEEF4',flexShrink:0}}>{newLayer==='personal'?'개인':'업무'}</button>
+          <input ref={nameRef} value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleAdd();if(e.key==='Escape')setAdding(false);}} placeholder="프로젝트명" style={{flex:1,fontSize:13,color:'#37352F',borderBottom:'0.5px solid #E0E0E8',paddingBottom:2,minWidth:0}}/>
+          <button onClick={()=>setNewLayer(l=>l==='work'?'personal':'work')} style={{fontSize:10,padding:'1px 6px',borderRadius:3,border:'0.5px solid #E0E0E8',color:newLayer==='personal'?'#185FA5':'#1F1F1E',backgroundColor:newLayer==='personal'?'#E6F1FB':'#EEEEF4',flexShrink:0}}>{newLayer==='personal'?'개인':'업무'}</button>
         </div>
         <div style={{display:'flex',gap:5,justifyContent:'flex-end'}}>
-          <button onClick={()=>setAdding(false)} style={{fontSize:12,color:'#999',padding:'3px 8px',border:'0.5px solid #E0E0E0',borderRadius:4}}>취소</button>
+          <button onClick={()=>setAdding(false)} style={{fontSize:12,color:'#999',padding:'3px 8px',border:'0.5px solid #E0E0E8',borderRadius:4}}>취소</button>
           <button onClick={handleAdd} style={{fontSize:12,color:'#fff',padding:'3px 8px',backgroundColor:'#1F1F1E',borderRadius:4,opacity:newName.trim()?1:0.4}}>추가</button>
         </div>
       </div>}
-      {state.projects.length===0&&!adding&&(state.projectFolders||[]).length===0?<div style={{fontSize:13,color:'#CDCDCD',textAlign:'center',padding:'10px 0'}}>프로젝트를 추가해보세요</div>:(
+      {state.projects.length===0&&!adding&&(state.projectFolders||[]).length===0?<div style={{fontSize:13,color:'#B4B4AE',textAlign:'center',padding:'10px 0'}}>프로젝트를 추가해보세요</div>:(
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {(state.projectFolders||[]).map(f=>{
           const inFolder=state.projects.filter(p=>p.folderId===f.id);
@@ -2393,7 +1734,7 @@ function ProjectsSection(){
             <div key={f.id}>
               <FolderRow f={f} count={inFolder.length} dragId={dragId} dispatch={dispatch} clearDrag={()=>{setDragId(null);setDragOverId(null);}} fDrag={fDrag} setFDrag={setFDrag} onFolderReorder={onFolderReorder}/>
               {!f.folded&&inFolder.length>0&&(
-                <div style={{display:'flex',flexDirection:'column',gap:8,paddingLeft:6,marginTop:7,marginLeft:3,borderLeft:'1.5px solid #F0F0F0'}}>
+                <div style={{display:'flex',flexDirection:'column',gap:8,paddingLeft:6,marginTop:7,marginLeft:3,borderLeft:'1.5px solid #E8E8EE'}}>
                   {inFolder.map(p=><ProjectItem key={p.id} project={p} dragId={dragId} dragOverId={dragOverId} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragOver={handleDragOver} onDrop={handleDrop}/>)}
                 </div>
               )}
@@ -2407,321 +1748,6 @@ function ProjectsSection(){
   );
 }
 // ─── FREE NOTE PANEL ─────────────────────────
-function FreeNotePanel(){
-  const{state,dispatch}=useStore();
-  const{freeLayerVisible,setFreeLayerVisible,calendarScrollRef,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId}=useLayout();
-  const[dockTab,setDockTab]=useState(()=>lsLoad('dockTab','notes'));
-  const[stickerTab,setStickerTab]=useState(0);
-  useEffect(()=>{if(stickerMode)setDockTab('stickers');},[stickerMode]);
-  useEffect(()=>{if(activeNoteId)setDockTab('notes');},[activeNoteId]);
-  const notes=state.stickyNotes||[];
-  const activeNote=notes.find(n=>n.id===activeNoteId)||null;
-  const FONT_SIZES=[11,12,13,14,16,18,20,24];
-  const TEXT_COLORS=['#1A1A1A','#1F1F1E','#1D9E75','#E24B4A','#D97706','#4A90D9','#888','#fff'];
-  const BG_COLORS=['transparent','#FFFDE7','#FFF3E0','#E3F2FD','#E8F5E9','#FCE4EC','#EDE7F6','#F3E5F5','#1A1A1A','#1F1F1E'];
-  const updateActiveNote=(updates)=>{if(activeNote)dispatch({type:'UPDATE_STICKY_NOTE',id:activeNote.id,updates});};
-  const scrollToNote=(note)=>{
-    const c=calendarScrollRef?.current;
-    if(c)c.scrollTo({top:Math.max(0,note.y-c.clientHeight/2+70),behavior:'smooth'});
-  };
-  const addNote=(type)=>{
-    const c=calendarScrollRef?.current;
-    const n=(state.stickyNotes||[]).length;
-    const off=(n%5)*26;
-    const x=c?Math.max(24,c.clientWidth*0.32-85+off):80;
-    const y=c?c.scrollTop+c.clientHeight/2-(type==='text'?30:70)-40+off:200;
-    const newId='n'+Date.now();
-    dispatch({type:'ADD_STICKY_NOTE',note:{id:newId,x,y,w:type==='text'?200:170,h:type==='text'?32:140,text:'',
-      color:type==='text'?'transparent':STICKY_COLORS[n%STICKY_COLORS.length],type,createdAt:new Date().toISOString()}});
-    if(!freeLayerVisible)setFreeLayerVisible(true);
-    setActiveNoteId(newId);
-    setTimeout(()=>{if(c)c.scrollTo({top:Math.max(0,y-c.clientHeight/2+70),behavior:'smooth'});},60);
-  };
-  const addSticker=(stickerType,stContent)=>{
-    const c=calendarScrollRef?.current;
-    const n=(state.placedStickers||[]).length;
-    const off=(n%6)*30;
-    const x=c?Math.max(24,c.clientWidth*0.30-40+off):200;
-    const y=c?c.scrollTop+c.clientHeight/2-84+off*0.7:200;
-    if(!freeLayerVisible)setFreeLayerVisible(true);
-    dispatch({type:'ADD_PLACED_STICKER',sticker:{type:stickerType,content:stContent,x,y,size:48,rotation:0}});
-  };
-  const StickerRow=({s})=>{
-    const faceEmoji=s.type==='face'?FACE_STICKERS.find(f=>f.id===s.content)?.emoji:null;
-    const shapeDef=s.type==='shape'?SHAPE_STICKERS.find(f=>f.id===s.content):null;
-    const arrowDef2=s.type==='arrow_svg'?ARROW_SVG_STICKERS.find(f=>f.id===s.content):null;
-    const sketchDef2=s.type==='sketch'?SKETCH_STICKERS.find(f=>f.id===s.content):null;
-    const isSelected=selectedStickerId===s.id;
-    return(
-      <div style={{display:'flex',alignItems:'center',gap:5,padding:'3px 4px',borderRadius:5,cursor:'pointer',marginBottom:1,
-        backgroundColor:isSelected?'rgba(20,20,25,0.08)':'transparent'}}
-        onMouseEnter={e=>{if(!isSelected)e.currentTarget.style.backgroundColor='#F3F3F3';}}
-        onMouseLeave={e=>{e.currentTarget.style.backgroundColor=isSelected?'rgba(20,20,25,0.08)':'transparent';}}
-        onClick={()=>{setSelectedStickerId(s.id);const c=calendarScrollRef?.current;if(c)c.scrollTo({top:Math.max(0,s.y-c.clientHeight/2),behavior:'smooth'});}}>
-        <div style={{width:18,height:18,flexShrink:0,borderRadius:3,overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center'}}>
-          {s.type==='shape'&&shapeDef?shapeDef.render():
-           s.type==='arrow_svg'&&arrowDef2?arrowDef2.render():
-           s.type==='sketch'&&sketchDef2?sketchDef2.render():
-           <span style={{fontSize:14,lineHeight:1}}>{s.type==='face'?faceEmoji:s.content}</span>}
-        </div>
-        <span style={{fontSize:11,color:'#5C5C5C',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-          {Math.round(s.x)},{Math.round(s.y)} · {Math.round(s.size||44)}px
-        </span>
-        <button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_PLACED_STICKER',id:s.id});if(selectedStickerId===s.id)setSelectedStickerId(null);}}
-          style={{fontSize:11,color:'#D2D2D2',flexShrink:0,lineHeight:1,padding:'0 2px'}}
-          onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
-          onMouseLeave={e=>e.currentTarget.style.color='#D2D2D2'}>×</button>
-      </div>
-    );
-  };
-  const NoteCard=({note})=>{
-    const isTxt=note.type==='text';
-    const active=activeNoteId===note.id;
-    return(
-      <div onClick={()=>{scrollToNote(note);setActiveNoteId(note.id);}}
-        style={{padding:'7px 10px',borderRadius:8,cursor:'pointer',marginBottom:5,
-          border:`0.5px solid ${active?'#E0E0E8':'#E8E8EE'}`,
-          backgroundColor:active?'#EEEEF4':'#FFFFFF',
-          boxShadow:'0 1px 2px rgba(20,20,40,0.04)',transition:'border-color 0.12s,background-color 0.12s'}}
-        onMouseEnter={e=>{if(!active)e.currentTarget.style.borderColor='#DDDDDD';}}
-        onMouseLeave={e=>{if(!active)e.currentTarget.style.borderColor='#E8E8EE';}}>
-        <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
-          <span style={{width:8,height:8,borderRadius:isTxt?2:'50%',backgroundColor:isTxt?'#B8B8B8':(note.color||STICKY_COLORS[0]),flexShrink:0,border:'0.5px solid rgba(0,0,0,0.08)'}}/>
-          <span style={{fontSize:9.5,color:'#9A9A9A',fontWeight:600,letterSpacing:'0.3px'}}>{isTxt?'텍스트':'포스트잇'}</span>
-          {note.createdAt&&<span style={{fontSize:9,color:'#C4C4C4',marginLeft:'auto'}}>{(()=>{const d=new Date(note.createdAt);return (d.getMonth()+1)+'/'+d.getDate();})()}</span>}
-          <button onClick={e=>{e.stopPropagation();dispatch({type:'DELETE_STICKY_NOTE',id:note.id});}}
-            style={{fontSize:11,color:'#D2D2D2',flexShrink:0,lineHeight:1,padding:'0 2px'}}
-            onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'}
-            onMouseLeave={e=>e.currentTarget.style.color='#D2D2D2'}>×</button>
-        </div>
-        <div style={{fontSize:12,color:'#444444',lineHeight:1.45,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',wordBreak:'break-word'}}>{(note.text||'').trim()||'(빈 노트)'}</div>
-      </div>
-    );
-  };
-  const editToggle=(
-    <button onClick={()=>setFreeLayerVisible(v=>!v)}
-      style={{fontSize:11,padding:'5px 10px',borderRadius:7,flexShrink:0,cursor:'pointer',
-        border:`0.5px solid ${freeLayerVisible?'#E0E0E8':'#E0E0E8'}`,
-        backgroundColor:freeLayerVisible?'#EEEEF4':'#F8F8FB',
-        color:freeLayerVisible?'#1F1F1E':'#9A9A9A',fontWeight:600}}>
-      {freeLayerVisible?'● 표시 중':'표시'}
-    </button>
-  );
-  return(
-    <div data-free-note-panel="true" style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',backgroundColor:'#fff'}}>
-      {/* 도크 탭 */}
-      <div style={{display:'flex',gap:2,padding:'8px 10px 0',flexShrink:0}}>
-        {[{id:'notes',label:'노트'},{id:'stickers',label:'스티커'}].map(t=>(
-          <button key={t.id} onClick={()=>{setDockTab(t.id);lsSave('dockTab',t.id);if(t.id==='stickers'&&!stickerMode)setStickerMode(true);}}
-            style={{flex:1,padding:'6px 0',borderRadius:7,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
-              backgroundColor:dockTab===t.id?'#EEEEF4':'transparent',color:dockTab===t.id?'#1A1A1A':'#9A9A9A',transition:'all 0.15s'}}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {dockTab==='notes'?(
-        <div style={{flex:1,minHeight:0,overflowY:'auto',padding:'10px 12px 12px'}}>
-          <div style={{display:'flex',gap:5,marginBottom:10}}>
-            <button onClick={()=>addNote('sticky')}
-              style={{flex:1,fontSize:12,fontWeight:600,color:'#1F1F1E',padding:'5px 0',border:'0.5px solid #E0E0E8',borderRadius:7,backgroundColor:'#EEEEF4',cursor:'pointer'}}>+ 포스트잇</button>
-            <button onClick={()=>addNote('text')}
-              style={{flex:1,fontSize:12,fontWeight:600,color:'#5C5C5C',padding:'5px 0',border:'0.5px solid #E0E0E8',borderRadius:7,backgroundColor:'#F8F8FB',cursor:'pointer'}}>+ 텍스트</button>
-            {editToggle}
-          </div>
-          {false&&activeNote&&(
-            <div style={{padding:'8px 10px',backgroundColor:'#F8F8FB',borderRadius:8,marginBottom:8,border:'0.5px solid #E8E8EE'}}>
-              <div style={{fontSize:10,color:'#8C8C8C',marginBottom:7,fontWeight:600,letterSpacing:'0.6px',textTransform:'uppercase'}}>{activeNote.type==='text'?'텍스트박스 서식':'포스트잇 서식'}</div>
-              <div style={{display:'flex',flexDirection:'column',gap:7}}>
-                <div style={{display:'flex',alignItems:'center',gap:6}}>
-                  <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0}}>크기</span>
-                  <select value={activeNote.fontSize||(activeNote.type==='text'?15:13)} onChange={e=>updateActiveNote({fontSize:+e.target.value})}
-                    style={{fontSize:11,color:'#2F2F2F',backgroundColor:'#EEEEF4',borderRadius:5,padding:'3px 6px',cursor:'pointer',flex:1,border:'none'}}>
-                    {FONT_SIZES.map(s=><option key={s} value={s}>{s}px</option>)}
-                  </select>
-                </div>
-                <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
-                  <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0,paddingTop:2}}>글자색</span>
-                  <div style={{display:'flex',gap:3.5,flexWrap:'wrap'}}>
-                    {TEXT_COLORS.map(c=>(
-                      <button key={c} onClick={()=>updateActiveNote({textColor:c})}
-                        style={{width:16,height:16,borderRadius:'50%',backgroundColor:c,cursor:'pointer',padding:0,border:'none',flexShrink:0,
-                          boxShadow:(activeNote.textColor||(activeNote.type==='text'?'#1A1A1A':'#333'))===c?'0 0 0 1.5px #fff, 0 0 0 3px #1F1F1E':(c==='#fff'?'inset 0 0 0 1px #D6D6DE':'inset 0 0 0 0.5px rgba(0,0,0,0.14)')}}/>
-                    ))}
-                  </div>
-                </div>
-                <div style={{display:'flex',alignItems:'flex-start',gap:6}}>
-                  <span style={{fontSize:10,color:'#9A9A9A',width:32,flexShrink:0,paddingTop:2}}>배경</span>
-                  <div style={{display:'flex',gap:3.5,flexWrap:'wrap'}}>
-                    {(activeNote.type==='text'?BG_COLORS:STICKY_COLORS).map(c=>{
-                      const cur=activeNote.type==='text'?(activeNote.bgColor||'transparent'):(activeNote.color||STICKY_COLORS[0]);
-                      return(
-                        <button key={c} onClick={()=>updateActiveNote(activeNote.type==='text'?{bgColor:c}:{color:c})}
-                          style={{width:16,height:16,borderRadius:4,cursor:'pointer',padding:0,flexShrink:0,
-                            backgroundColor:c==='transparent'?'#fff':c,
-                            border:c==='transparent'?'1px dashed #C8C8D0':'none',
-                            boxShadow:cur===c?'0 0 0 1.5px #fff, 0 0 0 3px #1F1F1E':(c==='transparent'?'none':'inset 0 0 0 0.5px rgba(0,0,0,0.10)')}}/>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {notes.length===0?(
-            <div style={{fontSize:12,color:'#C4C4C4',textAlign:'center',padding:'22px 0'}}>포스트잇이나 텍스트박스를<br/>추가해 보세요</div>
-          ):(
-            notes.map(n=><NoteCard key={n.id} note={n}/>)
-          )}
-        </div>
-      ):(
-        <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',padding:'10px 12px 12px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:8,flexShrink:0}}>
-            {editToggle}
-            {(state.placedStickers||[]).length>0&&(
-              <button onClick={()=>{if(confirm('스티커를 모두 삭제?'))dispatch({type:'CLEAR_ALL_STICKERS'});}}
-                style={{fontSize:10.5,color:'#E24B4A',padding:'5px 9px',border:'0.5px solid #F3C1C0',borderRadius:7,backgroundColor:'#FDF4F4',cursor:'pointer',marginLeft:'auto'}}>전체삭제</button>
-            )}
-          </div>
-          {(state.placedStickers||[]).length>0&&(
-            <div style={{maxHeight:88,overflowY:'auto',marginBottom:8,flexShrink:0,borderBottom:'0.5px solid #F1F1F1',paddingBottom:6}}>
-              {(state.placedStickers||[]).map(s=><StickerRow key={s.id} s={s}/>)}
-            </div>
-          )}
-          <div style={{display:'flex',gap:1,marginBottom:6,overflowX:'auto',paddingBottom:2,flexShrink:0}}>
-            {EMOJI_TABS.groups.map((g,i)=>(
-              <button key={i} onClick={()=>setStickerTab(i)}
-                style={{flexShrink:0,padding:'3px 9px',borderRadius:8,fontSize:10.5,fontWeight:600,cursor:'pointer',
-                  border:'none',
-                  backgroundColor:stickerTab===i?'#EEEEF4':'transparent',
-                  color:stickerTab===i?'#1A1A1A':'#9A9A9A',transition:'all 0.12s'}}>
-                {g.name}
-              </button>
-            ))}
-          </div>
-          <div style={{flex:1,minHeight:0,overflowY:'auto',overflowX:'hidden'}}>
-              {(()=>{
-                const g=EMOJI_TABS.groups[stickerTab];
-                const svgBtn=(s,w,h,type)=>(
-                  <button key={s.id} onClick={()=>addSticker(type,s.id)}
-                    style={{width:w,height:h,padding:3,borderRadius:6,border:'0.5px solid #E8E8EE',
-                      backgroundColor:'#F8F8FB',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.1s'}}
-                    onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F3F3F3';e.currentTarget.style.borderColor='#CFCFCF';e.currentTarget.style.transform='scale(1.08)';}}
-                    onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#F8F8FB';e.currentTarget.style.borderColor='#E8E8EE';e.currentTarget.style.transform='scale(1)';}}>
-                    {s.render()}
-                  </button>
-                );
-                const emojiGrid=(items)=>(
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:1}}>
-                    {items.map((em,i)=>(
-                      <button key={i} onClick={()=>addSticker('emoji',em)}
-                        style={{fontSize:16,padding:'3px 1px',borderRadius:4,border:'none',
-                          backgroundColor:'transparent',cursor:'pointer',lineHeight:1}}
-                        onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F3F3F3';e.currentTarget.style.transform='scale(1.2)';}}
-                        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='transparent';e.currentTarget.style.transform='scale(1)';}}>
-                        {em}
-                      </button>
-                    ))}
-                  </div>
-                );
-                if(g.type==='work'||g.type==='life')return(
-                  <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-                    {SKETCH_STICKERS.filter(s=>s.cat===g.type).map(s=>svgBtn(s,64,32,'sketch'))}
-                  </div>
-                );
-                if(g.type==='num')return(
-                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                    <div>
-                      <div style={{fontSize:9,color:'#ABABAB',marginBottom:3,fontWeight:500}}>순번</div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:2}}>
-                        {SKETCH_STICKERS.filter(s=>s.cat==='num'&&s.id.startsWith('sk-n')).map(s=>svgBtn(s,40,40,'sketch'))}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:9,color:'#ABABAB',marginBottom:3,fontWeight:500}}>별점</div>
-                      <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                        {SKETCH_STICKERS.filter(s=>s.cat==='num'&&s.id.startsWith('sk-rate')).map(s=>svgBtn(s,110,28,'sketch'))}
-                      </div>
-                    </div>
-                  </div>
-                );
-                if(g.type==='mark')return(
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:2}}>
-                    {SKETCH_STICKERS.filter(s=>s.cat==='mark').map(s=>svgBtn(s,34,34,'sketch'))}
-                  </div>
-                );
-                if(g.type==='arrow')return(
-                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                    <div>
-                      <div style={{fontSize:9,color:'#ABABAB',marginBottom:3,fontWeight:500}}>기본</div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:2}}>
-                        {ARROW_SVG_STICKERS.filter(s=>s.cat==='plain').map(s=>svgBtn(s,34,34,'arrow_svg'))}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{fontSize:9,color:'#ABABAB',marginBottom:3,fontWeight:500}}>원형 뱃지</div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:2}}>
-                        {ARROW_SVG_STICKERS.filter(s=>s.cat==='circle').map(s=>svgBtn(s,34,34,'arrow_svg'))}
-                      </div>
-                    </div>
-                  </div>
-                );
-                if(g.type==='shape')return(
-                  <div style={{display:'flex',flexWrap:'wrap',gap:3,alignItems:'center'}}>
-                    {SHAPE_STICKERS.filter(s=>s.cat==='s').map(s=>svgBtn(s,s.id.startsWith('shp-hl')||s.id.startsWith('shp-un')?66:34,s.id.startsWith('shp-hl')||s.id.startsWith('shp-un')?24:34,'shape'))}
-                  </div>
-                );
-                if(g.type==='emojiset')return(
-                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                    {g.sets.map((sec,si2)=>(
-                      <div key={si2}>
-                        <div style={{fontSize:9,color:'#ABABAB',marginBottom:3,fontWeight:500}}>{sec.label}</div>
-                        {emojiGrid(sec.items)}
-                      </div>
-                    ))}
-                  </div>
-                );
-                if(g.type==='face')return(
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:3}}>
-                    {FACE_STICKERS.map(s=>(
-                      <button key={s.id} onClick={()=>addSticker('face',s.id)}
-                        style={{padding:'5px 2px',borderRadius:6,border:'0.5px solid #F0F0F0',
-                          backgroundColor:'#F8F8FB',cursor:'pointer',
-                          display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.12s'}}
-                        onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F3F3F3';e.currentTarget.style.transform='scale(1.1)';}}
-                        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#F8F8FB';e.currentTarget.style.transform='scale(1)';}}>
-                        <span style={{fontSize:26,lineHeight:1.1}}>{s.emoji}</span>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })()}
-          </div>
-          <div style={{fontSize:9,color:'#ABABAB',textAlign:'center',marginTop:6,lineHeight:1.3,flexShrink:0}}>클릭→추가 · 드래그→이동 · 모서리■→크기 · ●→회전 · Delete→삭제</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════
-// MEETING NOTES ─ Block editor + Modal + List
-// ═══════════════════════════════════════════════════════════════
-
-/* ── BlockItem: individual editable block — cursor-safe ── */
-/* ─── Block editor: caret & selection helpers ─── */
-const _blkCaretAtStart=(el)=>{const sel=window.getSelection();if(!sel.rangeCount)return false;const r=sel.getRangeAt(0);if(!r.collapsed)return false;const pre=r.cloneRange();pre.selectNodeContents(el);pre.setEnd(r.startContainer,r.startOffset);return pre.toString().length===0;};
-const _blkCaretOnEdgeLine=(el,edge)=>{const sel=window.getSelection();if(!sel.rangeCount)return true;const r=sel.getRangeAt(0).cloneRange();r.collapse(edge!=='last');const rects=r.getClientRects();const rect=rects.length?rects[edge==='last'?rects.length-1:0]:null;if(!rect||!el)return true;const eb=el.getBoundingClientRect();const lh=parseFloat(getComputedStyle(el).lineHeight)||18;return edge==='last'?(eb.bottom-rect.bottom)<lh*0.7:(rect.top-eb.top)<lh*0.7;};
-const _blkFocusEdge=(el,edge)=>{if(!el)return;el.focus();const r=document.createRange();r.selectNodeContents(el);r.collapse(edge==='start');const s=window.getSelection();s.removeAllRanges();s.addRange(r);};
-const _blkSetCaretTextOffset=(el,off)=>{if(!el)return;el.focus();const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n,acc=0;while((n=walker.nextNode())){const len=n.textContent.length;if(acc+len>=off){const r=document.createRange();r.setStart(n,Math.max(0,off-acc));r.collapse(true);const s=window.getSelection();s.removeAllRanges();s.addRange(r);return;}acc+=len;}_blkFocusEdge(el,'end');};
-const _blkSplitAtCaret=(el)=>{const sel=window.getSelection();if(!sel.rangeCount)return{before:el.innerHTML,after:''};const r=sel.getRangeAt(0);if(!r.collapsed)r.deleteContents();const rest=document.createRange();rest.setStart(r.endContainer,r.endOffset);rest.setEnd(el,el.childNodes.length);const frag=rest.extractContents();const d=document.createElement('div');d.appendChild(frag);const clean=(h)=>h.replace(/^(<br\s*\/?>)+/,'').replace(/(<br\s*\/?>)+$/,'');return{before:clean(el.innerHTML),after:clean(d.innerHTML)};};
-const _MD_MAP={'#':'h1','##':'h2','###':'h3','-':'bullet','*':'bullet','1.':'numbered','[]':'todo'};
-const _mdLineParse=(line)=>{let m;
-  if((m=line.match(/^(#{1,3})\s+(.*)$/)))return{type:['h1','h2','h3'][m[1].length-1],text:m[2]};
-  if((m=line.match(/^[-*•◦▪]\s+(.*)$/)))return{type:'bullet',text:m[1]};
-  if((m=line.match(/^\d+[.)]\s+(.*)$/)))return{type:'numbered',text:m[1]};
-  if((m=line.match(/^\[( |x|X)?\]\s+(.*)$/)))return{type:'todo',text:m[2],checked:m[1]==='x'||m[1]==='X'};
-  return{type:'p',text:line};};
-const _escHtml=(s)=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function BlockItem({block,bIdx,refsMap,updateBlock,onEnterKey,onBackspaceKey,onTabKey,onArrowNav,onPasteLines,onFocusCb,editingRef,checkSel,TYPES,bulletMark,numMark}){
   const divRef=React.useRef(null);
   React.useEffect(()=>{
@@ -3188,7 +2214,7 @@ function MeetingNoteList({onOpen}){
   filtered.forEach(n=>{const key=n.date.slice(0,7);if(!grouped[key])grouped[key]=[];grouped[key].push(n);});
 
   if(notes.length===0)return(
-    <div style={{textAlign:'center',padding:'28px 0',color:'#CDCDCD'}}>
+    <div style={{textAlign:'center',padding:'28px 0',color:'#B4B4AE'}}>
       <div style={{fontSize:32,marginBottom:8}}>📋</div>
       <div style={{fontSize:13}}>회의록이 없습니다</div>
       <div style={{fontSize:11,marginTop:4}}>+ 새 회의록 버튼으로 추가하세요</div>
@@ -3207,14 +2233,14 @@ function MeetingNoteList({onOpen}){
               style={{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:active?600:400,
                 border:`0.5px solid ${active?(tab.color||'#1F1F1E'):'#E8E8EE'}`,
                 backgroundColor:active?(tab.color?lighten(tab.color,0.88):'#EEEEF4'):'transparent',
-                color:active?(tab.color||'#1F1F1E'):'#AAAAAA',cursor:'pointer',transition:'all 0.1s'}}>
+                color:active?(tab.color||'#1F1F1E'):'#B4B4AE',cursor:'pointer',transition:'all 0.1s'}}>
               {tab.label}
             </button>
           );
         })}
       </div>
       {filtered.length===0?(
-        <div style={{textAlign:'center',padding:'20px 0',color:'#CDCDCD',fontSize:12}}>
+        <div style={{textAlign:'center',padding:'20px 0',color:'#B4B4AE',fontSize:12}}>
           이 프로젝트에 회의록이 없습니다
         </div>
       ):(
@@ -3222,7 +2248,7 @@ function MeetingNoteList({onOpen}){
           const [yr,mo]=ym.split('-');
           return(
             <div key={ym} style={{marginBottom:12}}>
-              <div style={{fontSize:10,fontWeight:600,color:'#ABABAB',letterSpacing:'0.8px',
+              <div style={{fontSize:10,fontWeight:600,color:'#B4B4AE',letterSpacing:'0.8px',
                 textTransform:'uppercase',marginBottom:5,paddingLeft:2}}>
                 {yr}년 {parseInt(mo)}월
               </div>
@@ -3234,16 +2260,16 @@ function MeetingNoteList({onOpen}){
                   return(
                     <div key={n.id} onClick={()=>onOpen(n)}
                       style={{padding:'7px 10px',borderRadius:8,cursor:'pointer',
-                        border:'0.5px solid #F0F0F0',backgroundColor:'#F8F8FB',transition:'all 0.12s'}}
-                      onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F3F3F3';e.currentTarget.style.borderColor='#CFCFCF';}}
-                      onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#F8F8FB';e.currentTarget.style.borderColor='#F0F0F0';}}>
+                        border:'0.5px solid #E8E8EE',backgroundColor:'#F8F8FB',transition:'all 0.12s'}}
+                      onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F3F3F7';e.currentTarget.style.borderColor='#C4C4C4';}}
+                      onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#F8F8FB';e.currentTarget.style.borderColor='#E8E8EE';}}>
                       <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                         <span style={{fontSize:10,padding:'1px 6px',borderRadius:8,
                           backgroundColor:cs.bg,color:cs.text,border:`0.5px solid ${cs.border}`,flexShrink:0}}>
                           {getCatLabel(n.category)}
                         </span>
                         {proj&&<span style={{fontSize:10,color:proj.color,fontWeight:500,flexShrink:0}}>{proj.name}</span>}
-                        <span style={{fontSize:10,color:'#ABABAB',marginLeft:'auto',flexShrink:0}}>
+                        <span style={{fontSize:10,color:'#B4B4AE',marginLeft:'auto',flexShrink:0}}>
                           {n.date.slice(5).replace('-','/')}{n.time?' '+n.time:''}
                         </span>
                       </div>
@@ -3251,8 +2277,8 @@ function MeetingNoteList({onOpen}){
                         overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                         {n.title||'(제목 없음)'}
                       </div>
-                      {n.attendees&&<div style={{fontSize:10,color:'#8C8C8C'}}>👥 {n.attendees}</div>}
-                      {preview&&<div style={{fontSize:11,color:'#ABABAB',marginTop:2,
+                      {n.attendees&&<div style={{fontSize:10,color:'#9A9A95'}}>👥 {n.attendees}</div>}
+                      {preview&&<div style={{fontSize:11,color:'#B4B4AE',marginTop:2,
                         overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{preview}</div>}
                     </div>
                   );
@@ -4368,7 +3394,8 @@ function YearView({year,onSelectMonth}){
 }
 function CalendarSection(){
   const{state,dispatch}=useStore();
-  const{freeLayerVisible,setFreeLayerVisible,setStickerMode,setRightDockOpen,calendarScrollRef,scrollToTodayRef,setMonthLabel,monthNavRef,addEventRef}=useLayout();
+  const{calendarScrollRef,scrollToTodayRef,setMonthLabel,monthNavRef,addEventRef}=useLayout();
+  const[quickOpen,setQuickOpen]=useState(false);
   const showToast=useToast();
   const today_=new Date();
   const[navLabel,setNavLabel]=useState('');
@@ -4523,8 +3550,7 @@ function CalendarSection(){
             <button onClick={goNext} style={{fontSize:15,color:'#CDCDCD',padding:'2px 5px',borderRadius:4}} onMouseEnter={e=>e.currentTarget.style.color='#1F1F1E'} onMouseLeave={e=>e.currentTarget.style.color='#C8C8C8'}>&#8250;</button>
           </div>
           <div style={{flex:1}}/>
-          {freeLayerVisible&&<span style={{fontSize:11,color:'#1F1F1E',opacity:0.7,marginRight:4}}>더블클릭 → 포스트잇</span>}
-          {!freeLayerVisible&&<span style={{fontSize:11,color:'#8C8C8C',marginRight:4}}>더블클릭 → 일정 | 드래그 → 기간</span>}
+          <span style={{fontSize:11,color:'#8C8C8C',marginRight:4}}>더블클릭 → 일정 | 드래그 → 기간</span>
         </div>
         {/* Day names row (sticky) — hidden in year view */}
         {!yearView&&<div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',backgroundColor:'#F8F8FB',borderTop:'0.5px solid #E8E8EE'}}>
@@ -4554,19 +3580,18 @@ function CalendarSection(){
             projects={state.projects}
           />
         ))}
-        <StickyNotesCanvas/>
-        <StickerCanvas/>
       </div>
-      {/* 노트·스티커 추가 FAB */}
-      {!yearView&&<button data-fab="true" onClick={()=>{setFreeLayerVisible(true);setStickerMode(true);setRightDockOpen(true);}}
-        title="포스트잇·스티커 추가"
+      {/* 주요일정·프로젝트·회의록 패널 */}
+      {quickOpen&&<QuickPanel onClose={()=>setQuickOpen(false)}/>}
+      {!yearView&&<button data-fab="true" onClick={()=>setQuickOpen(v=>!v)}
+        title="주요일정 · 프로젝트 · 회의록"
         style={{position:'fixed',right:22,bottom:22,width:34,height:34,borderRadius:'50%',
           backgroundColor:'#1F1F1E',color:'#fff',fontSize:19,fontWeight:300,lineHeight:1,zIndex:940,
           display:'flex',alignItems:'center',justifyContent:'center',
           boxShadow:'0 4px 14px rgba(20,20,25,0.38), 0 1px 3px rgba(15,15,35,0.12)',
           transition:'transform 0.15s,background-color 0.15s'}}
         onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#37352F';e.currentTarget.style.transform='scale(1.06)';}}
-        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#1F1F1E';e.currentTarget.style.transform='scale(1)';}}>+</button>}
+        onMouseLeave={e=>{e.currentTarget.style.backgroundColor='#1F1F1E';e.currentTarget.style.transform='scale(1)';}}>{quickOpen?'×':'+'}</button>}
       {cmdOpen&&(()=>{
         const s=cmdQ.trim().toLowerCase();
         const evs=s?(state.weeklyEvents||[]).filter(ev=>(ev.title||'').toLowerCase().includes(s)).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7):[];
@@ -4640,8 +3665,62 @@ function HeaderBanner(){
     </div>
   );
 }
+function QuickPanel({onClose}){
+  const[qTab,setQTab]=useState(()=>lsLoad('qTab','monthly'));
+  const[meetingModal,setMeetingModal]=useState(null);
+  useEffect(()=>{
+    const onKey=(e)=>{if(e.key==='Escape'&&meetingModal===null)onClose();};
+    window.addEventListener('keydown',onKey);
+    return()=>window.removeEventListener('keydown',onKey);
+  },[onClose,meetingModal]);
+  const tabBtn=(active)=>({padding:'7px 11px',fontSize:12,fontWeight:active?600:400,
+    color:active?'#37352F':'#9A9A95',borderBottom:`2px solid ${active?'#37352F':'transparent'}`,
+    backgroundColor:'transparent',border:'none',borderBottomStyle:'solid',cursor:'pointer',
+    transition:'all 0.15s',marginBottom:'-0.5px'});
+  return(
+    <>
+    <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:930,backgroundColor:'rgba(15,15,35,0.10)',animation:'fadeIn 0.12s ease'}}/>
+    <aside onClick={e=>e.stopPropagation()}
+      style={{position:'fixed',right:22,bottom:66,width:352,maxHeight:'calc(100vh - 150px)',zIndex:935,
+        backgroundColor:'#fff',borderRadius:12,border:'0.5px solid #E8E8EE',
+        boxShadow:'0 0 0 1px rgba(15,15,35,0.05), 0 10px 24px rgba(15,15,35,0.10), 0 28px 60px rgba(15,15,35,0.13)',
+        display:'flex',flexDirection:'column',overflow:'hidden',animation:'popIn 0.16s ease'}}>
+      <div style={{display:'flex',alignItems:'center',borderBottom:'0.5px solid #E8E8EE',flexShrink:0,padding:'0 10px'}}>
+        {[{id:'monthly',label:'먼슬리'},{id:'meetings',label:'회의록'}].map(t=>(
+          <button key={t.id} onClick={()=>{setQTab(t.id);lsSave('qTab',t.id);}} style={tabBtn(qTab===t.id)}>
+            <span style={{display:'inline-flex',alignItems:'center',gap:5}}>{t.id==='monthly'?<IcCal/>:<IcNote/>}{t.label}</span>
+          </button>
+        ))}
+        <div style={{flex:1}}/>
+        <button onClick={onClose} title="닫기" style={{width:24,height:24,borderRadius:6,fontSize:14,color:'#B4B4AE',background:'transparent',border:'none',cursor:'pointer',lineHeight:1}}
+          onMouseEnter={e=>{e.currentTarget.style.backgroundColor='#F3F3F7';e.currentTarget.style.color='#37352F';}}
+          onMouseLeave={e=>{e.currentTarget.style.backgroundColor='transparent';e.currentTarget.style.color='#B4B4AE';}}>×</button>
+      </div>
+      {qTab==='monthly'?(
+        <div style={{flex:1,overflowY:'auto',padding:'12px 13px'}}>
+          <MonthlyHighlights/><ProjectsSection/>
+        </div>
+      ):(
+        <div style={{flex:1,overflowY:'auto',padding:'11px 13px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+            <span style={{fontSize:11,color:'#9A9A95',letterSpacing:'0.06em',textTransform:'uppercase',fontWeight:600}}>회의록</span>
+            <button onClick={()=>setMeetingModal({})}
+              style={{fontSize:11,color:'#9A9A95',padding:'3px 9px',borderRadius:6,border:'0.5px solid #E0E0E8',backgroundColor:'#fff',cursor:'pointer'}}
+              onMouseEnter={e=>{e.currentTarget.style.color='#37352F';e.currentTarget.style.backgroundColor='#F3F3F7';}}
+              onMouseLeave={e=>{e.currentTarget.style.color='#9A9A95';e.currentTarget.style.backgroundColor='#fff';}}>+ 새 회의록</button>
+          </div>
+          <MeetingNoteList onOpen={note=>setMeetingModal(note)}/>
+        </div>
+      )}
+    </aside>
+    {meetingModal!==null&&(
+      <MeetingNoteModal initialNote={meetingModal&&meetingModal.id?meetingModal:null} onClose={()=>setMeetingModal(null)}/>
+    )}
+    </>
+  );
+}
 function MainArea(){
-  const{leftWidth,leftCollapsed,rightDockOpen,dockW}=useLayout();
+  const{leftWidth,leftCollapsed}=useLayout();
   return(
     <main style={{marginLeft:leftCollapsed?0:leftWidth,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-left 0.2s ease'}}>
       <WeeklySection/>
@@ -4664,46 +3743,6 @@ function PanelToggle(){
     </button>
   );
 }
-function RightDock(){
-  const{rightDockOpen,setRightDockOpen,setStickerMode,dockW,setDockW}=useLayout();
-  const onDockResize=(e)=>{
-    e.preventDefault();
-    const sx=e.clientX,sw=dockW;
-    const onMove=(ev)=>setDockW(Math.max(260,Math.min(540,sw-(ev.clientX-sx))));
-    const onUp=(ev)=>{lsSave('dockW',Math.max(260,Math.min(540,sw-(ev.clientX-sx))));document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
-    document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
-  };
-  React.useEffect(()=>{
-    if(!rightDockOpen)return;
-    const h=(e)=>{
-      const t=e.target;
-      if(t.closest('[data-right-dock]')||t.closest('[data-sticky-note]')||t.closest('[data-sticker]')||t.closest('[data-fab]')||t.closest('[data-free-note-panel]'))return;
-      setRightDockOpen(false);setStickerMode(false);
-    };
-    document.addEventListener('mousedown',h);
-    return()=>document.removeEventListener('mousedown',h);
-  },[rightDockOpen,setRightDockOpen,setStickerMode]);
-  if(!rightDockOpen)return null;
-  return(
-    <aside data-right-dock="true" style={{position:'fixed',top:66,right:12,bottom:12,width:dockW,backgroundColor:'#fff',
-      border:'0.5px solid #E0E0E8',borderRadius:14,zIndex:950,display:'flex',flexDirection:'column',overflow:'hidden',
-      boxShadow:'0 0 0 0.5px rgba(15,15,35,0.04), 0 12px 32px rgba(15,15,35,0.13), 0 32px 70px rgba(15,15,35,0.15)',animation:'popIn 0.16s ease'}}>
-      <div onMouseDown={onDockResize} title="드래그로 너비 조절"
-        style={{position:'absolute',left:0,top:0,bottom:0,width:6,cursor:'ew-resize',zIndex:5}}
-        onMouseEnter={e=>e.currentTarget.style.backgroundColor='rgba(20,20,25,0.10)'}
-        onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'}/>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:'0.5px solid #E8E8EE',flexShrink:0}}>
-        <span style={{fontSize:11,color:'#8C8C8C',letterSpacing:'1px',textTransform:'uppercase',fontWeight:600}}>노트 · 스티커</span>
-        <button onClick={()=>{setRightDockOpen(false);setStickerMode(false);}} style={{fontSize:16,color:'#B8B8B8',lineHeight:1}}
-          onMouseEnter={e=>e.currentTarget.style.color='#666'}
-          onMouseLeave={e=>e.currentTarget.style.color='#B8B8B8'}>×</button>
-      </div>
-      <FreeNotePanel/>
-    </aside>
-  );
-}
-
-// ═══ MOBILE LAYOUT ═══════════════════════════════════════════════
 function MobileApp(){
   const{state,dispatch}=useStore();
   const catStyle=useDynCatStyle();
@@ -5090,13 +4129,6 @@ function App(){
   const[leftWidth,setLeftWidth]=React.useState(300);
   const[leftCollapsed,setLeftCollapsed]=React.useState(false);
   const[weeklyHeight,setWeeklyHeight]=React.useState(220);
-  const[freeNotePanelHeight,setFreeNotePanelHeight]=React.useState(200);
-  const[freeLayerVisible,setFreeLayerVisible]=React.useState(false);
-  const[activeNoteId,setActiveNoteId]=React.useState(null);
-  const[stickerMode,setStickerMode]=React.useState(false);
-  const[selectedStickerId,setSelectedStickerId]=React.useState(null);
-  const[rightDockOpen,setRightDockOpen]=React.useState(false);
-  const[dockW,setDockW]=React.useState(()=>lsLoad('dockW',308));
   const calendarScrollRef=React.useRef(null);
   const scrollToTodayRef=React.useRef(null);
   const[monthLabel,setMonthLabel]=React.useState('');
@@ -5104,10 +4136,10 @@ function App(){
   const addEventRef=React.useRef(null);
   const isMobile=useIsMobile();
   return(
-    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,freeLayerVisible,setFreeLayerVisible,calendarScrollRef,scrollToTodayRef,freeNotePanelHeight,setFreeNotePanelHeight,activeNoteId,setActiveNoteId,stickerMode,setStickerMode,selectedStickerId,setSelectedStickerId,rightDockOpen,setRightDockOpen,dockW,setDockW,monthLabel,setMonthLabel,monthNavRef,addEventRef}}>
+    <LayoutContext.Provider value={{leftWidth,setLeftWidth,leftCollapsed,setLeftCollapsed,weeklyHeight,setWeeklyHeight,calendarScrollRef,scrollToTodayRef,monthLabel,setMonthLabel,monthNavRef,addEventRef}}>
       <StoreProvider>
         <ToastProvider>
-          {isMobile?<MobileApp/>:<><TopBar/><LeftPanel/><PanelToggle/><MainArea/><RightDock/></>}
+          {isMobile?<MobileApp/>:<><TopBar/><LeftPanel/><PanelToggle/><MainArea/></>}
         </ToastProvider>
       </StoreProvider>
     </LayoutContext.Provider>
