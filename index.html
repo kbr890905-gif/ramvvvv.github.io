@@ -1325,41 +1325,31 @@ function TopBar(){
   // Layer context menu (unified for all layer types)
   const[layerCtx,setLayerCtx]=useState(null);
   const openCtx=(e,type,id=null)=>{e.preventDefault();e.stopPropagation();setLayerCtx({x:e.clientX,y:e.clientY,type,id});};
-  const isDark=topBarBg&&!['#ffffff','#F8F8FB','#EEEEF4','#E6F1FB'].includes(topBarBg);
+  const isDark=topBarBg&&!['#ffffff','#F8F8FB','#EEEEF4','#E6F1FB','#F2F2F4'].includes(topBarBg);
   // Drag state for custom layers
   const[dragId,setDragId]=useState(null);
   const[dragOverId,setDragOverId]=useState(null);
   return(<>
-    <div style={{position:'fixed',top:0,left:0,right:0,height:56,borderBottom:'0.5px solid #E8E8EE',boxShadow:'0 1px 4px rgba(20,20,43,0.04)',zIndex:1000,
-      display:'flex',alignItems:'center',padding:'0 14px 0 16px',gap:8,
+    <div style={{position:'fixed',top:0,left:0,right:0,height:46,borderBottom:'0.5px solid #E4E4E8',zIndex:1000,
+      display:'flex',alignItems:'center',padding:'0 12px 0 14px',gap:8,
       backgroundImage:topBarImg?`url(${topBarImg})`:'none',backgroundSize:'cover',backgroundPosition:'center',
-      backgroundColor:topBarBg||'#fff'}}>
+      backgroundColor:topBarBg||'#F2F2F4'}}>
       {/* Apple-style title — dblclick to edit */}
       <div data-topbar-title="true"
         onClick={()=>{dispatch({type:'SET_WEEK_OFFSET',payload:0});setTimeout(()=>scrollToTodayRef?.current?.(),50);}}
         onDoubleClick={e=>{e.stopPropagation();setTitleVal(titleText||'보람 스케줄러');setEditingTitle(v=>!v);}}
-        style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',userSelect:'none',flexShrink:0}}
+        style={{display:'flex',alignItems:'center',gap:9,cursor:'pointer',userSelect:'none',flexShrink:0}}
         title="클릭 → 오늘로 이동 / 더블클릭 → 편집">
-        <div style={{width:38,height:38,borderRadius:10,
-          background:isDark?'rgba(255,255,255,0.92)':'#111',
-          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
-          boxShadow:'0 2px 6px rgba(0,0,0,0.2)'}}>
-          <span style={{fontSize:18,fontWeight:600,color:isDark?'#111':'#fff',lineHeight:1,letterSpacing:'-0.5px'}}>
-            {(titleText||'보람').slice(0,1)}
-          </span>
-        </div>
-        <div style={{display:'flex',flexDirection:'column',gap:2}}>
-          <span style={{fontSize:21,fontWeight:600,letterSpacing:'-0.6px',
-            color:isDark?'#fff':'#000',lineHeight:1.1}}>
-            {titleText||'보람 스케줄러'}
-          </span>
-          <span style={{fontSize:11,color:isDark?'rgba(255,255,255,0.5)':'#8e8e93',
-            letterSpacing:'0.1px',lineHeight:1}}>Personal Calendar</span>
-        </div>
+        <span style={{width:7,height:7,borderRadius:'50%',flexShrink:0,
+          backgroundColor:isDark?'rgba(255,255,255,0.9)':'#37352F'}}/>
+        <span style={{fontSize:15,fontWeight:500,letterSpacing:'-0.3px',
+          color:isDark?'#fff':'#37352F',lineHeight:1.1,whiteSpace:'nowrap'}}>
+          {titleText||'보람 스케줄러'}
+        </span>
       </div>
       {/* Title edit popup */}
       {editingTitle&&(
-        <div data-topbar-edit="true" style={{position:'fixed',top:62,left:14,backgroundColor:'#fff',border:'0.5px solid #E0E0E0',
+        <div data-topbar-edit="true" style={{position:'fixed',top:52,left:14,backgroundColor:'#fff',border:'0.5px solid #E0E0E0',
           borderRadius:10,padding:'12px 14px',boxShadow:'0 6px 20px rgba(20,20,25,0.10)',zIndex:3000,minWidth:272,display:'flex',flexDirection:'column',gap:9}}>
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
             <input autoFocus value={titleVal} onChange={e=>setTitleVal(e.target.value)}
@@ -3619,7 +3609,7 @@ function QuickPanel({onClose}){
     transition:'all 0.15s',marginBottom:'-0.5px'});
   return(
     <>
-    <aside style={{position:'fixed',top:66,right:12,bottom:12,width:QUICK_W,zIndex:900,
+    <aside style={{position:'fixed',top:56,right:12,bottom:12,width:QUICK_W,zIndex:900,
         backgroundColor:'#fff',borderRadius:12,border:'0.5px solid #E0E0E8',
         boxShadow:'0 1px 3px rgba(20,20,40,0.05)',
         display:'flex',flexDirection:'column',overflow:'hidden',animation:'quickIn 0.22s cubic-bezier(.32,.72,0,1)'}}>
@@ -3660,7 +3650,7 @@ function QuickPanel({onClose}){
 function MainArea(){
   const{quickOpen}=useLayout();
   return(
-    <main style={{marginLeft:0,marginRight:quickOpen?QUICK_W+10:0,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-right 0.22s ease'}}>
+    <main style={{marginLeft:0,marginRight:quickOpen?QUICK_W+10:0,marginTop:46,height:'calc(100vh - 46px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-right 0.22s ease'}}>
       <WeeklySection/>
       <CalendarSection/>
     </main>
