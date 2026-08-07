@@ -15,7 +15,7 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Pretendard Variable',Pretendard,'Noto Sans KR','Apple SD Gothic Neo',-apple-system,sans-serif;background:#fff;color:#1A1A1A;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em;}
+    body{font-family:'Pretendard Variable',Pretendard,'Noto Sans KR','Apple SD Gothic Neo',-apple-system,sans-serif;background:#F2F2F4;color:#1A1A1A;-webkit-font-smoothing:antialiased;letter-spacing:-0.01em;}
     input,textarea{outline:none;border:none;background:transparent;font-family:inherit;}
     button{cursor:pointer;border:none;background:transparent;font-family:inherit;}
     button:focus-visible{outline:2px solid #E0E0E8;outline-offset:2px;border-radius:3px;}
@@ -51,6 +51,7 @@
   input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;} input[type=number]{-moz-appearance:textfield;}
   @keyframes popIn{from{opacity:0;transform:scale(0.97) translateY(4px);}to{opacity:1;transform:scale(1) translateY(0);}}
   @keyframes mSlideInR{from{transform:translateX(100%);}to{transform:translateX(0);}}
+  @keyframes quickIn{from{transform:translateX(calc(100% + 12px));}to{transform:translateX(0);}}
   @keyframes mSlideInL{from{transform:translateX(-100%);}to{transform:translateX(0);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes slideInRight{from{transform:translateX(28px);opacity:0;}to{transform:translateX(0);opacity:1;}}
@@ -3619,9 +3620,9 @@ function QuickPanel({onClose}){
   return(
     <>
     <aside style={{position:'fixed',top:66,right:12,bottom:12,width:QUICK_W,zIndex:900,
-        backgroundColor:'#fff',borderRadius:12,border:'0.5px solid #E8E8EE',
-        boxShadow:'0 0 0 1px rgba(15,15,35,0.05), 0 10px 24px rgba(15,15,35,0.10), 0 28px 60px rgba(15,15,35,0.13)',
-        display:'flex',flexDirection:'column',overflow:'hidden',animation:'popIn 0.16s ease'}}>
+        backgroundColor:'#fff',borderRadius:12,border:'0.5px solid #E0E0E8',
+        boxShadow:'0 1px 3px rgba(20,20,40,0.05)',
+        display:'flex',flexDirection:'column',overflow:'hidden',animation:'quickIn 0.22s cubic-bezier(.32,.72,0,1)'}}>
       <div style={{display:'flex',alignItems:'center',borderBottom:'0.5px solid #E8E8EE',flexShrink:0,padding:'0 10px'}}>
         {[{id:'monthly',label:'먼슬리'},{id:'meetings',label:'회의록'}].map(t=>(
           <button key={t.id} onClick={()=>{setQTab(t.id);lsSave('qTab',t.id);}} style={tabBtn(qTab===t.id)}>
@@ -3659,7 +3660,7 @@ function QuickPanel({onClose}){
 function MainArea(){
   const{quickOpen}=useLayout();
   return(
-    <main style={{marginLeft:0,marginRight:quickOpen?QUICK_W+16:0,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-right 0.22s ease'}}>
+    <main style={{marginLeft:0,marginRight:quickOpen?QUICK_W+10:0,marginTop:56,height:'calc(100vh - 56px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-right 0.22s ease'}}>
       <WeeklySection/>
       <CalendarSection/>
     </main>
