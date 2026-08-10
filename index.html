@@ -1330,7 +1330,7 @@ function TopBar(){
   const[dragId,setDragId]=useState(null);
   const[dragOverId,setDragOverId]=useState(null);
   return(<>
-    <div style={{position:'fixed',top:0,left:0,right:0,height:46,borderBottom:'0.5px solid #E4E4E8',zIndex:1000,
+    <div style={{position:'fixed',top:0,left:0,right:0,height:50,borderBottom:'0.5px solid #E4E4E8',zIndex:1000,
       display:'flex',alignItems:'center',padding:'0 12px 0 14px',gap:8,
       backgroundImage:topBarImg?`url(${topBarImg})`:'none',backgroundSize:'cover',backgroundPosition:'center',
       backgroundColor:topBarBg||'#F2F2F4'}}>
@@ -1340,16 +1340,16 @@ function TopBar(){
         onDoubleClick={e=>{e.stopPropagation();setTitleVal(titleText||'보람 스케줄러');setEditingTitle(v=>!v);}}
         style={{display:'flex',alignItems:'center',gap:9,cursor:'pointer',userSelect:'none',flexShrink:0}}
         title="클릭 → 오늘로 이동 / 더블클릭 → 편집">
-        <span style={{width:7,height:7,borderRadius:'50%',flexShrink:0,
-          backgroundColor:isDark?'rgba(255,255,255,0.9)':'#37352F'}}/>
-        <span style={{fontSize:15,fontWeight:500,letterSpacing:'-0.3px',
-          color:isDark?'#fff':'#37352F',lineHeight:1.1,whiteSpace:'nowrap'}}>
+        <span style={{width:9,height:9,borderRadius:'50%',flexShrink:0,
+          backgroundColor:isDark?'rgba(255,255,255,0.9)':'#1F1F1E'}}/>
+        <span style={{fontSize:18.5,fontWeight:600,letterSpacing:'-0.55px',
+          color:isDark?'#fff':'#1F1F1E',lineHeight:1.1,whiteSpace:'nowrap'}}>
           {titleText||'보람 스케줄러'}
         </span>
       </div>
       {/* Title edit popup */}
       {editingTitle&&(
-        <div data-topbar-edit="true" style={{position:'fixed',top:52,left:14,backgroundColor:'#fff',border:'0.5px solid #E0E0E0',
+        <div data-topbar-edit="true" style={{position:'fixed',top:56,left:14,backgroundColor:'#fff',border:'0.5px solid #E0E0E0',
           borderRadius:10,padding:'12px 14px',boxShadow:'0 6px 20px rgba(20,20,25,0.10)',zIndex:3000,minWidth:272,display:'flex',flexDirection:'column',gap:9}}>
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
             <input autoFocus value={titleVal} onChange={e=>setTitleVal(e.target.value)}
@@ -3609,7 +3609,7 @@ function QuickPanel({onClose}){
     transition:'all 0.15s',marginBottom:'-0.5px'});
   return(
     <>
-    <aside style={{position:'fixed',top:56,right:12,bottom:12,width:QUICK_W,zIndex:900,
+    <aside style={{position:'fixed',top:60,right:12,bottom:12,width:QUICK_W,zIndex:900,
         backgroundColor:'#fff',borderRadius:12,border:'0.5px solid #E0E0E8',
         boxShadow:'0 1px 3px rgba(20,20,40,0.05)',
         display:'flex',flexDirection:'column',overflow:'hidden',animation:'quickIn 0.22s cubic-bezier(.32,.72,0,1)'}}>
@@ -3650,7 +3650,7 @@ function QuickPanel({onClose}){
 function MainArea(){
   const{quickOpen}=useLayout();
   return(
-    <main style={{marginLeft:0,marginRight:quickOpen?QUICK_W+10:0,marginTop:46,height:'calc(100vh - 46px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-right 0.22s ease'}}>
+    <main style={{marginLeft:0,marginRight:quickOpen?QUICK_W+10:0,marginTop:50,height:'calc(100vh - 50px)',display:'flex',flexDirection:'column',gap:10,padding:'10px 12px 12px',backgroundColor:'#F2F2F4',transition:'margin-right 0.22s ease'}}>
       <WeeklySection/>
       <CalendarSection/>
     </main>
