@@ -2693,9 +2693,9 @@ function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCo
   const catStyle=useDynCatStyle();const cs=catStyle[todo.category]||catStyle.work;
   const save=()=>{const t=val.trim();if(t&&onEdit&&t!==todo.text)onEdit(t);setEditing(false);};
   return(
-    <div draggable={!editing} onDragStart={e=>{if(e.target.tagName==='INPUT'){e.preventDefault();return;}e.stopPropagation();e.dataTransfer.setData('text/todoid',todo.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:4,marginBottom:2,cursor:'grab'}} onClick={e=>e.stopPropagation()} onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
-      <button onClick={onToggle} style={{width:10,height:10,borderRadius:2,flexShrink:0,border:`0.5px solid ${todo.done?'#D0D0D0':cs.border}`,backgroundColor:todo.done?'#F0F0F0':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:7,color:'#A2A2A2',transition:'all 0.1s'}}>{todo.done?'✓':''}</button>
-      <span style={{width:5,height:5,borderRadius:'50%',flexShrink:0,backgroundColor:todo.done?'#D0D0D0':cs.dot}}/>
+    <div draggable={!editing} onDragStart={e=>{if(e.target.tagName==='INPUT'){e.preventDefault();return;}e.stopPropagation();e.dataTransfer.setData('text/todoid',todo.id);e.dataTransfer.effectAllowed='move';}} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5,cursor:'grab'}} onClick={e=>e.stopPropagation()} onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
+      <button onClick={onToggle} style={{width:11,height:11,borderRadius:2,flexShrink:0,border:`0.5px solid ${todo.done?'#D0D0D0':cs.border}`,backgroundColor:todo.done?'#F0F0F0':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:7,color:'#A2A2A2',transition:'all 0.1s'}}>{todo.done?'✓':''}</button>
+      <span style={{width:6,height:6,borderRadius:'50%',flexShrink:0,backgroundColor:todo.done?'#D0D0D0':cs.dot}}/>
       {editing&&cycleCat&&<button onMouseDown={e=>e.preventDefault()} onClick={()=>onSetCat&&onSetCat(cycleCat(todo.category))} title="레이어 전환" style={{fontSize:7,padding:'1px 4px',borderRadius:3,flexShrink:0,border:`0.5px solid ${catCol(todo.category).border}`,backgroundColor:catCol(todo.category).bg,color:catCol(todo.category).text,maxWidth:34,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{catLabel(todo.category).slice(0,3)}</button>}
       {editing?(
         <input autoFocus value={val} onChange={e=>setVal(e.target.value)} onBlur={save}
@@ -2703,7 +2703,7 @@ function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCo
           style={{flex:1,fontSize:13,color:'#2F2F2F',minWidth:0,borderBottom:'0.5px solid #E0E0E8',background:'transparent'}}/>
       ):(
         <span onDoubleClick={e=>{e.stopPropagation();setVal(todo.text);setEditing(true);}} title="더블클릭 → 수정"
-          style={{fontSize:12,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:todo.done?'#C8C8C8':'#444444',textDecoration:todo.done?'line-through':'none',cursor:'text'}}>{todo.text}</span>
+          style={{fontSize:13,flex:1,lineHeight:1.35,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:todo.done?'#C8C8C8':'#2B2B2B',textDecoration:todo.done?'line-through':'none',cursor:'text'}}>{todo.text}</span>
       )}
       {hovered&&!editing&&<button onClick={onDelete} style={{fontSize:11,color:'#E0E0E0',flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color='#E24B4A'} onMouseLeave={e=>e.currentTarget.style.color='#E0E0E0'}>×</button>}
     </div>
@@ -2753,6 +2753,8 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
   const catLabel=(id)=>id==='work'?(state.workLabel||'업무'):id==='personal'?(state.personalLabel||'개인'):((state.customLayers||[]).find(l=>l.id===id)||{}).name||id;
   const catCol=(id)=>catStyle[id]||catStyle.work;
   const cycleCat=(cur)=>{const i=allCats.indexOf(cur);return allCats[(i+1)%allCats.length]||'work';};
+  const sortedTodos=[...todos].sort((a,b)=>{const ia=allCats.indexOf(a.category||'work');const ib=allCats.indexOf(b.category||'work');return(ia<0?999:ia)-(ib<0?999:ib);});
+  const multiCat=new Set(sortedTodos.map(t=>t.category||'work')).size>1;
   const[todoActive,setTodoActive]=useState(false);const[todoVal,setTodoVal]=useState('');const[todoCat,setTodoCat]=useState('personal');const[todoRepeat,setTodoRepeat]=useState(false);const todoRef=useRef(null);const[detailEvent,setDetailEvent]=useState(null);
   const[noteMdl,setNoteMdl]=useState(null);
   const activateTodo=()=>{setTodoActive(true);setTimeout(()=>todoRef.current?.focus(),20);};
@@ -2803,12 +2805,17 @@ function DayColumn({date,onAddEvent,colH=220,evtH=44,laneH=0}){
         </div>
         {hiddenEvt>0&&<div style={{fontSize:8,color:'#ABABAB',paddingLeft:2,paddingTop:1}}>+{hiddenEvt}개 더</div>}
       </div>
-      <div onDragOver={e=>{if(e.dataTransfer.types.includes('text/todoid')){e.preventDefault();e.dataTransfer.dropEffect='move';const r=e.currentTarget.getBoundingClientRect();let idx=Math.round((e.clientY-r.top-3)/20);idx=Math.max(0,Math.min(idx,todos.length));if(todoDragIdx!==idx)setTodoDragIdx(idx);}}}
+      <div onDragOver={e=>{if(e.dataTransfer.types.includes('text/todoid')){e.preventDefault();e.dataTransfer.dropEffect='move';const r=e.currentTarget.getBoundingClientRect();let idx=Math.round((e.clientY-r.top-3)/22);idx=Math.max(0,Math.min(idx,sortedTodos.length));if(todoDragIdx!==idx)setTodoDragIdx(idx);}}}
         onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setTodoDragIdx(null);}}
         onDrop={e=>{setTodoDragIdx(null);const id=e.dataTransfer.getData('text/todoid');if(!id)return;e.preventDefault();const td=(state.todos||[]).find(x=>x.id===id);if(!td||td.date===dk)return;dispatch({type:'UPDATE_TODO',id,updates:{date:dk}});}}
         style={{flex:2,overflowY:'auto',padding:'3px 4px 2px',borderBottom:'0.5px solid #E8E8EE',minHeight:0,cursor:todoActive?'default':'text',position:'relative'}} onClick={()=>{if(!todoActive)activateTodo();}}>
-        {todoDragIdx!==null&&<div style={{position:'absolute',left:3,right:3,top:3+todoDragIdx*20,height:17,borderRadius:6,border:'1.5px dashed #E0E0E8',backgroundColor:'rgba(20,20,25,0.07)',pointerEvents:'none',transition:'top 0.12s ease',zIndex:2}}/>}
-        {todos.map((t,ci)=><div key={t.id} style={{transform:(todoDragIdx!==null&&ci>=todoDragIdx)?'translateY(20px)':'translateY(0)',transition:'transform 0.15s ease'}}><TodoItem todo={t} allCats={allCats} catLabel={catLabel} catCol={catCol} cycleCat={cycleCat} onToggle={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} onDelete={()=>dispatch({type:'DELETE_TODO',id:t.id})} onEdit={text=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{text}})} onSetCat={cat=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{category:cat}})}/></div>)}
+        {todoDragIdx!==null&&<div style={{position:'absolute',left:3,right:3,top:3+todoDragIdx*22,height:19,borderRadius:6,border:'1.5px dashed #E0E0E8',backgroundColor:'rgba(20,20,25,0.07)',pointerEvents:'none',transition:'top 0.12s ease',zIndex:2}}/>}
+        {sortedTodos.map((t,ci)=>{const catId=t.category||'work';const showHdr=multiCat&&(ci===0||(sortedTodos[ci-1].category||'work')!==catId);return(
+          <React.Fragment key={t.id}>
+            {showHdr&&<div style={{fontSize:9,fontWeight:700,color:catCol(catId).text,opacity:0.85,margin:ci===0?'0 0 3px 1px':'7px 0 3px 1px',letterSpacing:'0.02em'}}>{catLabel(catId)}</div>}
+            <div style={{transform:(todoDragIdx!==null&&ci>=todoDragIdx)?'translateY(22px)':'translateY(0)',transition:'transform 0.15s ease'}}><TodoItem todo={t} allCats={allCats} catLabel={catLabel} catCol={catCol} cycleCat={cycleCat} onToggle={()=>dispatch({type:'TOGGLE_TODO',id:t.id})} onDelete={()=>dispatch({type:'DELETE_TODO',id:t.id})} onEdit={text=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{text}})} onSetCat={cat=>dispatch({type:'UPDATE_TODO',id:t.id,updates:{category:cat}})}/></div>
+          </React.Fragment>
+        );})}
         {todoActive&&<div style={{display:'flex',alignItems:'center',gap:3,marginTop:todos.length?2:0}} onClick={e=>e.stopPropagation()}><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoCat(c=>cycleCat(c))} title="레이어 전환" style={{fontSize:7,padding:'1px 4px',borderRadius:3,flexShrink:0,border:`0.5px solid ${catCol(todoCat).border}`,backgroundColor:catCol(todoCat).bg,color:catCol(todoCat).text,maxWidth:34,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{catLabel(todoCat).slice(0,3)}</button><button onMouseDown={e=>e.preventDefault()} onClick={()=>setTodoRepeat(v=>!v)} title="매주 반복 (12주)" style={{fontSize:7,padding:'1px 3px',borderRadius:3,flexShrink:0,border:'0.5px solid '+(todoRepeat?'#E0E0E8':'#E0E0E8'),backgroundColor:todoRepeat?'#EEEEF4':'#F8F8FB',color:todoRepeat?'#1F1F1E':'#ABABAB'}}>매주</button><input ref={todoRef} value={todoVal} onChange={e=>setTodoVal(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitTodo();if(e.key==='Escape'){setTodoVal('');setTodoActive(false);}}} onBlur={()=>setTimeout(submitTodo,120)} placeholder="할 일" style={{flex:1,fontSize:11,color:'#333',minWidth:0,borderBottom:'0.5px solid #E8E8EE'}}/></div>}
         {!todoActive&&todos.length===0&&<div style={{fontSize:11,color:'#CFCFD7',paddingTop:2}}>+ 할 일</div>}
       </div>
@@ -2938,7 +2945,7 @@ function WeeklySection(){
   const onResizeMouseDown=React.useCallback((e)=>{
     e.preventDefault();
     const startY=e.clientY,startH=weeklyHeight;
-    const onMove=(ev)=>{const h=Math.max(80,Math.min(600,startH+(ev.clientY-startY)));setWeeklyHeight(h);};
+    const onMove=(ev)=>{const h=Math.max(120,Math.min(760,startH+(ev.clientY-startY)));setWeeklyHeight(h);};
     const onUp=()=>{document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);};
     document.addEventListener('mousemove',onMove);
     document.addEventListener('mouseup',onUp);
@@ -4041,7 +4048,8 @@ function useIsMobile(){
 }
 function App(){
   const[quickOpen,setQuickOpen]=React.useState(false); // 우측 패널(주요일정·프로젝트·회의록)
-  const[weeklyHeight,setWeeklyHeight]=React.useState(220);
+  const[weeklyHeight,setWeeklyHeightState]=React.useState(()=>lsLoad('weeklyHeight',340));
+  const setWeeklyHeight=(v)=>{setWeeklyHeightState(v);lsSave('weeklyHeight',v);};
   const calendarScrollRef=React.useRef(null);
   const scrollToTodayRef=React.useRef(null);
   const[monthLabel,setMonthLabel]=React.useState('');
