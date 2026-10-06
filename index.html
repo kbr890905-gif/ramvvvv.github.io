@@ -2895,7 +2895,7 @@ function WeeklyGrid({weekOffset,colH}){
             </div>);})}
         </div>
       )}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',gap:0,alignItems:'stretch',height:'100%'}}>{weekDates.map(date=>{const _dk=toDateKey(date);let _m=-1;wkBlocks.forEach(b=>{if(b.startDate<=_dk&&b.endDate>=_dk&&b.lane>_m)_m=b.lane;});return <DayColumn key={_dk} date={date} onAddEvent={dk=>setPopoverDate(dk)} colH={colH} evtH={evtH} laneH={_m>=0?(_m+1)*20+6:0}/>;})}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',gap:0,alignItems:'stretch',height:'100%'}}>{weekDates.map(date=>{const _dk=toDateKey(date);return <DayColumn key={_dk} date={date} onAddEvent={dk=>setPopoverDate(dk)} colH={colH} evtH={evtH} laneH={laneN>0?laneN*20+6:0}/>;})}</div>
       {popoverDate&&<EventPopover date={popoverDate} onClose={()=>setPopoverDate(null)}/>}
       {wkEditBlock&&<MultiDayBlockPopover editBlock={wkEditBlock} onClose={()=>setWkEditBlock(null)}/>}
     </div>
@@ -3683,6 +3683,7 @@ function MobileApp(){
   const[todoVal,setTodoVal]=React.useState('');
   const weekAddRef=React.useRef(null);
   const weekScrollRef=React.useRef(null);
+  const monthScrollRef=React.useRef(null);
   const mTouchRef=React.useRef(null);
   const mBarTouchRef=React.useRef(null);
   const wkScrolledRef=React.useRef(false);
@@ -3771,16 +3772,60 @@ function MobileApp(){
     };
     setTimeout(jump,80);
   },[tab]);
-  const goPrev=()=>{if(tab==='month'){const mm=navM===0?11:navM-1,yy=navM===0?navY-1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w-1);};
-  const goNext=()=>{if(tab==='month'){const mm=navM===11?0:navM+1,yy=navM===11?navY+1:navY;setNavM(mm);setNavY(yy);}else setWeekOff(w=>w+1);};
-  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());setWeekOff(0);setSelDate(toDateKey(today));setTimeout(()=>{if(weekScrollRef.current){const el=weekScrollRef.current.querySelector('[data-today="1"]');if(el)el.scrollIntoView({block:'start',behavior:'smooth'});}},80);};
+  const scrollMonthToDateKey=(dk,smooth)=>{
+    const mel=monthScrollRef.current;if(!mel||!rowMeta.length)return;
+    const t=new Date(dk+'T00:00:00');
+    const idx=allMonthWeeks.findIndex(week=>t>=week[0]&&t<=week[6]);
+    if(idx<0)return;
+    const top=rowMeta[idx].top;
+    if(smooth)mel.scrollTo({top,behavior:'smooth'});else mel.scrollTop=top;
+  };
+  const onMonthScroll=()=>{
+    const mel=monthScrollRef.current;if(!mel||!rowMeta.length)return;
+    const st=mel.scrollTop+40;
+    let lo=0,hi=rowMeta.length-1,ans=0;
+    while(lo<=hi){const mid=(lo+hi)>>1;if(rowMeta[mid].top<=st){ans=mid;lo=mid+1;}else hi=mid-1;}
+    const dd=new Date(rowMeta[ans].wStart+'T00:00:00');
+    if(dd.getFullYear()!==navY||dd.getMonth()!==navM){setNavY(dd.getFullYear());setNavM(dd.getMonth());}
+  };
+  React.useEffect(()=>{
+    if(tab!=='month')return;
+    let tries=0;
+    const jump=()=>{
+      if(monthScrollRef.current&&rowMeta.length){scrollMonthToDateKey(toDateKey(today));}
+      else if(tries<12){tries++;setTimeout(jump,60);}
+    };
+    setTimeout(jump,80);
+  },[tab]);
+  const goPrev=()=>{if(tab==='month'){const mm=navM===0?11:navM-1,yy=navM===0?navY-1:navY;setNavM(mm);setNavY(yy);scrollMonthToDateKey(`${yy}-${String(mm+1).padStart(2,'0')}-01`,true);}else setWeekOff(w=>w-1);};
+  const goNext=()=>{if(tab==='month'){const mm=navM===11?0:navM+1,yy=navM===11?navY+1:navY;setNavM(mm);setNavY(yy);scrollMonthToDateKey(`${yy}-${String(mm+1).padStart(2,'0')}-01`,true);}else setWeekOff(w=>w+1);};
+  const goToday=()=>{setNavY(today.getFullYear());setNavM(today.getMonth());setWeekOff(0);setSelDate(toDateKey(today));setTimeout(()=>{if(weekScrollRef.current){const el=weekScrollRef.current.querySelector('[data-today="1"]');if(el)el.scrollIntoView({block:'start',behavior:'smooth'});}scrollMonthToDateKey(toDateKey(today),true);},80);};
 
-  // month grid cells
-  const first=new Date(navY,navM,1);
-  const startDow=first.getDay();// 일요일 시작(헤더 일~토와 정렬)
-  const daysIn=new Date(navY,navM+1,0).getDate();
-  const cells=[];for(let i=0;i<startDow;i++)cells.push(null);for(let d=1;d<=daysIn;d++)cells.push(d);
-  while(cells.length%7)cells.push(null);
+  // month grid cells (continuous weeks across many months)
+  const allMonthWeeks=React.useMemo(()=>{
+    const weeks=[];
+    const st=new Date(today.getFullYear()-1,0,1);
+    const dow0=st.getDay();st.setDate(st.getDate()-dow0);
+    const ed=new Date(today.getFullYear()+2,11,31);
+    const cur=new Date(st);
+    while(cur<=ed){
+      weeks.push(Array.from({length:7},(_,i)=>{const dd=new Date(cur);dd.setDate(cur.getDate()+i);return dd;}));
+      cur.setDate(cur.getDate()+7);
+    }
+    return weeks;
+  },[]);
+  const cells=allMonthWeeks.flat();
+  const ROW_H=84,LABEL_H=28;
+  const rowMeta=React.useMemo(()=>{
+    let acc=0;
+    return allMonthWeeks.map(week=>{
+      const hasLabel=week.some(d=>d.getDate()===1);
+      if(hasLabel)acc+=LABEL_H;
+      const top=acc;
+      acc+=ROW_H;
+      return{top,wStart:toDateKey(week[0])};
+    });
+  },[allMonthWeeks]);
 
   const selEvents=evByDate[selDate]||[];
   const selTodos=(state.todos||[]).filter(t=>{if(t.date!==selDate)return false;if(t.category==='work')return state.workVisible;if(t.category==='personal')return state.personalVisible;return true;});
@@ -3839,14 +3884,14 @@ function MobileApp(){
       {tab==='month'&&(
         <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative'}}>
           {/* ── 달력 ── */}
-          <div onTouchStart={calTouchStart} onTouchEnd={calTouchEnd} style={{height:sheet?'44%':'calc(100% - 50px)',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
+          <div style={{height:sheet?'44%':'calc(100% - 50px)',flexShrink:0,overflow:'hidden',display:'flex',flexDirection:'column',transition:'height 0.26s cubic-bezier(.32,.72,0,1)'}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',padding:'4px 6px 4px',flexShrink:0}}>
               {DAY_NAMES.map((d,i)=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:600,color:i===0?'#E24B4A':i===6?'#4A7BC4':C.t2}}>{d}</div>)}
             </div>
-            <div style={{flex:1,minHeight:0,padding:'0 6px',display:'flex',flexDirection:'column'}}>
+            <div ref={monthScrollRef} onScroll={onMonthScroll} style={{flex:1,minHeight:0,padding:'0 6px',overflowY:'auto',overflowX:'hidden',display:'flex',flexDirection:'column'}}>
               {Array.from({length:cells.length/7}).map((_,r)=>{
                 const rowCells=cells.slice(r*7,r*7+7);
-                const rowDks=rowCells.map(d=>d?`${navY}-${String(navM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`:null);
+                const rowDks=rowCells.map(d=>d?toDateKey(d):null);
                 const realDks=rowDks.filter(Boolean);
                 const wStart=realDks[0],wEnd=realDks[realDks.length-1];
                 const rowBlocks=(state.multiDayBlocks||[]).filter(b=>{
@@ -3865,13 +3910,16 @@ function MobileApp(){
                   return{b,sc,ec,lane,isS:b.startDate>=wStart,isE:b.endDate<=wEnd};
                 });
                 const laneN=lanes.length;const barH=13;const DATE_H=30;
+                const monthStartDay=rowCells.find(dd=>dd&&dd.getDate()===1);
                 return(
-                <div key={r} style={{flex:1,minHeight:0,position:'relative',borderTop:r===0?'none':`0.5px solid ${C.line}`}}>
+                <React.Fragment key={r}>
+                {monthStartDay&&<div style={{height:28,boxSizing:'border-box',flexShrink:0,display:'flex',alignItems:'center',paddingLeft:4,fontSize:11.5,fontWeight:700,color:C.t1}}>{monthStartDay.getFullYear()}년 {monthStartDay.getMonth()+1}월</div>}
+                <div data-wk={wStart} style={{height:84,boxSizing:'border-box',flexShrink:0,position:'relative',borderTop:(r===0||monthStartDay)?'none':`0.5px solid ${C.line}`}}>
                   <div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',height:'100%'}}>
                   {rowCells.map((d,ci)=>{
                     if(!d)return<div key={ci}/>;
                     const dk=rowDks[ci];
-                    const dObj=new Date(navY,navM,d);
+                    const dObj=d;
                     const isTd=dk===toDateKey(today);const isSel=dk===selDate;
                     const hol=getHoliday(dk);
                     const isRed=(dObj.getDay()===0||hol)&&!isTd;const isBlue=dObj.getDay()===6&&!isTd&&!hol;
@@ -3880,7 +3928,7 @@ function MobileApp(){
                       <div key={ci} onClick={()=>{setSelDate(dk);setSheet(true);}}
                         style={{minWidth:0,display:'flex',flexDirection:'column',alignItems:'center',paddingTop:3,cursor:'pointer',borderRadius:10,
                           backgroundColor:isSel&&!isTd?'#EFEBE2':'transparent',overflow:'hidden'}}>
-                        <span style={{fontSize:13,fontWeight:isTd?700:500,width:24,height:24,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontVariantNumeric:'tabular-nums'}}>{d}</span>
+                        <span style={{fontSize:13,fontWeight:isTd?700:500,width:24,height:24,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%',backgroundColor:isTd?C.brand:'transparent',color:isTd?'#fff':isRed?'#E24B4A':isBlue?'#4A7BC4':C.t1,fontVariantNumeric:'tabular-nums'}}>{d.getDate()}</span>
                         {/* 기간일정 바가 있는 날만 그만큼 자리 확보 */}
                         <div style={{height:(()=>{let m=-1;placed.forEach(p=>{if(p.b.startDate<=dk&&p.b.endDate>=dk&&p.lane>m)m=p.lane;});return m>=0?(m+1)*barH:0;})(),flexShrink:0}}/>
                         {hol&&<span style={{fontSize:8.5,color:'#E24B4A',fontWeight:600,maxWidth:'100%',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',flexShrink:0}}>{hol}</span>}
@@ -3900,7 +3948,8 @@ function MobileApp(){
                       {isS&&<span style={{width:5,height:5,borderRadius:'50%',flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
                       {isS&&<span style={{overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</span>}
                     </div>);})}
-                </div>);
+                </div>
+                </React.Fragment>);
               })}
             </div>
           </div>
