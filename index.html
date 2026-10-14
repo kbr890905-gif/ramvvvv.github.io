@@ -3074,6 +3074,7 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
           {events.slice(0,4).map((ev,ci)=>{
             const cs=catStyle[ev.category]||catStyle.work;
             const isBdayEv=getBdayPrefix(ev.category,state)!=='';
+            const hl=(ev.category==='personal'&&state.personalLabel==='보람')||(state.customLayers||[]).some(l=>l.id===ev.category&&l.name==='대명');
             return(
               <div key={ev.id} onClick={e=>{e.stopPropagation();onEventClick&&onEventClick(ev);}}
                 draggable
@@ -3087,8 +3088,10 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
                   transition:'transform 0.15s ease',
                   cursor:'pointer',flexShrink:0,lineHeight:1.5}}>
                 {!isBdayEv&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
+                <span style={{display:'flex',alignItems:'center',gap:5,overflow:'hidden',flex:1,minWidth:0,backgroundColor:hl?withAlpha(cs.bg,0.65):'transparent',borderRadius:hl?3:0,padding:hl?'1px 4px':0,margin:hl?'-1px 0 -1px -4px':0}}>
                 {ev.time&&<span style={{fontSize:10,color:'#9A9A95',flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
                 <span style={{fontSize:11.5,color:'#37352F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
+                </span>
                 {ev.isOutlook&&<span style={{fontSize:10,flexShrink:0,opacity:0.45}}>🔗</span>}
               </div>
             );
