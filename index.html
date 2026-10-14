@@ -2685,7 +2685,7 @@ function EventChip({event,onClick}){
   const{state}=useStore();const bdayPfx=getBdayPrefix(event.category,state);
   const isBday=bdayPfx!=='';
   const hl=(event.category==='personal'&&state.personalLabel==='보람')||(state.customLayers||[]).some(l=>l.id===event.category&&l.name==='대명');
-  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#EDECF4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 5px 2px 4px',backgroundColor:'transparent',borderRadius:5,marginBottom:1,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%',lineHeight:1.5}}>{!isBday&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}<span style={{display:'flex',alignItems:'center',gap:5,overflow:'hidden',flex:1,minWidth:0,backgroundColor:'transparent'}}>{event.time&&<span style={{flexShrink:0,fontSize:10,color:hl?cs.text:'#9A9A95',fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1,fontSize:11.5,color:hl?cs.text:'#37352F',fontWeight:hl?700:500}}>{bdayPfx}{event.title}</span></span>{event.isOutlook&&<span style={{flexShrink:0,fontSize:10,opacity:0.45}}>🔗</span>}</div>;
+  return<div onClick={onClick} draggable onDragStart={e=>{e.stopPropagation();e.dataTransfer.setData('text/evtid',event.id);e.dataTransfer.effectAllowed='move';}} onMouseEnter={e=>e.currentTarget.style.backgroundColor='#EDECF4'} onMouseLeave={e=>e.currentTarget.style.backgroundColor='transparent'} style={{display:'flex',alignItems:'center',gap:5,padding:'2px 5px 2px 4px',backgroundColor:'transparent',borderRadius:5,marginBottom:1,overflow:'hidden',whiteSpace:'nowrap',cursor:'pointer',maxWidth:'100%',lineHeight:1.5}}>{!isBday&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}<span style={{display:'flex',alignItems:'center',gap:5,overflow:'hidden',flex:1,minWidth:0,backgroundColor:hl?withAlpha(cs.bg,0.65):'transparent',borderRadius:hl?3:0,padding:hl?'1px 4px':0,margin:hl?'-1px 0 -1px -4px':0}}>{event.time&&<span style={{flexShrink:0,fontSize:10,color:hl?cs.text:'#9A9A95',fontVariantNumeric:'tabular-nums'}}>{event.time}</span>}<span style={{overflow:'hidden',textOverflow:'ellipsis',flex:1,fontSize:11.5,color:hl?cs.text:'#37352F',fontWeight:500}}>{bdayPfx}{event.title}</span></span>{event.isOutlook&&<span style={{flexShrink:0,fontSize:10,opacity:0.45}}>🔗</span>}</div>;
 }
 function TodoItem({todo,onToggle,onDelete,onEdit,onSetCat,allCats,catLabel,catCol,cycleCat}){
   const[hovered,setHovered]=useState(false);
@@ -3088,9 +3088,9 @@ function CalendarDateCell({date,holiday,events,isInDragRange,onMouseDown,onMouse
                   transition:'transform 0.15s ease',
                   cursor:'pointer',flexShrink:0,lineHeight:1.5}}>
                 {!isBdayEv&&<span style={{width:3,height:13,borderRadius:2,flexShrink:0,backgroundColor:cs.dot||cs.text}}/>}
-                <span style={{display:'flex',alignItems:'center',gap:5,overflow:'hidden',flex:1,minWidth:0,backgroundColor:'transparent'}}>
+                <span style={{display:'flex',alignItems:'center',gap:5,overflow:'hidden',flex:1,minWidth:0,backgroundColor:hl?withAlpha(cs.bg,0.65):'transparent',borderRadius:hl?3:0,padding:hl?'1px 4px':0,margin:hl?'-1px 0 -1px -4px':0}}>
                 {ev.time&&<span style={{fontSize:10,color:hl?cs.text:'#9A9A95',flexShrink:0,fontVariantNumeric:'tabular-nums'}}>{ev.time}</span>}
-                <span style={{fontSize:11.5,color:hl?cs.text:'#37352F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:hl?700:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
+                <span style={{fontSize:11.5,color:hl?cs.text:'#37352F',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,fontWeight:500}}>{getBdayPrefix(ev.category,state)}{ev.title}</span>
                 </span>
                 {ev.isOutlook&&<span style={{fontSize:10,flexShrink:0,opacity:0.45}}>🔗</span>}
               </div>
@@ -3848,10 +3848,10 @@ function MobileApp(){
       <div onClick={()=>setDetailEv(ev)} style={{display:'flex',alignItems:'stretch',gap:10,padding:'11px 4px',borderBottom:`0.5px solid ${C.line}`,cursor:'pointer'}}>
         <span style={{width:3.5,borderRadius:2,backgroundColor:cs.dot||cs.text,flexShrink:0}}/>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:13.5,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}><span style={hl?{color:cs.text,fontWeight:700}:null}>{ev.title}</span></div>
+          <div style={{fontSize:13.5,fontWeight:600,color:C.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}><span style={hl?{backgroundColor:withAlpha(cs.bg,0.65),borderRadius:3,padding:'1px 3px',margin:'-1px -3px',color:cs.text}:null}>{ev.title}</span></div>
           <div style={{fontSize:10.5,color:cs.text,marginTop:2,fontWeight:500}}>{layerLabel(ev.category)}{ev.meetingNoteId?' · 📋':''}</div>
         </div>
-        <span style={{fontSize:11.5,color:C.t2,fontVariantNumeric:'tabular-nums',flexShrink:0,alignSelf:'center',fontWeight:600}}>{ev.time?<span style={hl?{color:cs.text,fontWeight:700}:null}>{ev.time}</span>:'종일'}</span>
+        <span style={{fontSize:11.5,color:C.t2,fontVariantNumeric:'tabular-nums',flexShrink:0,alignSelf:'center',fontWeight:600}}>{ev.time?<span style={hl?{backgroundColor:withAlpha(cs.bg,0.65),borderRadius:3,padding:'1px 3px',margin:'-1px -3px',color:cs.text}:null}>{ev.time}</span>:'종일'}</span>
       </div>
     );
   };
