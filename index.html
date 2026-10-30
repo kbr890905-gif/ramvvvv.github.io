@@ -219,6 +219,7 @@ const initialState={
   weekOffset:0,weeklyCollapsed:lsLoad('weeklyCollapsed',false),hlYear:new Date().getFullYear(),hlMonth:new Date().getMonth(),
   multiDayBlocks:lsLoad('multiDayBlocks',[]),
   outlookUser:lsLoad('outlookUser',null),outlookClientId:lsLoad('outlookClientId',''),outlookSyncedAt:lsLoad('outlookSyncedAt',null),
+  stickyNotes:lsLoad('stickyNotes',[]),
 };
 
 // 기존 Block[] 데이터를 새 Memo[] 형식으로 변환
@@ -299,6 +300,9 @@ function reducer(state,action){
     case 'SET_OUTLOOK_EVENTS':return{...state,weeklyEvents:[...state.weeklyEvents.filter(e=>!e.isOutlook),...action.events],outlookSyncedAt:new Date().toISOString()};
     case 'SET_OUTLOOK_USER':return{...state,outlookUser:action.user,outlookClientId:action.clientId||state.outlookClientId};
     case 'DISCONNECT_OUTLOOK':return{...state,outlookUser:null,weeklyEvents:state.weeklyEvents.filter(e=>!e.isOutlook),outlookSyncedAt:null};
+    case 'ADD_STICKY':return{...state,stickyNotes:[...(state.stickyNotes||[]),action.note]};
+    case 'UPDATE_STICKY':return{...state,stickyNotes:(state.stickyNotes||[]).map(n=>n.id===action.id?{...n,...action.updates}:n)};
+    case 'DELETE_STICKY':return{...state,stickyNotes:(state.stickyNotes||[]).filter(n=>n.id!==action.id)};
     case 'RESTORE_FULL':return{...state,...action.state,weekOffset:0};
     case 'RESTORE_STATE':return action.state;
     default:return state;
@@ -941,7 +945,7 @@ function StoreProvider({children}){
     rawDispatch({type:'RESTORE_STATE',state:nxt});
   },[rawDispatch]);
   // Auto-snapshot on mount
-  useEffect(()=>{try{manualSnapshot(stateRef.current,'자동 백업 (앱 시작)');}catch(e){}setTimeout(()=>autoSnapshot(stateRef.current),1000);},[]);
+  useEffect(()=>{try{const _sn=JSON.parse(localStorage.getItem('snapshots')||'[]');const _ls=_sn[0];if(!_ls||(Date.now()-new Date(_ls.createdAt).getTime())>3600000){manualSnapshot(stateRef.current,'자동 백업 (앱 시작)');}}catch(e){}setTimeout(()=>autoSnapshot(stateRef.current),1000);},[]);
 
   // 할일 자동 이동: 클라우드 동기화가 끝난 뒤(레이스 방지), todos가 바뀔 때마다 재검사.
   // 하루 1회 잠금을 두지 않음 — 미완료+과거날짜 조건 자체가 이미 멱등적이라
@@ -1005,7 +1009,9 @@ function StoreProvider({children}){
       return;
     }
     cloudLoad(apiKey,binId).then(s=>{
-      if(s&&!dirtyRef.current){rawDispatch({type:'RESTORE_FULL',state:s});doMigrate(s.customLayers);}
+      const _localMod=Number(localStorage.getItem('lastMod')||0);
+      const _cloudStale=s&&s._mod!=null&&_localMod>0&&s._mod<_localMod;
+      if(s&&!dirtyRef.current&&!_cloudStale){rawDispatch({type:'RESTORE_FULL',state:s});doMigrate(s.customLayers);}
       else{doMigrate(stateRef.current.customLayers);}
       // 모노스킨 1회 강제: 클라우드 복원 후 내장 레이어색을 음소색으로 리셋하고 클라우드에도 반영
       if(!localStorage.getItem('monoSkinV2')){
@@ -1103,7 +1109,7 @@ function StoreProvider({children}){
         'weeklyEvents','todos','weekMemos','weeklyCollapsed','multiDayBlocks','outlookVisible','outlookColor',
         'customLayers','layerOrder','meetingNotes','workLabel','personalLabel','workColor','personalColor',
         'titleText','topBarBg','topBarImg','eventTombstones',
-        'outlookUser','outlookClientId','outlookSyncedAt'];
+        'outlookUser','outlookClientId','outlookSyncedAt','stickyNotes'];
       LS_KEYS.forEach(k=>lsSave(k,state[k]));
       const _now=Date.now();localStorage.setItem('lastMod',String(_now));
       {const fc=famGetCreds();if(fc.apiKey&&fc.binId){if(window.__famT)clearTimeout(window.__famT);window.__famT=setTimeout(()=>{try{familySync();}catch(e){}},2000);}}
@@ -4100,6 +4106,104 @@ function useIsMobile(){
   React.useEffect(()=>{const h=()=>setM(window.innerWidth<=640);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);
   return m;
 }
+
+// ─── STICKY NOTES (Miro-style post-it) ───────
+const STICKY_COLORS=['#FFF2A8','#FFD6E0','#FFDCB4','#D6F5D6','#CFE8FF','#E8D9FF'];
+function StickyNote({note,selected,onFocus,onUpdate,onDelete}){
+  const[editing,setEditing]=React.useState(false);
+  const taRef=React.useRef(null);
+  const movedRef=React.useRef(false);
+  React.useEffect(()=>{if(editing&&taRef.current){taRef.current.focus();const l=taRef.current.value.length;taRef.current.setSelectionRange(l,l);}},[editing]);
+  const startDrag=(e)=>{
+    e.stopPropagation();
+    if(editing)return;
+    onFocus();
+    movedRef.current=false;
+    const sx=e.clientX,sy=e.clientY,ox=note.x,oy=note.y,pid=e.pointerId;
+    const onMove=(ev)=>{if(ev.pointerId!==pid)return;if(Math.abs(ev.clientX-sx)>4||Math.abs(ev.clientY-sy)>4)movedRef.current=true;onUpdate(note.id,{x:ox+(ev.clientX-sx),y:oy+(ev.clientY-sy)});};
+    const onUp=(ev)=>{if(ev.pointerId!==pid)return;window.removeEventListener('pointermove',onMove);window.removeEventListener('pointerup',onUp);};
+    window.addEventListener('pointermove',onMove);window.addEventListener('pointerup',onUp);
+  };
+  const startResize=(e)=>{
+    e.stopPropagation();e.preventDefault();onFocus();
+    const sx=e.clientX,sy=e.clientY,ow=note.w,oh=note.h,pid=e.pointerId;
+    const onMove=(ev)=>{if(ev.pointerId!==pid)return;onUpdate(note.id,{w:Math.max(120,ow+(ev.clientX-sx)),h:Math.max(100,oh+(ev.clientY-sy))});};
+    const onUp=(ev)=>{if(ev.pointerId!==pid)return;window.removeEventListener('pointermove',onMove);window.removeEventListener('pointerup',onUp);};
+    window.addEventListener('pointermove',onMove);window.addEventListener('pointerup',onUp);
+  };
+  const len=(note.text||'').length;
+  const fontSize=len>160?11:len>90?12.5:len>40?14:16;
+  return(
+    <div onPointerDown={startDrag}
+      onClick={()=>{if(movedRef.current){movedRef.current=false;return;}if(selected&&!editing)setEditing(true);}}
+      onDoubleClick={(e)=>{e.stopPropagation();onFocus();setEditing(true);}}
+      style={{position:'fixed',left:note.x,top:note.y,width:note.w,height:note.h,backgroundColor:note.color,
+        borderRadius:3,boxShadow:selected?'0 6px 16px rgba(0,0,0,0.22)':'0 2px 8px rgba(0,0,0,0.15)',
+        zIndex:note.z||1,cursor:editing?'text':'grab',display:'flex',flexDirection:'column',
+        outline:selected?'2px solid rgba(0,0,0,0.18)':'none',transition:'box-shadow 0.12s ease',touchAction:'none'}}>
+      {selected&&!editing&&(
+        <div onPointerDown={(e)=>e.stopPropagation()} style={{position:'absolute',top:-34,left:0,display:'flex',gap:5,padding:'4px 6px',backgroundColor:'#fff',borderRadius:6,boxShadow:'0 2px 6px rgba(0,0,0,0.18)'}}>
+          {STICKY_COLORS.map(c=>(
+            <span key={c} onClick={(e)=>{e.stopPropagation();onUpdate(note.id,{color:c});}} style={{width:14,height:14,borderRadius:'50%',backgroundColor:c,cursor:'pointer',border:c===note.color?'2px solid #666':'1px solid rgba(0,0,0,0.1)'}}/>
+          ))}
+          <span onClick={(e)=>{e.stopPropagation();onDelete(note.id);}} style={{width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#999',fontSize:13,marginLeft:2}}>×</span>
+        </div>
+      )}
+      <textarea ref={taRef} value={note.text} readOnly={!editing}
+        onChange={(e)=>onUpdate(note.id,{text:e.target.value})}
+        onBlur={()=>setEditing(false)}
+        placeholder="메모 입력..."
+        style={{flex:1,width:'100%',height:'100%',boxSizing:'border-box',border:'none',outline:'none',resize:'none',
+          backgroundColor:'transparent',fontFamily:'inherit',fontSize,lineHeight:1.4,color:'#3A3A32',
+          padding:'12px 12px',cursor:editing?'text':'grab',pointerEvents:editing?'auto':'none'}}/>
+      {selected&&(
+        <div onPointerDown={startResize} style={{position:'absolute',right:2,bottom:2,width:14,height:14,cursor:'nwse-resize',
+          backgroundImage:'linear-gradient(135deg, transparent 0%, transparent 40%, rgba(0,0,0,0.25) 40%, rgba(0,0,0,0.25) 55%, transparent 55%, transparent 70%, rgba(0,0,0,0.25) 70%, rgba(0,0,0,0.25) 85%, transparent 85%)'}}/>
+      )}
+    </div>
+  );
+}
+function StickyBoard(){
+  const{state,dispatch}=useStore();
+  const[selectedId,setSelectedId]=React.useState(null);
+  const notes=state.stickyNotes||[];
+  React.useEffect(()=>{
+    const onDocDown=()=>setSelectedId(null);
+    const onKey=(e)=>{
+      if(!selectedId)return;
+      const ae=document.activeElement;
+      if(ae&&(ae.tagName==='TEXTAREA'||ae.tagName==='INPUT'))return;
+      if(e.key==='Delete'||e.key==='Backspace'){dispatch({type:'DELETE_STICKY',id:selectedId});setSelectedId(null);}
+    };
+    document.addEventListener('pointerdown',onDocDown);
+    document.addEventListener('keydown',onKey);
+    return()=>{document.removeEventListener('pointerdown',onDocDown);document.removeEventListener('keydown',onKey);};
+  },[selectedId,dispatch]);
+  const addNote=()=>{
+    const maxZ=Math.max(0,...notes.map(n=>n.z||0));
+    const id=uid();
+    const jitter=(notes.length%5)*18;
+    const cx=Math.max(40,Math.min(window.innerWidth-240,window.innerWidth/2-90+jitter));
+    const cy=Math.max(80,Math.min(window.innerHeight-220,window.innerHeight/2-80+jitter));
+    dispatch({type:'ADD_STICKY',note:{id,x:cx,y:cy,w:180,h:160,color:STICKY_COLORS[notes.length%STICKY_COLORS.length],text:'',z:maxZ+1}});
+    setSelectedId(id);
+  };
+  return(
+    <>
+      {notes.map(n=>(
+        <StickyNote key={n.id} note={n} selected={selectedId===n.id}
+          onFocus={()=>{setSelectedId(n.id);const maxZ=Math.max(0,...notes.map(x=>x.z||0));if((n.z||0)<maxZ)dispatch({type:'UPDATE_STICKY',id:n.id,updates:{z:maxZ+1}});}}
+          onUpdate={(id,updates)=>dispatch({type:'UPDATE_STICKY',id,updates})}
+          onDelete={(id)=>{dispatch({type:'DELETE_STICKY',id});setSelectedId(null);}}/>
+      ))}
+      <div onClick={addNote} title="포스트잇 추가"
+        style={{position:'fixed',right:22,bottom:22,width:46,height:46,borderRadius:'50%',backgroundColor:'#FFF2A8',
+          boxShadow:'0 3px 10px rgba(0,0,0,0.25)',display:'flex',alignItems:'center',justifyContent:'center',
+          cursor:'pointer',zIndex:99999,fontSize:22,color:'#8A7A2E',userSelect:'none'}}>+</div>
+    </>
+  );
+}
+
 function App(){
   const[quickOpen,setQuickOpen]=React.useState(false); // 우측 패널(주요일정·프로젝트·회의록)
   const[weeklyHeight,setWeeklyHeightState]=React.useState(()=>lsLoad('weeklyHeight',340));
@@ -4115,6 +4219,7 @@ function App(){
       <StoreProvider>
         <ToastProvider>
           {isMobile?<MobileApp/>:<><TopBar/><MainArea/></>}
+          <StickyBoard/>
         </ToastProvider>
       </StoreProvider>
     </LayoutContext.Provider>
