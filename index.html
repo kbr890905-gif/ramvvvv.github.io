@@ -4139,7 +4139,7 @@ function StickyNote({note,selected,onFocus,onUpdate,onDelete}){
       onDoubleClick={(e)=>{e.stopPropagation();onFocus();setEditing(true);}}
       style={{position:'fixed',left:note.x,top:note.y,width:note.w,height:note.h,backgroundColor:note.color,
         borderRadius:3,boxShadow:selected?'0 6px 16px rgba(0,0,0,0.22)':'0 2px 8px rgba(0,0,0,0.15)',
-        zIndex:note.z||1,cursor:editing?'text':'grab',display:'flex',flexDirection:'column',
+        zIndex:note.z||9500,display:'flex',flexDirection:'column',cursor:editing?'text':'grab',
         outline:selected?'2px solid rgba(0,0,0,0.18)':'none',transition:'box-shadow 0.12s ease',touchAction:'none'}}>
       {selected&&!editing&&(
         <div onPointerDown={(e)=>e.stopPropagation()} style={{position:'absolute',top:-34,left:0,display:'flex',gap:5,padding:'4px 6px',backgroundColor:'#fff',borderRadius:6,boxShadow:'0 2px 6px rgba(0,0,0,0.18)'}}>
@@ -4180,7 +4180,7 @@ function StickyBoard(){
     return()=>{document.removeEventListener('pointerdown',onDocDown);document.removeEventListener('keydown',onKey);};
   },[selectedId,dispatch]);
   const addNote=()=>{
-    const maxZ=Math.max(0,...notes.map(n=>n.z||0));
+    const maxZ=Math.max(9500,...notes.map(n=>n.z||0));
     const id=uid();
     const jitter=(notes.length%5)*18;
     const cx=Math.max(40,Math.min(window.innerWidth-240,window.innerWidth/2-90+jitter));
@@ -4192,7 +4192,7 @@ function StickyBoard(){
     <>
       {notes.map(n=>(
         <StickyNote key={n.id} note={n} selected={selectedId===n.id}
-          onFocus={()=>{setSelectedId(n.id);const maxZ=Math.max(0,...notes.map(x=>x.z||0));if((n.z||0)<maxZ)dispatch({type:'UPDATE_STICKY',id:n.id,updates:{z:maxZ+1}});}}
+          onFocus={()=>{setSelectedId(n.id);const maxZ=Math.max(9500,...notes.map(x=>x.z||0));if((n.z||0)<maxZ)dispatch({type:'UPDATE_STICKY',id:n.id,updates:{z:maxZ+1}});}}
           onUpdate={(id,updates)=>dispatch({type:'UPDATE_STICKY',id,updates})}
           onDelete={(id)=>{dispatch({type:'DELETE_STICKY',id});setSelectedId(null);}}/>
       ))}
