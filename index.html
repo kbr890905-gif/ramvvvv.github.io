@@ -4113,10 +4113,12 @@ function StickyNote({note,selected,onFocus,onUpdate,onDelete}){
   const[editing,setEditing]=React.useState(false);
   const taRef=React.useRef(null);
   const movedRef=React.useRef(false);
+  const wasSelectedRef=React.useRef(false);
   React.useEffect(()=>{if(editing&&taRef.current){taRef.current.focus();const l=taRef.current.value.length;taRef.current.setSelectionRange(l,l);}},[editing]);
   const startDrag=(e)=>{
     e.stopPropagation();
     if(editing)return;
+    wasSelectedRef.current=selected;
     onFocus();
     movedRef.current=false;
     const sx=e.clientX,sy=e.clientY,ox=note.x,oy=note.y,pid=e.pointerId;
@@ -4135,7 +4137,7 @@ function StickyNote({note,selected,onFocus,onUpdate,onDelete}){
   const fontSize=len>160?11:len>90?12.5:len>40?14:16;
   return(
     <div onPointerDown={startDrag}
-      onClick={()=>{if(movedRef.current){movedRef.current=false;return;}if(selected&&!editing)setEditing(true);}}
+      onClick={()=>{if(movedRef.current){movedRef.current=false;return;}if(wasSelectedRef.current&&!editing)setEditing(true);}}
       onDoubleClick={(e)=>{e.stopPropagation();onFocus();setEditing(true);}}
       style={{position:'fixed',left:note.x,top:note.y,width:note.w,height:note.h,backgroundColor:note.color,
         borderRadius:3,boxShadow:selected?'0 6px 16px rgba(0,0,0,0.22)':'0 2px 8px rgba(0,0,0,0.15)',
