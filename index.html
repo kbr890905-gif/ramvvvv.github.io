@@ -297,7 +297,17 @@ function reducer(state,action){
     case 'UPDATE_FOLDER':return{...state,projectFolders:(state.projectFolders||[]).map(f=>f.id===action.id?{...f,...action.updates}:f)};
     case 'DELETE_FOLDER':return{...state,projectFolders:(state.projectFolders||[]).filter(f=>f.id!==action.id),projects:state.projects.map(p=>p.folderId===action.id?{...p,folderId:null}:p)};
     case 'SET_HL_MONTH':return{...state,hlYear:action.hlYear,hlMonth:action.hlMonth};
-    case 'SET_OUTLOOK_EVENTS':return{...state,weeklyEvents:[...state.weeklyEvents.filter(e=>!e.isOutlook),...action.events],outlookSyncedAt:new Date().toISOString()};
+    case 'SET_OUTLOOK_EVENTS':{
+      // 지난 아웃룩 일정은 지우지 않고 보관(아카이브). 오늘 이후는 아웃룩 기준으로 갱신.
+      const _today=toDateKey(new Date());
+      const _sig=e=>e.date+'|'+(e.time||'')+'|'+(e.title||'');
+      const _ids=new Set(action.events.map(e=>e.id)),_sigs=new Set(action.events.map(_sig));
+      const _tomb=state.eventTombstones||{};
+      const _seen=new Set();
+      const _kept=state.weeklyEvents.filter(e=>{if(!e.isOutlook||e.date>=_today||_ids.has(e.id)||_sigs.has(_sig(e)))return false;const k=_sig(e);if(_seen.has(k))return false;_seen.add(k);return true;}).map(e=>e.archived?e:{...e,archived:true});
+      const _fresh=action.events.filter(e=>!_tomb[e.id]);
+      return{...state,weeklyEvents:[...state.weeklyEvents.filter(e=>!e.isOutlook),..._kept,..._fresh],outlookSyncedAt:new Date().toISOString()};
+    }
     case 'SET_OUTLOOK_USER':return{...state,outlookUser:action.user,outlookClientId:action.clientId||state.outlookClientId};
     case 'DISCONNECT_OUTLOOK':return{...state,outlookUser:null,weeklyEvents:state.weeklyEvents.filter(e=>!e.isOutlook),outlookSyncedAt:null};
     case 'ADD_STICKY':return{...state,stickyNotes:[...(state.stickyNotes||[]),action.note]};
@@ -356,12 +366,20 @@ async function outlookSync(clientId){
   const now=new Date();
   const s=new Date(now.getFullYear()-1,0,1).toISOString();
   const e=new Date(now.getFullYear()+2,0,1).toISOString();
-  const resp=await fetch(`https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${s}&endDateTime=${e}&$top=999&$select=subject,start,end,isAllDay,id`,
-    {headers:{Authorization:`Bearer ${token.accessToken}`,'Content-Type':'application/json'}});
-  if(!resp.ok)throw new Error('Graph API 오류: '+resp.status);
-  const data=await resp.json();
-  return(data.value||[]).map(ev=>({
-    id:'ol_'+(ev.id||uid()).slice(0,12),
+  // 페이지 단위로 끝까지 가져오기 (예전엔 첫 페이지만 받아서 일부 일정이 빠졌음)
+  let url=`https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${s}&endDateTime=${e}&$top=500&$orderby=start/dateTime&$select=subject,start,end,isAllDay,id`;
+  const items=[];
+  for(let pg=0;pg<40&&url;pg++){
+    const resp=await fetch(url,{headers:{Authorization:`Bearer ${token.accessToken}`,'Content-Type':'application/json'}});
+    if(!resp.ok)throw new Error('Graph API 오류: '+resp.status);
+    const data=await resp.json();
+    items.push(...(data.value||[]));
+    url=data['@odata.nextLink']||null;
+  }
+  // 아웃룩 id는 앞부분이 거의 같아서 잘라 쓰면 겹침 → 전체 id를 해시해서 고유 id로
+  const _h=(str)=>{let a=5381,b=52711;for(let i=0;i<str.length;i++){const c=str.charCodeAt(i);a=((a*33)^c)>>>0;b=((b*31)^c)>>>0;}return a.toString(36)+b.toString(36);};
+  return items.map(ev=>({
+    id:'ol_'+(ev.id?_h(ev.id):uid()),
     date:ev.start.dateTime?ev.start.dateTime.slice(0,10):ev.start.date,
     time:ev.start.dateTime?ev.start.dateTime.slice(11,16):undefined,
     title:(ev.subject||'(제목 없음)').normalize('NFC').trim(),
